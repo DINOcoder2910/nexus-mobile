@@ -1,0 +1,56 @@
+name: Build iPad app
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show Xcode
+        run: xcodebuild -version
+
+      - name: Generate the Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Build (unsigned; Sideloadly signs it on install)
+        run: |
+          set -o pipefail
+          xcodebuild -project NexusMobile.xcodeproj -target NexusMobile -configuration Release \
+            -sdk iphoneos SYMROOT="$PWD/build" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build | tail -n 80
+
+      - name: Package the .ipa
+        run: |
+          mkdir -p Payload
+          cp -R build/Release-iphoneos/NexusMobile.app Payload/
+          zip -qry NexusMobile.ipa Payload
+          ls -la NexusMobile.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NexusMobile-ipa
+          path: NexusMobile.ipa
+
+      - name: Publish as the "latest" download
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest NexusMobile.ipa --title "Latest build" \
+            --notes "Built from ${GITHUB_SHA::7}. Download NexusMobile.ipa and install it with Sideloadly." --target "$GITHUB_SHA"
