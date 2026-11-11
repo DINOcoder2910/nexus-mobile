@@ -268,6 +268,47 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
         edited()
     }
 
+    // MARK: words from the other device
+
+    /// The laptop's words for this open block arrived (live editing, piece 11): `base` is the words both last agreed on, `theirs`
+    /// the laptop's now. Merges them into what is being typed (LiveBoard.mergeBlock), keeps the caret where it was in the words
+    /// and leaves the merge out of the block's undo. False on a clash on the same line: nothing changes, and the caller keeps
+    /// these words and makes the laptop's a draft (LiveBoard.clashDraft).
+    @discardableResult
+    func takeRemote(base: String?, theirs: String) -> Bool {
+        let mine = text
+        guard let merged = LiveBoard.mergeBlock(base: base, mine: mine, theirs: theirs) else { return false }
+        guard merged != mine else { return true }
+        if textView.markedTextRange != nil { textView.unmarkText() }
+        let old = text as NSString
+        let new = merged as NSString
+        var p = 0
+        while p < old.length, p < new.length, old.character(at: p) == new.character(at: p) { p += 1 }
+        var s = 0
+        while s < old.length - p, s < new.length - p, old.character(at: old.length - 1 - s) == new.character(at: new.length - 1 - s) { s += 1 }
+        let gone = NSRange(location: p, length: old.length - p - s)
+        let middle = new.substring(with: NSRange(location: p, length: new.length - p - s))
+        let delta = new.length - old.length
+        func moved(_ i: Int) -> Int {
+            if i <= gone.location { return i }
+            if i >= gone.location + gone.length { return i + delta }
+            return p + (middle as NSString).length
+        }
+        let sel = textView.selectedRange
+        let from = moved(sel.location)
+        let to = moved(sel.location + sel.length)
+        applying = true
+        // the block's undo history refers to places in the old words, so it starts over (the board's undo still has the whole typing)
+        textView.undoManager?.removeAllActions()
+        storage.beginEditing()
+        storage.replaceCharacters(in: gone, with: middle)
+        storage.endEditing()
+        textView.selectedRange = NSRange(location: min(from, new.length), length: max(0, min(to, new.length) - min(from, new.length)))
+        applying = false
+        edited()
+        return true
+    }
+
     // MARK: the bar's and the keys' actions
 
     func perform(_ action: String) {
