@@ -16,7 +16,20 @@ public enum BoardFormat {
     public static let pdfWidth: Double = 820
     public static let pdfGap: Double = 24
     public static let pointFields = ["x", "y", "force", "azimuth", "altitude", "t", "w", "h", "opacity"]
+    /// The item types this app draws and edits; any other type (made by a newer Nexus) is kept as it is and shown as a placeholder.
     public static let itemTypes: Set<String> = ["text", "image", "pdf", "shape"]
+    /// The board redesign's features this app understands (nexus docs/data-format.md "Features"): a board.json naming one not here
+    /// opens read-only. Add a name in the same change that makes the app read and write that feature.
+    public static let features: Set<String> = []
+    /// A placeholder's size when a foreign item has none.
+    public static let foreignSize = (w: 200.0, h: 80.0)
+
+    /// The features a board.json names that this app doesn't know, in the order named.
+    public static func unknownFeatures(_ meta: JSONValue?, known: Set<String> = features) -> [String] {
+        var out: [String] = []
+        for f in meta?["features"]?.array?.compactMap(\.string) ?? [] where !known.contains(f) && !out.contains(f) { out.append(f) }
+        return out
+    }
     public static let shapes: Set<String> = ["rect", "ellipse", "line", "arrow"]
     public static let notebooks = "notebooks"
     /// A typed block wraps at this width until it is given its own (the laptop's TEXT_W).
@@ -137,7 +150,7 @@ public struct BoardItem: Equatable, Identifiable {
     public var json: JSONValue
 
     public init?(_ v: JSONValue) {
-        guard let id = v["id"]?.string, !id.isEmpty, let t = v["type"]?.string, BoardFormat.itemTypes.contains(t),
+        guard let id = v["id"]?.string, !id.isEmpty, let t = v["type"]?.string, !t.isEmpty,
               let x = v["x"]?.number, let y = v["y"]?.number, x.isFinite, y.isFinite else { return nil }
         json = v
         if t == "shape", !BoardFormat.shapes.contains(v["shape"]?.string ?? "") { json = json.setting("shape", .string("rect")) }
@@ -156,6 +169,8 @@ public struct BoardItem: Equatable, Identifiable {
     public var src: String? { json["src"]?.string }
     public var shape: String? { json["shape"]?.string }
     public var tileKey: String { BoardFormat.tileKey(x, y) }
+    /// Made by a newer Nexus: a type this app doesn't draw. Kept and written back unchanged.
+    public var isForeign: Bool { !BoardFormat.itemTypes.contains(type) }
     public func number(_ k: String) -> Double? { json[k]?.number }
     public func string(_ k: String) -> String? { json[k]?.string }
 
@@ -227,6 +242,10 @@ public enum BoardFiles {
             if fmt.hasPrefix("nexus-board/") { c.readOnly = "This board was made by a newer Nexus (\(fmt))." }
             else if fmt == "nexus-board-test/1" { return legacy(board, meta: meta) }
             else { throw Failure.notABoard("board.json is not a Nexus board") }
+        }
+        let unknown = BoardFormat.unknownFeatures(meta)
+        if c.readOnly == nil, !unknown.isEmpty {
+            c.readOnly = "This board uses \(unknown.joined(separator: ", ")) from a newer Nexus. Update the iPad app to edit it."
         }
         let tiles = board.appendingPathComponent("tiles")
         let names = ((try? fm.contentsOfDirectory(atPath: tiles.path)) ?? []).sorted()

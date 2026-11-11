@@ -185,6 +185,29 @@ final class BoardTests: XCTestCase {
         XCTAssertThrowsError(try BoardFiles.load(dir.appendingPathComponent("X.board")))
     }
 
+    func testUnknownFeaturesAreReadOnly() throws {
+        try write("F.board/board.json", "{\"format\":\"nexus-board/1\",\"features\":[\"space\",\"links\",\"space\"],\"paper\":{\"kind\":\"dots\"}}")
+        let c = try BoardFiles.load(dir.appendingPathComponent("F.board"))
+        XCTAssertEqual(c.readOnly, "This board uses space, links from a newer Nexus. Update the iPad app to edit it.")
+        var wrote = false
+        _ = try BoardFiles.save(c, to: dir.appendingPathComponent("F.board"), write: { _, _ in wrote = true })
+        XCTAssertFalse(wrote)
+        XCTAssertEqual(BoardFormat.unknownFeatures(try JSONValue.parse("{\"features\":[\"space\"]}"), known: ["space"]), [])
+        try write("E.board/board.json", "{\"format\":\"nexus-board/1\",\"features\":[]}")
+        XCTAssertNil(try BoardFiles.load(dir.appendingPathComponent("E.board")).readOnly)
+    }
+
+    /// An item a newer Nexus made is kept and written back exactly as the laptop writes it (JSON.stringify of what was read).
+    func testForeignItemsAreKeptAsTheyWere() throws {
+        let mark = "{\"id\":\"m1abc\",\"type\":\"mark\",\"kind\":\"bubble\",\"x\":4,\"y\":5,\"on\":\"txt22\",\"at\":{\"q\":\"hola\",\"pre\":\"\"},\"done\":false}"
+        let tile = "{\"format\":\"nexus-board-tile/1\",\"pointFields\":[\"x\",\"y\",\"force\",\"azimuth\",\"altitude\",\"t\",\"w\",\"h\",\"opacity\"],\n\"strokes\":[],\n\"items\":[\n" + mark + "\n]}\n"
+        let t = try BoardFiles.parseTile(tile)
+        XCTAssertEqual(t.items.count, 1)
+        XCTAssertTrue(t.items[0].isForeign)
+        XCTAssertFalse(BoardItem(id: "a", type: "text", x: 0, y: 0).isForeign)
+        XCTAssertEqual(BoardFiles.tileJSON(strokes: t.strokes, items: t.items), tile)
+    }
+
     func testInkTestBoardBecomesARealOneOnItsFirstSave() throws {
         try write("Old.board/board.json", "{\"name\":\"Old\",\"format\":\"nexus-board-test/1\",\"pdf\":\"Book.pdf\",\"originX\":120,\"originY\":80}")
         try write("Old.board/strokes.json", "{\"format\":\"nexus-ink/1\",\"pointFields\":[\"x\",\"y\",\"force\",\"azimuth\",\"altitude\",\"t\",\"w\",\"h\",\"opacity\"],\"strokes\":[{\"ink\":\"com.apple.ink.pen\",\"color\":\"#000000FF\",\"points\":[[200,300,1,0,1.571,0,2,2,1]]},{\"ink\":\"com.apple.ink.pen\",\"color\":\"#000000FF\",\"points\":[[2000,300,1,0,1.571,0,2,2,1]]}]}")

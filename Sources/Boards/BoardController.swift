@@ -246,7 +246,9 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
                 textSizes[it.id] = v.frame.size
                 v.frame.origin = CGPoint(x: it.x + offset.x, y: it.y + offset.y)
             default:
-                break
+                let v = (itemViews[it.id] as? ForeignItemView) ?? ForeignItemView(frame: .zero)
+                if v.superview == nil { shapeLayer.addSubview(v); itemViews[it.id] = v }
+                v.update(it, offset: offset)
             }
         }
         showSelection()
