@@ -106,6 +106,10 @@ final class FormatBar: UIInputView {
             button("paintpalette", "Colour", menu: colourMenu()),
             button("square.fill.on.square", "Background", menu: deferred { [weak self] in self?.fillItems() ?? [] }),
             divider(),
+            button("square.on.square", "Drafts", menu: deferred { [weak self] in
+                guard let s = self?.session, let b = s.board else { return [] }
+                return b.draftMenu(s.id)
+            }),
             button("ellipsis.circle", "More", menu: deferred { [weak self] in self?.moreItems() ?? [] }),
         ]
         for v in views { stack.addArrangedSubview(v) }

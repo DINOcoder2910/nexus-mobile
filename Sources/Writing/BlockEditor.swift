@@ -66,12 +66,16 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
     /// The block's size on the board (units), from its laid-out words.
     var displaySize: CGSize = .zero
     /// The board's items and words when typing started, for the board's undo.
-    let before: ([BoardItem], [String: String])
-    let startText: String
+    var before: ([BoardItem], [String: String])
+    var startText: String
+    /// Which words are open: the block's id for its current draft, `<id>~<draft>` for another one (BlockDrafts.key).
+    private(set) var key: String
     private var applying = false
     private var lastTyped: Int? = nil
     private var keyboard: CGRect = .zero
     lazy var bar = FormatBar(session: self)
+    /// The block's drafts as tabs above it (only when it has drafts).
+    lazy var tabs = DraftTabs(session: self)
 
     /// In the Writing view: the text view scrolls on its own and is not placed over the board.
     let fullscreen: Bool
@@ -87,7 +91,8 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
         scale = fullscreen ? 1.25 : board.canvas.zoomScale
         look = BlockLook(item)
         before = (board.content.items, board.content.texts)
-        startText = board.content.texts[item.id] ?? ""
+        key = board.shownKey(item.id)
+        startText = board.content.texts[key] ?? ""
         let c = NSTextContainer(size: CGSize(width: 100, height: 10_000_000))
         c.lineFragmentPadding = 0
         c.widthTracksTextView = true
@@ -168,6 +173,7 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
         textView.layer.position = b.viewPoint(board: CGPoint(x: it.x, y: it.y))
         let k = z / s
         textView.transform = abs(k - 1) < 0.0005 ? .identity : CGAffineTransform(scaleX: k, y: k)
+        tabs.place(over: textView.frame)
         if let fill = look.fill {
             textView.backgroundColor = fill
             textView.layer.cornerRadius = 4 * s
@@ -200,7 +206,10 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
 
     func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
         if applying { return true }
-        if board?.blockLocked(id) == true { return false }
+        if board?.blockLocked(id) == true {
+            board?.tellLocked(id)
+            return false
+        }
         lastTyped = nil
         if text == "\n", let e = MarkdownEdit.newline(self.text, range) {
             apply(e)
@@ -212,6 +221,7 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
 
     func textViewDidChange(_ textView: UITextView) {
         if applying { return }
+        board?.tellTyping(id)
         edited()
         if look.chem, let caret = lastTyped {
             lastTyped = nil
@@ -231,8 +241,30 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
         restyle()
         measure()
         place()
-        board?.typed(id, text)
+        board?.typed(id, key: key, text)
         keepCaretVisible()
+    }
+
+    /// Another draft is shown, or the drafts changed under the open block: show the words the board now has for it.
+    /// The typing so far must already be an undo step (BoardController.commitTyping).
+    func reload() {
+        guard let b = board else { return }
+        key = b.shownKey(id)
+        let words = b.content.texts[key] ?? ""
+        startText = words
+        before = (b.content.items, b.content.texts)
+        if text != words {
+            applying = true
+            textView.text = words
+            textView.selectedRange = NSRange(location: (words as NSString).length, length: 0)
+            applying = false
+        }
+        textView.undoManager?.removeAllActions()
+        if let it = item { look = BlockLook(it) }
+        restyle()
+        measure()
+        place()
+        tabs.refresh()
     }
 
     func convertChemistry(caret: Int) {

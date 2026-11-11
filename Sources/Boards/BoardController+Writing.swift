@@ -23,6 +23,7 @@ extension BoardController {
         }
         guard let current = content.items.first(where: { $0.id == it.id }) else { return }
         selected = nil
+        loadDraftFiles(it.id)
         let session = WritingSession(board: self, item: current)
         syncStrokes()
         session.beforeStrokes = content.strokes
@@ -54,6 +55,7 @@ extension BoardController {
         writing = nil
         w.textView.resignFirstResponder()
         w.textView.removeFromSuperview()
+        w.tabs.removeFromSuperview()
         finish(w)
         if !readOnly { canvas.becomeFirstResponder() }
         updateBar()
@@ -62,7 +64,10 @@ extension BoardController {
     /// The typing in a block is over (on the board or in the Writing view): keep it as one undo step.
     func finish(_ w: WritingSession) {
         let id = w.id
+        let key = w.key
         let text = w.text
+        if writingFull === w { writingFull = nil }
+        tellTyping(nil)
         itemViews[id]?.alpha = 1
         let pushed = (pushedBy[id] ?? 0) > 0.5
         pushedBy[id] = nil
@@ -70,8 +75,9 @@ extension BoardController {
         func undoStep(_ name: String) {
             if pushed { registerBoardUndo(strokes: w.beforeStrokes, items: w.before, name) } else { registerItemsUndo(w.before, name) }
         }
-        if content.items.contains(where: { $0.id == id }) {
-            if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if let it = content.items.first(where: { $0.id == id }) {
+            // a block with drafts is never removed for being empty: another draft may hold its words
+            if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, BlockDrafts.list(it).isEmpty {
                 content.items.removeAll { $0.id == id }
                 content.texts[id] = nil
                 // a new block left empty just goes, as on the laptop
@@ -79,7 +85,7 @@ extension BoardController {
                 rebuildItems()
                 changed()
             } else if text != w.startText {
-                content.texts[id] = text
+                content.texts[key] = text
                 undoStep("Typing")
                 rebuildItems()
                 changed()
@@ -91,17 +97,16 @@ extension BoardController {
     }
 
     /// The open block's words changed: keep them in the board's content, saved shortly (the laptop saves about every half second).
-    func typed(_ id: String, _ text: String) {
-        content.texts[id] = text
+    func typed(_ id: String, key: String, _ text: String) {
+        content.texts[key] = text
         changed()
         pushBelow(id)
     }
 
-    /// Drafts can lock a block (piece 4's drafts); nothing is locked yet.
+    /// The draft shown here is locked (its Lock button): typing in it is blocked until it is unlocked.
     func blockLocked(_ id: String) -> Bool {
         guard let it = content.items.first(where: { $0.id == id }) else { return false }
-        guard let current = it.string("draft"), let drafts = it.json["drafts"]?.array else { return false }
-        return drafts.contains { $0["id"]?.string == current && $0["locked"]?.bool == true }
+        return BlockDrafts.isLocked(it, viewingDraft[id])
     }
 
     // MARK: the block's fields
@@ -246,7 +251,9 @@ extension BoardController {
     func openWritingView(_ id: String) {
         endWriting()
         guard let it = content.items.first(where: { $0.id == id }) else { return }
+        loadDraftFiles(id)
         let session = WritingSession(board: self, item: it, fullscreen: true)
+        writingFull = session
         syncStrokes()
         session.beforeStrokes = content.strokes
         let vc = WritingViewController(session: session)

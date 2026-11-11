@@ -55,6 +55,10 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     var writing: WritingSession?
     var pushedBottom: [String: CGFloat] = [:]
     var pushedBy: [String: CGFloat] = [:]
+    /// The draft this iPad shows for a block (each device's own view; nil or missing: the current draft).
+    var viewingDraft: [String: String] = [:]
+    /// The block open in the Writing view (full screen), if any.
+    weak var writingFull: WritingSession?
 
     // hold to make a shape (BoardController+Snap.swift)
     let snapOverlay = UIView(), snapLine = CAShapeLayer(), snapHalo = CAShapeLayer()
@@ -247,7 +251,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
             case "text":
                 let v = (itemViews[it.id] as? TextBlockView) ?? TextBlockView()
                 if v.superview == nil { textLayer.addSubview(v); itemViews[it.id] = v }
-                let md = content.texts[it.id] ?? ""
+                let md = content.texts[shownKey(it.id)] ?? ""
                 v.update(md: md, item: it)
                 v.setRenderScale(canvas.zoomScale)
                 textSizes[it.id] = v.frame.size
@@ -415,10 +419,11 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
 
     /// Another device (sync) or app wrote the board: read it again, unless something here isn't saved yet (that wins on the next save).
     func checkOutside() {
-        guard !dirty, writing == nil, presentedViewController == nil, !canvas.isTracking else { return }
+        guard !dirty, presentedViewController == nil, !canvas.isTracking else { return }
         let now = fileStamps()
         guard now != stamps else { return }
         if takeOutsideWords(now) { return } // only words changed (the laptop typing): the ink and its undo stay as they are
+        guard writing == nil else { return } // a block is open: the whole board is read again once it closes
         let z = canvas.zoomScale
         let look = CGPoint(x: visibleBoard.minX, y: visibleBoard.minY)
         let keep = selected
