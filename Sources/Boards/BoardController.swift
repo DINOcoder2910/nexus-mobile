@@ -50,6 +50,8 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     var poll: Timer?
     var strokeCount = 0
     var drag: Drag?
+    /// The Tools panel (BoardController+Tools.swift), while it is shown.
+    var toolPanel: ToolPanelController?
 
     // hold to make a shape (BoardController+Snap.swift)
     let snapOverlay = UIView(), snapLine = CAShapeLayer(), snapHalo = CAShapeLayer()
@@ -237,6 +239,11 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
                 let v = (itemViews[it.id] as? ShapeItemView) ?? ShapeItemView(frame: .zero)
                 if v.superview == nil { shapeLayer.addSubview(v); itemViews[it.id] = v }
                 v.update(it, offset: offset)
+            case "tool":
+                let v = (itemViews[it.id] as? ToolCardView) ?? ToolCardView(frame: .zero)
+                if v.superview == nil { imageLayer.addSubview(v); itemViews[it.id] = v }
+                v.update(it, offset: offset, pageURL: ToolCatalog.pageURL(it.src, board: boardURL, root: root),
+                         imageURL: resolve(it.string("image")))
             case "text":
                 let v = (itemViews[it.id] as? TextBlockView) ?? TextBlockView()
                 if v.superview == nil { textLayer.addSubview(v); itemViews[it.id] = v }
@@ -426,6 +433,10 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
                                          style: .plain, target: self, action: #selector(togglePolicy(_:))))
             items.append(UIBarButtonItem(title: nil, image: UIImage(systemName: "plus.circle"), primaryAction: nil, menu: insertMenu()))
         }
+        let tools = UIBarButtonItem(image: UIImage(systemName: "square.grid.2x2"), style: .plain, target: self, action: #selector(toggleToolPanel))
+        tools.accessibilityLabel = "Tools"
+        tools.isSelected = toolPanel != nil
+        items.append(tools)
         if !pdfs.isEmpty {
             items.append(UIBarButtonItem(image: UIImage(systemName: "list.bullet"), style: .plain, target: self, action: #selector(showContents(_:))))
         }
@@ -434,6 +445,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
             if it.type == "text" {
                 items.append(UIBarButtonItem(image: UIImage(systemName: "character.cursor.ibeam"), style: .plain, target: self, action: #selector(editSelected)))
             }
+            if it.type == "tool" { items.append(contentsOf: toolCardButtons(it)) }
         }
         navigationItem.rightBarButtonItems = items
     }

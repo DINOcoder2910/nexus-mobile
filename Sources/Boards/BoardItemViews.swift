@@ -16,6 +16,8 @@ func boardBox(_ it: BoardItem, textSize: CGSize? = nil) -> CGRect {
     case "text":
         let s = textSize ?? CGSize(width: it.w ?? BoardFormat.textWidth, height: 40)
         return CGRect(x: x, y: y, width: s.width, height: s.height)
+    case "tool":
+        return CGRect(x: x, y: y, width: max(ToolCatalog.minW, it.w ?? 480), height: max(ToolCatalog.minH, it.h ?? 360))
     default:
         if it.isForeign { return CGRect(x: x, y: y, width: it.w ?? BoardFormat.foreignSize.w, height: it.h ?? BoardFormat.foreignSize.h) }
         return CGRect(x: x, y: y, width: it.w ?? 0, height: it.h ?? 0)

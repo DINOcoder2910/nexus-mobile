@@ -67,7 +67,7 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
     /// The item under a board point, top layer first (typed text, shapes, images, then PDF printouts if asked).
     func hitItem(_ p: CGPoint, pdf: Bool) -> BoardItem? {
         let z = canvas.zoomScale
-        let order = ["text": 0, "shape": 1, "image": 2, "pdf": 3]
+        let order = ["text": 0, "shape": 1, "image": 2, "tool": 2, "pdf": 3]
         let items = content.items.filter { pdf || $0.type != "pdf" }.sorted { (order[$0.type] ?? 9, $1.id) < (order[$1.type] ?? 9, $0.id) }
         return items.first { box(of: $0).insetBy(dx: -6 / z, dy: -6 / z).contains(p) }
     }
@@ -84,6 +84,8 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
             }
             if selected == it.id { edit(it); return }
         }
+        // a picked tool card, tapped again: use it in the Tools panel
+        if it.type == "tool", selected == it.id { useToolCard(it.id); return }
         selected = it.id
     }
 
@@ -145,6 +147,9 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
         case "text":
             let w0 = it.w ?? Double(d.startSize.width)
             return it.with("w", .number(max(60, (w0 + dx).rounded())))
+        case "tool":
+            let w0 = Double(d.startSize.width), h0 = Double(d.startSize.height)
+            return it.with("w", .number(max(ToolCatalog.minW, (w0 + dx).rounded()))).with("h", .number(max(ToolCatalog.minH, (h0 + dy).rounded())))
         default:
             return it
         }
