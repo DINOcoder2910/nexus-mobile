@@ -24,6 +24,17 @@ public enum BoardFormat {
     /// A placeholder's size when a foreign item has none.
     public static let foreignSize = (w: 200.0, h: 80.0)
 
+    /// board.json with `name` added to its features (the first time this app writes that feature); the same when it is there already.
+    public static func withFeature(_ meta: JSONValue, _ name: String) -> JSONValue {
+        var f = meta["features"]?.array ?? []
+        if f.contains(where: { $0.string == name }) { return meta }
+        f.append(.string(name))
+        return meta.setting("features", .array(f))
+    }
+
+    /// board.json's text as the laptop writes it (`JSON.stringify(meta, null, 2)` and a newline).
+    public static func metaText(_ meta: JSONValue) -> String { meta.pretty + "\n" }
+
     /// The features a board.json names that this app doesn't know, in the order named.
     public static func unknownFeatures(_ meta: JSONValue?, known: Set<String> = features) -> [String] {
         var out: [String] = []
@@ -197,6 +208,10 @@ public struct BoardContent {
     /// What each tile file held when read (or last written), to write only what changed.
     public var tilesOnDisk: [String: String] = [:]
     public var textsOnDisk: [String: String] = [:]
+    /// board.json as read (unknown keys kept), and what it was on disk: save writes it when the two differ (paper, features, ...).
+    /// Change it with `BoardFormat.withFeature` or `setting`; nil for an ink test board until its first save.
+    public var meta: JSONValue?
+    public var metaOnDisk: JSONValue?
     /// A newer format: shown, never written.
     public var readOnly: String?
     public var created: String?
@@ -238,6 +253,7 @@ public enum BoardFiles {
         let meta = try? JSONValue.parse(String(decoding: metaData, as: UTF8.self))
         let fmt = meta?["format"]?.string ?? ""
         c.created = meta?["created"]?.string
+        if fmt == BoardFormat.format { c.meta = meta; c.metaOnDisk = meta }
         if fmt != BoardFormat.format {
             if fmt.hasPrefix("nexus-board/") { c.readOnly = "This board was made by a newer Nexus (\(fmt))." }
             else if fmt == "nexus-board-test/1" { return legacy(board, meta: meta) }
@@ -325,9 +341,16 @@ public enum BoardFiles {
         let fm = FileManager.default
         let metaURL = board.appendingPathComponent("board.json")
         if let d = try? Data(contentsOf: metaURL), (try? JSONValue.parse(String(decoding: d, as: UTF8.self)))?["format"]?.string != BoardFormat.format {
-            try write(metaURL, BoardFormat.boardJSON()) // an ink test board becomes a real one on its first save
+            let text = BoardFormat.boardJSON() // an ink test board becomes a real one on its first save
+            try write(metaURL, text)
+            out.meta = try? JSONValue.parse(text)
+            out.metaOnDisk = out.meta
         } else if !fm.fileExists(atPath: metaURL.path) {
-            try write(metaURL, BoardFormat.boardJSON())
+            try write(metaURL, c.meta.map(BoardFormat.metaText) ?? BoardFormat.boardJSON())
+            out.metaOnDisk = c.meta
+        } else if let m = c.meta, m != c.metaOnDisk {
+            try write(metaURL, BoardFormat.metaText(m))
+            out.metaOnDisk = m
         }
         let ch = changes(c)
         for (key, text) in ch.tiles {
