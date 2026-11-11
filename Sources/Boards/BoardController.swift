@@ -73,6 +73,10 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     var lastBarKey = ""
     /// Set when the board sits beside the sidebar: the bar's sidebar button calls it.
     var onSidebar: (() -> Void)?
+    /// Side by side (BoardPanes): what to open beside this board; nil in the side pane itself.
+    enum SideRequest { case same, pick, pdf(URL), close }
+    var onSide: ((SideRequest) -> Void)?
+    var isSidePane = false
 
     init(root: URL, path: String, focus: CGRect?) {
         self.root = root
@@ -131,6 +135,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         applyTool()
 
         NotificationCenter.default.addObserver(self, selector: #selector(saveNowSelector), name: UIApplication.willResignActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(otherPaneSaved(_:)), name: BoardController.savedNote, object: nil)
         poll = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.checkOutside() }
     }
 
@@ -407,6 +412,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
                                           remove: { url in try FileManager.default.removeItem(at: url) })
             dirty = false
             stamps = fileStamps()
+            NotificationCenter.default.post(name: BoardController.savedNote, object: self, userInfo: ["path": path])
             onSaved?(path)
         } catch {
             tell("Couldn't save the board: \(error.localizedDescription)")
@@ -429,6 +435,14 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
             out["board.json"] = "\(v.contentModificationDate?.timeIntervalSince1970 ?? 0)"
         }
         return out
+    }
+
+    static let savedNote = Notification.Name("NexusBoardSaved")
+
+    /// The same board open in the other pane was saved: read it in now rather than at the next look.
+    @objc func otherPaneSaved(_ n: Notification) {
+        guard (n.object as? BoardController) !== self, n.userInfo?["path"] as? String == path else { return }
+        checkOutside()
     }
 
     /// Another device (sync) or app wrote the board: read it again, unless something here isn't saved yet (that wins on the next save).

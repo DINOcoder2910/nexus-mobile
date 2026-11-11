@@ -8,11 +8,18 @@ struct BoardHost: UIViewControllerRepresentable {
     let root: URL
     let onClose: () -> Void
     let onSaved: (String) -> Void
+    /// The board in the side pane (its close button closes the pane).
+    var isSide = false
+    var onSidebar: (() -> Void)?
+    var onSide: ((BoardController.SideRequest) -> Void)?
 
     func makeUIViewController(context: Context) -> UINavigationController {
         let vc = BoardController(root: root, path: target.path, focus: target.focus)
         vc.onClose = onClose
         vc.onSaved = onSaved
+        vc.isSidePane = isSide
+        vc.onSidebar = onSidebar
+        vc.onSide = onSide
         return UINavigationController(rootViewController: vc)
     }
 

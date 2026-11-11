@@ -249,7 +249,7 @@ final class BoardBar: UIView {
         let lead = UIStackView()
         lead.axis = .horizontal
         lead.spacing = 0
-        lead.addArrangedSubview(icon("chevron.backward", "Close the board") { [weak b] in b?.close() })
+        lead.addArrangedSubview(icon(b.isSidePane ? "xmark" : "chevron.backward", b.isSidePane ? "Close this pane" : "Close the board") { [weak b] in b?.close() })
         if b.onSidebar != nil { lead.addArrangedSubview(icon("sidebar.left", "Sidebar") { [weak b] in b?.onSidebar?() }) }
         topRow.addArrangedSubview(lead)
         var tc = UIButton.Configuration.plain()

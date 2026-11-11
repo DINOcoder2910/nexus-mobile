@@ -225,6 +225,18 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
                 self.showContents(from: self.bar.pagePill)
             })
         }
+        if let onSide, !isSidePane {
+            var side: [UIMenuElement] = [
+                UIAction(title: "This board again", image: UIImage(systemName: "rectangle.split.2x1")) { _ in onSide(.same) },
+                UIAction(title: "Another board…", image: UIImage(systemName: "rectangle.on.rectangle")) { _ in onSide(.pick) },
+            ]
+            for p in pdfs.values.sorted(by: { $0.item.id < $1.item.id }) {
+                guard let url = resolve(p.item.src) else { continue }
+                side.append(UIAction(title: "\(p.name) on its own", image: UIImage(systemName: "doc.richtext")) { _ in onSide(.pdf(url)) })
+            }
+            side.append(UIAction(title: "Close the side pane", image: UIImage(systemName: "xmark")) { _ in onSide(.close) })
+            items.append(UIMenu(title: "Side by side", image: UIImage(systemName: "rectangle.split.2x1"), children: side))
+        }
         // (Earlier versions, from the version history, goes here.)
         items.append(UIAction(title: "Hide the bars", image: UIImage(systemName: "rectangle.expand.vertical")) { [weak self] _ in
             self?.setBarsHidden(true)
