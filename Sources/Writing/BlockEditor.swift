@@ -36,7 +36,25 @@ final class BlockTextView: UITextView {
         key(UIKeyCommand.inputEscape, [], "done", "Done")
         key("\t", [], "indent", "Indent")
         key("\t", .shift, "outdent", "Outdent")
+        // Word's accent keys (the laptop's): a dead key, then the letter
+        key("'", .command, "dead:acute", "Acute accent (then a vowel)")
+        key("~", [.command, .shift], "dead:tilde", "Tilde (then n)")
+        key("`", [.command, .shift], "dead:tilde", "Tilde (then n)")
+        key(":", [.command, .shift], "dead:umlaut", "Diaeresis (then u)")
+        key(";", [.command, .shift], "dead:umlaut", "Diaeresis (then u)")
+        key("/", [.command, .alternate, .shift], "insert:¿", "¿")
+        key("?", [.command, .alternate, .shift], "insert:¿", "¿")
+        key("1", [.command, .alternate, .shift], "insert:¡", "¡")
+        key("!", [.command, .alternate, .shift], "insert:¡", "¡")
         return out
+    }
+
+    /// A Spanish block asks for a Spanish keyboard when one is set up (its spelling and suggestions then follow).
+    override var textInputMode: UITextInputMode? {
+        if session?.isSpanish == true, let es = UITextInputMode.activeInputModes.first(where: { $0.primaryLanguage?.hasPrefix("es") == true }) {
+            return es
+        }
+        return super.textInputMode
     }
 
     @objc func nexusKey(_ sender: UIKeyCommand) {
@@ -72,6 +90,10 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
     private(set) var key: String
     private var applying = false
     private var lastTyped: Int? = nil
+    /// A dead accent key waiting for its letter ("acute", "tilde", "umlaut").
+    var deadKey: String?
+    private var practiceTimer: Timer?
+    private var practiceOver = false
     private var keyboard: CGRect = .zero
     lazy var bar = FormatBar(session: self)
     /// The block's drafts as tabs above it (only when it has drafts).
@@ -116,6 +138,7 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
         textView.smartInsertDeleteType = .no
         textView.inputAccessoryView = bar
         textView.text = startText
+        applyPractice()
 
         let tick = UITapGestureRecognizer(target: self, action: #selector(tappedInside(_:)))
         tick.delegate = self
@@ -197,6 +220,7 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
     func lookChanged() {
         guard let it = item else { return }
         look = BlockLook(it)
+        if Practice.isOn(it) != (practiceTimer != nil) { applyPractice() }
         restyle()
         measure()
         place()
@@ -214,6 +238,14 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
         if text == "\n", let e = MarkdownEdit.newline(self.text, range) {
             apply(e)
             return false
+        }
+        if let dead = deadKey, (text as NSString).length == 1 {
+            deadKey = nil
+            let out = Accents.apply(dead, text)
+            if out != text {
+                apply(MDEdit((self.text as NSString).replacingCharacters(in: range, with: out), NSRange(location: range.location + (out as NSString).length, length: 0)))
+                return false
+            }
         }
         if look.review, text != "\n", textView.markedTextRange == nil {
             // Review mode: the change becomes a suggestion
@@ -419,8 +451,54 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
         case "done": if fullscreen { onDone?() } else { board?.endWriting() }
         case "writing": if fullscreen { onDone?() } else { board?.openWritingView(id) }
         case "find": board?.openFind(id)
-        default: break
+        default:
+            if action.hasPrefix("dead:") { deadKey = String(action.dropFirst(5)) }
+            else if action.hasPrefix("insert:") { insert(String(action.dropFirst(7))) }
         }
+    }
+
+    /// Types `s` at the caret (the accent row, ¿ and ¡).
+    func insert(_ s: String) {
+        if board?.blockLocked(id) == true { board?.tellLocked(id); return }
+        let sel = textView.selectedRange
+        if look.review { apply(Review.type(text, range: sel, with: s)); return }
+        apply(MDEdit((text as NSString).replacingCharacters(in: sel, with: s), NSRange(location: sel.location + (s as NSString).length, length: 0)))
+    }
+
+    // MARK: Spanish blocks and practice mode
+
+    /// The block is Spanish: its own `lang`, else what its words look like (as the laptop guesses it).
+    var isSpanish: Bool { BlockFacts.lang(item, text) == "es" }
+
+    var practicing: Bool { item.map(Practice.isOn) ?? false }
+
+    /// Practice mode turns every check off: spelling, autocorrect, predictions and Writing Tools; it is back on when practice ends.
+    func applyPractice() {
+        let on = practicing
+        textView.spellCheckingType = on ? .no : .default
+        textView.autocorrectionType = on ? .no : .default
+        textView.inlinePredictionType = on ? .no : .default
+        if #available(iOS 18.0, *) { textView.writingToolsBehavior = on ? .none : .default }
+        if textView.isFirstResponder { textView.reloadInputViews() }
+        practiceTimer?.invalidate()
+        practiceTimer = nil
+        practiceOver = false
+        if on {
+            practiceTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.tickPractice() }
+        }
+        bar.refresh()
+    }
+
+    func tickPractice() {
+        bar.refresh()
+        guard let it = item, let left = Practice.left(it), left <= 0, !practiceOver else { return }
+        practiceOver = true
+        board?.practiceOver(id)
+    }
+
+    func stopTimers() {
+        practiceTimer?.invalidate()
+        practiceTimer = nil
     }
 
     func setStyle(_ style: BlockStyle) { apply(MarkdownEdit.setStyle(text, textView.selectedRange, style)) }

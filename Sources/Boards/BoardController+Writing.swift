@@ -68,6 +68,7 @@ extension BoardController {
         let key = w.key
         let text = w.text
         if writingFull === w { writingFull = nil }
+        w.stopTimers()
         tellTyping(nil)
         itemViews[id]?.alpha = 1
         let pushed = (pushedBy[id] ?? 0) > 0.5

@@ -10,6 +10,8 @@ final class FormatBar: UIInputView {
     private let stack = UIStackView()
     private var styleButton = UIButton(type: .system)
     private var countLabel = UILabel()
+    /// á é í ó ú ñ ü ¿ ¡, shown for a Spanish block.
+    private let accentStack = UIStackView()
 
     init(session: WritingSession) {
         self.session = session
@@ -75,7 +77,25 @@ final class FormatBar: UIInputView {
         return wrap
     }
 
+    private func buildAccents() {
+        accentStack.axis = .horizontal
+        accentStack.spacing = 0
+        for ch in Accents.spanishRow {
+            var c = UIButton.Configuration.plain()
+            c.title = ch
+            c.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 7, bottom: 4, trailing: 7)
+            c.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { a in
+                var a = a; a.font = UIFont.systemFont(ofSize: 18); return a
+            }
+            let b = UIButton(configuration: c, primaryAction: UIAction { [weak self] _ in self?.session?.insert(ch) })
+            b.accessibilityLabel = "Type \(ch)"
+            accentStack.addArrangedSubview(b)
+        }
+        accentStack.isHidden = true
+    }
+
     private func build() {
+        buildAccents()
         var config = UIButton.Configuration.plain()
         config.title = "Body"
         config.image = UIImage(systemName: "chevron.down")
@@ -106,6 +126,11 @@ final class FormatBar: UIInputView {
             button("paintpalette", "Colour", menu: colourMenu()),
             button("square.fill.on.square", "Background", menu: deferred { [weak self] in self?.fillItems() ?? [] }),
             divider(),
+            button("globe", "Spanish", menu: deferred { [weak self] in
+                guard let s = self?.session, let b = s.board else { return [] }
+                return b.spanishMenu(s.id)
+            }),
+            accentStack,
             button("text.badge.checkmark", "Review", menu: deferred { [weak self] in self?.reviewItems() ?? [] }),
             button("square.on.square", "Drafts", menu: deferred { [weak self] in
                 guard let s = self?.session, let b = s.board else { return [] }
@@ -135,7 +160,16 @@ final class FormatBar: UIInputView {
         config?.title = s.currentStyle.label
         styleButton.configuration = config
         let c = LiveMarkdown.count(s.text)
-        countLabel.text = c.words == 1 ? "1 word" : "\(c.words) words"
+        var label = c.words == 1 ? "1 word" : "\(c.words) words"
+        if let it = s.item, let left = Practice.left(it) {
+            label = (left > 0 ? "Practice \(Practice.clock(left)) left" : "Practice time's up") + " · " + label
+            countLabel.textColor = left > 0 ? .secondaryLabel : .systemOrange
+        } else {
+            countLabel.textColor = .secondaryLabel
+        }
+        countLabel.text = label
+        let spanish = s.isSpanish
+        if accentStack.isHidden == spanish { accentStack.isHidden = !spanish }
     }
 
     // MARK: menus
@@ -270,12 +304,6 @@ final class FormatBar: UIInputView {
             UIAction(title: "Push things below", image: UIImage(systemName: "arrow.down.square"), state: push ? .on : .off) { [weak b] _ in
                 b?.setBlockField(id, "push", push ? nil : .bool(true))
             },
-        ]))
-        let lang = it.string("lang")
-        out.append(UIMenu(title: "Language", image: UIImage(systemName: "globe"), children: [
-            UIAction(title: "Detect", state: lang == nil ? .on : .off) { [weak b] _ in b?.setBlockField(id, "lang", nil) },
-            UIAction(title: "English", state: lang == "en" ? .on : .off) { [weak b] _ in b?.setBlockField(id, "lang", .string("en")) },
-            UIAction(title: "Spanish", state: lang == "es" ? .on : .off) { [weak b] _ in b?.setBlockField(id, "lang", .string("es")) },
         ]))
         let chem = it.json["chem"]?.bool ?? true
         out.append(UIAction(title: "Chemistry subscripts", image: UIImage(systemName: "flask"), state: chem ? .on : .off) { [weak b] _ in
