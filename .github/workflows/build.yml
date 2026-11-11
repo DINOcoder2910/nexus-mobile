@@ -1,18 +1,30 @@
 name: Build iPad app
 
+# Every push builds on a GitHub-hosted Mac: the NexusCore tests and the unsigned app, side by side.
+# main publishes the "latest" download; any other branch publishes "preview", so a branch can be tried on the iPad before it lands.
 on:
   push:
-    branches: [main]
+    branches: [main, "claude/**"]
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: build
+  group: build-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  test:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: NexusCore tests (data folder, YAML edits, planning)
+        run: |
+          set -o pipefail
+          swift test --package-path Packages/NexusCore 2>&1 | tail -n 150
+
   build:
     runs-on: macos-latest
     timeout-minutes: 30
@@ -30,15 +42,15 @@ jobs:
       - name: Build (unsigned; Sideloadly signs it on install)
         run: |
           set -o pipefail
-          xcodebuild -project NexusMobile.xcodeproj -target NexusMobile -configuration Release \
-            -sdk iphoneos SYMROOT="$PWD/build" \
+          xcodebuild -project NexusMobile.xcodeproj -scheme NexusMobile -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath DerivedData \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            build | tail -n 80
+            build 2>&1 | grep -E "error:|warning: unre|BUILD|\*\*" | head -n 150
 
       - name: Package the .ipa
         run: |
           mkdir -p Payload
-          cp -R build/Release-iphoneos/NexusMobile.app Payload/
+          cp -R DerivedData/Build/Products/Release-iphoneos/NexusMobile.app Payload/
           zip -qry NexusMobile.ipa Payload
           ls -la NexusMobile.ipa
 
@@ -47,10 +59,20 @@ jobs:
           name: NexusMobile-ipa
           path: NexusMobile.ipa
 
-      - name: Publish as the "latest" download
+  publish:
+    needs: [test, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: NexusMobile-ipa
+
+      - name: Publish the download
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
-          gh release delete latest --yes --cleanup-tag || true
-          gh release create latest NexusMobile.ipa --title "Latest build" \
-            --notes "Built from ${GITHUB_SHA::7}. Download NexusMobile.ipa and install it with Sideloadly." --target "$GITHUB_SHA"
+          if [ "$GITHUB_REF_NAME" = "main" ]; then TAG=latest; TITLE="Latest build"; FLAG=""; else TAG=preview; TITLE="Preview build ($GITHUB_REF_NAME)"; FLAG="--prerelease"; fi
+          gh release delete "$TAG" --yes --cleanup-tag || true
+          gh release create "$TAG" NexusMobile.ipa --title "$TITLE" $FLAG \
+            --notes "Built from ${GITHUB_SHA::7} on $GITHUB_REF_NAME. Download NexusMobile.ipa and install it with Sideloadly." --target "$GITHUB_SHA"

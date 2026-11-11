@@ -1,0 +1,7 @@
+id: beta
+name: Beta class
+color: blue
+aliases: [BETA]
+status: active
+links:
+  - https://docs.google.com/document/d/beta-lab-book

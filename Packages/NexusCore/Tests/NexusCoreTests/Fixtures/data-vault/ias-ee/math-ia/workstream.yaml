@@ -1,0 +1,7 @@
+id: math-ia
+name: Math IA
+color: teal
+aliases: [MATHIA, ia]
+status: parked
+links:
+  - {url: https://onenote.example/math-ia, title: Research log}

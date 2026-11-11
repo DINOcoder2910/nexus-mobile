@@ -1,0 +1,79 @@
+tasks:
+  - id: q7ry
+    title: Parent that is ticked while a child is open
+    done: true
+    subtasks:
+      - id: r4pd
+        title: Child one, tab indented
+      - id: evpf
+        title: Child two, tab indented
+        done: true
+        plan: [2026-09-20]
+        subtasks:
+          - id: auem
+            title: Grandchild with two tabs
+  - id: bnt6
+    title: 'Decide ED: Columbia or "Northwestern" — #1 pick (see [[beta]])'
+    due: 2026-10-20
+    plan: [2026-10-10]
+  - id: n2jt
+    title: Plan the week
+    plan: [2026-10-02, 2026-10-04, 2026-10-06]
+    est: 1h30m
+  - id: b585
+    title: Study daily
+    est: 45m
+    every: {freq: day, until: 2026-12-01}
+  - id: rzdt
+    title: Study with no end
+    every: {freq: day}
+  - id: snr9
+    title: Odd repeat
+    every: weekly on monday
+  - id: m5w9
+    title: Reply to the editor — Jane Doe (Example Journal)
+    key: true
+    email: gmail/1a07b8ad04f258c4
+  - id: kjxd
+    title: Exam prep
+    tags: [summative]
+  - id: mavm
+    title: Glued tag after a link — from [[2026-01-05 First meeting|the session]]
+  - id: z7qk
+    title: A custom field row
+    due: 2026-12-01
+    difficulty: hard
+  - id: nn48
+    title: Bad dates
+    due: next week
+    plan: [2026-10-02, soonish]
+  - id: v2ur
+    title: Field in the middle of the sentence
+    due: 2026-10-30
+  - id: apet
+    title: Upper-case X is done
+    done: true
+  - id: yvgq
+    title: Row with no tag at all
+  - id: mv3k
+    title: IRIS Deadline Alpha
+    due: 2026-10-13
+    key: true
+  - id: w2eb
+    title: Journal to say where to access the paper — Example Journal (Murtaza asked)
+    waiting: {since: 2026-09-28}
+    email: gmail/1a0d893993db151a
+  - id: wyug
+    title: A wait without its date
+    waiting: {}
+  - id: a5zj
+    title: Finished thing one
+    done: true
+    due: 2026-08-01
+  - id: k6qs
+    title: Finished thing two
+    done: true
+  - id: me3p
+    title: An open row hiding in Done
+  - id: mg2e
+    title: A task for another workstream filed here

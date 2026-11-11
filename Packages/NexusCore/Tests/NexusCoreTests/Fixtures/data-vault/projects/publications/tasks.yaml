@@ -1,0 +1,10 @@
+tasks:
+  - id: yghj
+    title: Paper A — response from the journal
+    waiting: {since: 2026-08-03}
+  - id: ksq2
+    title: Paper B — check whether it is out
+    waiting: {since: 2026-08-03}
+  - id: inp7
+    title: Chase the journal about Paper B
+    due: 2026-11-05

@@ -1,0 +1,20 @@
+tasks:
+  - id: yvyp
+    title: Submit the overdue assignment — Schoology (ASB)
+    email: outlook/jAAIhQuSPwAAAA==
+  - id: kgtv
+    title: Decide whether to attend the webinar, Sept 23 — Some University
+    email: gmail/1a0b43334859bd18
+  - id: zq48
+    title: 'Suspicious: sender x@example.com, subject "THANK YOU"'
+    done: true
+    email: gmail/19fe0a2b8131eddc
+  - id: sdn4
+    title: Learn to juggle
+    someday: true
+  - id: sdn5
+    title: Build a bookshelf
+    due: 2027-03-01
+    key: true
+    someday: true
+    tags: [home]

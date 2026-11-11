@@ -1,0 +1,12 @@
+tasks:
+  - id: ebee
+    title: Supplemental essay(s)
+    due: 2026-11-01
+    est: 4h
+    subtasks:
+      - id: j3vk
+        title: Essay one — under 300 words
+        due: 2026-10-15
+      - id: yzr7
+        title: Essay two — under 200 words
+        due: 2026-10-15

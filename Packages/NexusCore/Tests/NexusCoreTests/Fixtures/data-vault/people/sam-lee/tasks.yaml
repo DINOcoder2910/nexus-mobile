@@ -1,0 +1,5 @@
+tasks:
+  - id: slm1
+    title: Send Sam the essay list
+    due: 2026-10-30
+    key: true
