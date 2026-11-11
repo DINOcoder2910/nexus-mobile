@@ -290,6 +290,9 @@ final class TutorTests: XCTestCase {
         XCTAssertEqual(r.time(ofItem: "t1", word: "loss"), 10)
         XCTAssertEqual(r.time(ofItem: "t1"), 10)
         XCTAssertNil(r.time(ofStroke: "nope"))
+        let md = "Oxidation is loss\nof electrons\n\nreduction is gain"
+        XCTAssertEqual(r.time(ofItem: "t1", markdown: md, fraction: 0.05), 10, "a tap at the top: the first words")
+        XCTAssertEqual(r.time(ofItem: "t1", markdown: md, fraction: 0.95), 30, "a tap at the bottom: the last")
         XCTAssertEqual(r.strokesNotYet(at: 3), ["s2"])
         XCTAssertEqual(r.itemsNotYet(at: 3), ["t1"])
         XCTAssertEqual(r.itemsNotYet(at: 10), [])

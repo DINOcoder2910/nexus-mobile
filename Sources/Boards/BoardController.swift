@@ -138,6 +138,8 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        tutorBoardClosing()
+        recordingBoardClosing()
         saveNow()
         poll?.invalidate()
     }
@@ -344,6 +346,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         let n = canvas.drawing.strokes.count
         if n == strokeCount + 1 { strokeLanded() }
         strokeCount = canvas.drawing.strokes.count
+        recordingDrawingChanged()
         if selected != nil { selected = nil }
         growIfNeeded()
         updateContentSize()
@@ -368,6 +371,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         guard dirty, !readOnly else { return }
         let taken = Set(content.items.map(\.id))
         content.strokes = ledger.strokes(canvas.drawing, offset: offset, taken: taken)
+        recordingSaved()
         do {
             content = try BoardFiles.save(content, to: boardURL, write: { url, text in try FolderAccess.write(url, text) },
                                           remove: { url in try FileManager.default.removeItem(at: url) })
@@ -435,6 +439,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
                 items.append(UIBarButtonItem(image: UIImage(systemName: "character.cursor.ibeam"), style: .plain, target: self, action: #selector(editSelected)))
             }
         }
+        items.append(contentsOf: boardExtraBarItems())
         navigationItem.rightBarButtonItems = items
     }
 

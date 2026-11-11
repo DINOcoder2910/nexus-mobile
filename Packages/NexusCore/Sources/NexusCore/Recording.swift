@@ -90,6 +90,26 @@ public struct BoardRecording: Equatable, Identifiable {
         return mine.first?.at
     }
 
+    /// A tap on a block `fraction` of the way down it (0 top, 1 bottom): the mark whose words sit nearest that place in the block's
+    /// text (where its words are found in `markdown`), else the block's first.
+    public func time(ofItem id: String, markdown: String, fraction: Double) -> Double? {
+        let mine = marks.filter { $0.item == id }
+        guard mine.count > 1 else { return mine.first?.at }
+        let text = markdown.lowercased() as NSString
+        guard text.length > 0 else { return mine.first?.at }
+        let want = max(0, min(1, fraction)) * Double(text.length)
+        var best: (d: Double, at: Double)?
+        for m in mine {
+            let words = (m.text ?? "").lowercased()
+            let first = String(words.prefix(40))
+            let r = text.range(of: first)
+            guard r.location != NSNotFound else { continue }
+            let d = abs(Double(r.location + r.length / 2) - want)
+            if best == nil || d < best!.d { best = (d, m.at) }
+        }
+        return best?.at ?? mine.first?.at
+    }
+
     /// While playing at `t`: the strokes of this recording not written yet (hidden, so the notes appear in step).
     public func strokesNotYet(at t: Double) -> Set<String> { Set(marks.filter { $0.stroke != nil && $0.at > t }.compactMap(\.stroke)) }
 

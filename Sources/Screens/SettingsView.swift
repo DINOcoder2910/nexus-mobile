@@ -36,6 +36,8 @@ struct SettingsView: View {
 
             SyncSettings()
 
+            TutorSettings()
+
             if !s.problems.isEmpty {
                 Section("Things to check") {
                     ForEach(s.problems) { p in

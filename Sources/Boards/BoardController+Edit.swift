@@ -74,6 +74,7 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
 
     @objc func tapped(_ g: UITapGestureRecognizer) {
         let p = boardPoint(g)
+        if recordingTap(p) { return }
         guard let it = hitItem(p, pdf: false) else { selected = nil; return }
         if it.type == "text", !readOnly {
             if let v = itemViews[it.id] as? TextBlockView,
@@ -211,6 +212,7 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
             changeItems("Delete") { c in c.items.removeAll { $0.id == id }; c.texts[id] = nil }
             return
         }
+        recordingTyped(id, old: content.texts[id] ?? "", new: md)
         changeItems("Edit text") { c in
             if let i = c.items.firstIndex(where: { $0.id == id }) { c.items[i] = item }
             c.texts[id] = md

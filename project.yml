@@ -30,6 +30,11 @@ targets:
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
         NSLocalNetworkUsageDescription: Nexus syncs your notes with your home hub.
+        NSMicrophoneUsageDescription: Nexus listens while you hold the tutor button, and records a class when you ask it to.
+        NSSpeechRecognitionUsageDescription: Nexus turns what you ask the tutor into words, on the iPad.
+        # a class keeps recording when the screen locks or you switch apps
+        UIBackgroundModes:
+          - audio
         UISupportedInterfaceOrientations~ipad:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationPortraitUpsideDown
