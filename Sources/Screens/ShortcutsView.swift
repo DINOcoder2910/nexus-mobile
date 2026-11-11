@@ -45,8 +45,8 @@ struct ShortcutsView: View {
         List {
             Section {
                 Picker("Device", selection: $side) {
-                    Label("Laptop", systemImage: "laptopcomputer").tag(Side.laptop)
-                    Label("iPad", systemImage: "ipad.landscape").tag(Side.ipad)
+                    Text("Laptop").tag(Side.laptop)
+                    Text("iPad").tag(Side.ipad)
                 }
                 .pickerStyle(.segmented)
                 .listRowBackground(Color.clear)
@@ -75,10 +75,10 @@ struct ShortcutsView: View {
                             }
                         }
                     } header: {
-                        header(g, issues)
+                        header(g, issues).textCase(nil)
                     }
                 }
-            } else if side == .laptop {
+            } else if side == .laptop && center.laptopMissing {
                 Section {
                     ContentUnavailableView("No laptop shortcuts yet", systemImage: "laptopcomputer",
                                            description: Text("The laptop's list appears here once Nexus on the laptop has run with this data folder (it writes shortcuts/laptop.yaml)."))
