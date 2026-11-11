@@ -6,6 +6,7 @@ import NexusCore
 struct BoardHost: UIViewControllerRepresentable {
     let target: NexusStore.BoardTarget
     let root: URL
+    let store: NexusStore
     let onClose: () -> Void
     let onSaved: (String) -> Void
 
@@ -13,6 +14,7 @@ struct BoardHost: UIViewControllerRepresentable {
         let vc = BoardController(root: root, path: target.path, focus: target.focus)
         vc.onClose = onClose
         vc.onSaved = onSaved
+        vc.store = store
         return UINavigationController(rootViewController: vc)
     }
 

@@ -300,6 +300,22 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
         edited()
     }
 
+    // MARK: the edit menu (Comment)
+
+    func textView(_ textView: UITextView, editMenuForTextIn range: NSRange, suggestedActions: [UIMenuElement]) -> UIMenu? {
+        guard let b = board else { return nil }
+        let id = self.id
+        var extra: [UIMenuElement] = [
+            UIAction(title: "Comment", image: UIImage(systemName: "text.bubble")) { [weak b] _ in b?.addComment(on: id, range: range) },
+        ]
+        if b.content.items.contains(where: { $0.id == id }) {
+            extra.append(UIAction(title: "Add a Nexus task", image: UIImage(systemName: "checkmark.circle.badge.plus")) { [weak b] _ in
+                b?.addNexusTask(from: id, range: range)
+            })
+        }
+        return UIMenu(children: suggestedActions + [UIMenu(options: .displayInline, children: extra)])
+    }
+
     // MARK: words from the other device
 
     /// The laptop's words for this open block arrived (live editing, piece 11): `base` is the words both last agreed on, `theirs`

@@ -46,7 +46,7 @@ struct RootView: View {
         }
         .sheet(item: $store.capture) { start in CaptureSheet(start: start) }
         .fullScreenCover(item: $store.openBoard) { target in
-            BoardHost(target: target, root: store.folder, onClose: { store.openBoard = nil }, onSaved: { path in
+            BoardHost(target: target, root: store.folder, store: store, onClose: { store.openBoard = nil }, onSaved: { path in
                 store.boardsChanged()
                 HandwritingIndex.shared.refresh(board: path, root: store.folder)
             })

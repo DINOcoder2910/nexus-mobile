@@ -93,6 +93,8 @@ extension BoardController {
                 rebuildItems()
             }
         }
+        if content.items.contains(where: { $0.id == id }), key == id { marksAfterTyping(id) } else { followInkMarks() }
+        rebuildItems()
         saveNow()
     }
 

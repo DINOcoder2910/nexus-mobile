@@ -222,6 +222,14 @@ final class FormatBar: UIInputView {
         out.append(UIAction(title: "Writing view", image: UIImage(systemName: "arrow.up.left.and.arrow.down.right")) { [weak b] _ in b?.openWritingView(id) })
         out.append(UIAction(title: "Find and replace", image: UIImage(systemName: "magnifyingglass")) { [weak b] _ in b?.openFind(id) })
         out.append(UIAction(title: "\(c.words) words · \(c.characters) characters", attributes: .disabled) { _ in })
+        let sel = s.textView.selectedRange
+        let shown = b.marksShown
+        out.append(UIMenu(options: .displayInline, children: [
+            UIAction(title: "Comment", image: UIImage(systemName: "text.bubble")) { [weak b] _ in b?.addComment(on: id, range: sel) },
+            UIAction(title: "Add a Nexus task", image: UIImage(systemName: "checkmark.circle.badge.plus")) { [weak b] _ in b?.addNexusTask(from: id, range: sel) },
+            UIAction(title: "All comments", image: UIImage(systemName: "list.bullet.rectangle")) { [weak b] _ in b?.openComments() },
+            UIAction(title: "Show comments", image: UIImage(systemName: "eye"), state: shown ? .on : .off) { [weak b] _ in b?.marksShown = !shown },
+        ]))
         let push = it.json["push"]?.bool ?? false
         out.append(UIMenu(options: .displayInline, children: [
             UIAction(title: "Make room", image: UIImage(systemName: "arrow.down.to.line")) { [weak b] _ in b?.makeRoom(id) },

@@ -77,11 +77,14 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
         if writing != nil { endWriting(); return }
         let p = boardPoint(g)
         guard let it = hitItem(p, pdf: false) else { selected = nil; return }
+        if it.type == "mark" { selected = nil; openMark(it.id); return }
         if it.type == "text", !readOnly {
             if let v = itemViews[it.id] as? TextBlockView,
                let line = v.taskLine(at: CGPoint(x: p.x - it.x, y: p.y - it.y)),
-               let md = TextLook.toggleTask(content.texts[it.id] ?? "", line: line) {
-                changeItems("Tick") { $0.texts[it.id] = md }
+               let md = TextLook.toggleTask(content.texts[shownKey(it.id)] ?? "", line: line) {
+                if blockLocked(it.id) { tellLocked(it.id); return }
+                let key = shownKey(it.id)
+                changeItems("Tick") { $0.texts[key] = md }
                 return
             }
             if selected == it.id { beginWriting(it, at: p); return }
@@ -124,6 +127,7 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
             }
             registerItemsUndo(d.before, d.resize ? "Resize" : "Move")
             rebuildItems()
+            followInkMarks() // ink attached to the block's words moves with it
             growIfNeeded()
             changed()
         default:

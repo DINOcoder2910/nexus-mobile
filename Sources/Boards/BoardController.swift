@@ -59,6 +59,10 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     var viewingDraft: [String: String] = [:]
     /// The block open in the Writing view (full screen), if any.
     weak var writingFull: WritingSession?
+    /// Where each comment's bubble is drawn (board units), for taps and selection.
+    var markBoxes: [String: CGRect] = [:]
+    /// The user's tasks, for "Add a Nexus task" from typed words.
+    weak var store: NexusStore?
 
     // hold to make a shape (BoardController+Snap.swift)
     let snapOverlay = UIView(), snapLine = CAShapeLayer(), snapHalo = CAShapeLayer()
@@ -189,6 +193,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
 
     func box(of it: BoardItem) -> CGRect {
         if it.type == "pdf", let p = pdfs[it.id] { return p.box }
+        if it.type == "mark" { return markBoxes[it.id] ?? CGRect(x: it.x, y: it.y, width: MarkView.size, height: MarkView.size) }
         return boardBox(it, textSize: textSizes[it.id])
     }
 
@@ -253,15 +258,19 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
                 if v.superview == nil { textLayer.addSubview(v); itemViews[it.id] = v }
                 let md = content.texts[shownKey(it.id)] ?? ""
                 v.update(md: md, item: it)
+                v.marked = markedRanges(it.id)
                 v.setRenderScale(canvas.zoomScale)
                 textSizes[it.id] = v.frame.size
                 v.frame.origin = CGPoint(x: it.x + offset.x, y: it.y + offset.y)
+            case "mark":
+                break // placed below, once the blocks they sit on are laid out
             default:
                 let v = (itemViews[it.id] as? ForeignItemView) ?? ForeignItemView(frame: .zero)
                 if v.superview == nil { shapeLayer.addSubview(v); itemViews[it.id] = v }
                 v.update(it, offset: offset)
             }
         }
+        for it in content.items where it.type == "mark" { placeMark(it) }
         showSelection()
         updateContentSize()
         syncWorld()

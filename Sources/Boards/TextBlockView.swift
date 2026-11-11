@@ -42,6 +42,8 @@ enum TextBlockRender {
 /// is on, so the board can tick it with TextLook.toggleTask.
 final class TextBlockView: UIView {
     private(set) var layout: TextBlockLayout?
+    /// Words that comments sit on (markdown ranges), underlined softly.
+    var marked: [NSRange] = [] { didSet { if marked != oldValue { setNeedsDisplay() } } }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -97,6 +99,7 @@ final class TextBlockView: UIView {
 
     override func draw(_ rect: CGRect) {
         guard let layout, let ctx = UIGraphicsGetCurrentContext() else { return }
+        layout.text.drawMarked(marked, in: ctx)
         layout.text.draw(in: ctx)
     }
 
