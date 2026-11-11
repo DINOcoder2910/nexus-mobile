@@ -187,7 +187,8 @@ final class MarkController: UIViewController, UITextViewDelegate {
         let empty = text.isEmpty && drawing.strokes.isEmpty && BoardMarks.replies(m).isEmpty
         if empty, isNew {
             // nothing said: the new comment goes, and so does its undo step
-            b.content.items.removeAll { $0.id == id }
+            let gone = self.id
+            b.content.items.removeAll { $0.id == gone }
             b.canvas.undoManager?.undo()
             b.rebuildItems()
             b.changed()
@@ -204,8 +205,7 @@ final class MarkController: UIViewController, UITextViewDelegate {
         }
         let made = BoardMarks.make(id: m.id, kind: "bubble", on: BoardMarks.on(m), at: BoardMarks.anchor(m), x: m.x, y: m.y,
                                    text: text, strokes: strokes.isEmpty ? nil : strokes, by: m.string("by") ?? b.deviceName)
-        let id = self.id
-        b.changeMark(id, "Comment") { old in
+        b.changeMark(self.id, "Comment") { old in
             var next = old.with("text", .string(text))
             next = next.with("strokes", made.json["strokes"])
             return next
