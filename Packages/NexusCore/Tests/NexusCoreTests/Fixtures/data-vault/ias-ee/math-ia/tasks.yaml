@@ -1,0 +1,15 @@
+tasks:
+  - id: mia1
+    title: Pick the topic
+    done: 2026-09-10
+  - id: mia2
+    title: First draft
+    due: 2026-11-20
+    key: true
+    note: |
+      Ask Mr K for feedback
+      Bring the data table
+  - id: mia3
+    title: Gather data
+    plan: [2026-10-28 16:00, 2026-10-30]
+    est: 3h

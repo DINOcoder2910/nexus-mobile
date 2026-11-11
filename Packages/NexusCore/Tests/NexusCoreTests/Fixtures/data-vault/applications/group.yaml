@@ -1,0 +1,6 @@
+label: Applications
+order: 4
+color: purple
+kind: school
+default: overview
+aliases: [apps]

@@ -1,0 +1,10 @@
+tasks:
+  - id: j586
+    title: "[[2026-01-05 First meeting|Meeting with Pat]] — Thu 7:15pm, 45 min"
+    due: 2026-10-08
+    email: gmail/19fffa2589c0bb06
+  - id: w79s
+    title: Do one hour of research
+    done: true
+    due: 2026-09-30
+    plan: [2026-09-29]

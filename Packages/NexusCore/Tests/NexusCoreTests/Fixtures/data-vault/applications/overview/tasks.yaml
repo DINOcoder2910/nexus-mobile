@@ -1,0 +1,19 @@
+tasks:
+  - id: epmz
+    title: "Decide ED: Columbia or Northwestern"
+    due: 2026-11-01
+  - id: h84a
+    title: Add convo to bragsheet
+  - id: atvn
+    title: Teacher to send the letter
+    done: true
+    waiting: {since: 2026-09-01}
+  - id: wewd
+    title: A done row under an unknown heading
+    done: true
+  - id: sdp2
+    title: Ask about a gap year
+    someday: true
+    subtasks:
+      - id: sdp3
+        title: List the questions

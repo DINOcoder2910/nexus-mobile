@@ -3,3 +3,7 @@ build/
 Payload/
 *.ipa
 .DS_Store
+DerivedData/
+.build/
+.swiftpm/
+Package.resolved

@@ -1,0 +1,4 @@
+nexus: 2
+fields:
+  difficulty: {type: text, label: difficulty, show: chip}
+viewers: {}

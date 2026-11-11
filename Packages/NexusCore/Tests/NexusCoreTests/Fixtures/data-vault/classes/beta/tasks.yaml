@@ -1,0 +1,65 @@
+tasks:
+  - id: nvwp
+    title: Parent task
+    subtasks:
+      - id: pz53
+        title: Single-space child
+        done: true
+        plan: [2026-09-13]
+        est: 0.5h
+      - id: gdqb
+        title: Another single-space child
+        subtasks:
+          - id: cw9h
+            title: Four-space grandchild
+      - id: bsm6
+        title: Child with its own deadline and mail
+        due: 2026-10-21
+        email: outlook/AQMkBETA==
+  - id: tjn4
+    title: Second parent
+  - id: bkd7
+    title: Unit test
+    key: true
+    plan: [2026-10-26]
+    tags: [summative]
+  - id: huj5
+    title: A row from another workstream
+  - id: hm7a
+    title: Two workstream tags
+    tags: [gamma]
+  - id: lab1
+    title: Lab report
+    due: 2026-11-06
+    key: true
+    est: 4h
+    subtasks:
+      - id: lab2
+        title: Method section
+        due: 2026-11-03
+        subtasks:
+          - id: lab3
+            title: Draft the steps
+            plan: [2026-11-02 15:00]
+            est: 1h
+            subtasks:
+              - id: lab4
+                title: Check the safety sheet
+                est: 15m
+                note: |
+                  Goggles and gloves.
+                  Ask the technician about the acid.
+              - id: lab5
+                title: List the equipment
+                done: 2026-10-27
+          - id: lab6
+            title: Write it up neatly
+      - id: lab7
+        title: Results table
+        waiting: {on: Ms Settle, since: 2026-10-26}
+      - id: lab8
+        title: Extension questions
+        someday: true
+  - id: sdb1
+    title: Read the extra chapter
+    someday: true
