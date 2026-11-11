@@ -21,6 +21,7 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
 
     func setUpGestures() {
         let tap = UITapGestureRecognizer(target: self, action: #selector(tapped(_:)))
+        tap.name = "tap"
         tap.allowedTouchTypes = BoardController.direct
         tap.delegate = self
         canvas.addGestureRecognizer(tap)
@@ -53,6 +54,7 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
     }
 
     func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
+        if let tool = toolGestureShouldBegin(g) { return tool }
         guard g.name == "itemPan", let pan = g as? UIPanGestureRecognizer else { return true }
         guard !readOnly, let id = selected, let it = content.items.first(where: { $0.id == id }) else { return false }
         let z = canvas.zoomScale
@@ -240,9 +242,10 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
         edit(it)
     }
 
+    /// The pen's colour as saved (light), for a shape added from the menu.
     var currentColor: String {
-        if let tool = canvas.tool as? PKInkingTool { return InkConvert.hex(tool.color) }
-        return "#1B1B1BFF"
+        let t = BoardTools.shared.tool
+        return BoardTools.shared.color(t.inks && t != .highlighter ? t : .pen) + "FF"
     }
 
     func insertShape(_ kind: String) {

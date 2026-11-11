@@ -61,6 +61,19 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     var awaitingSnap: Int?
     let toastLabel = UILabel()
 
+    // the bar, the paper, dark boards, Insert space (BoardController+Bar, BoardTheme, BoardController+Space)
+    let bar = BoardBar()
+    let paperView = PaperView()
+    let showBarsButton = UIButton(type: .system)
+    var themeWatch: (any UITraitChangeRegistration)?
+    var colorEdit: (BoardTool, Int)?
+    var spaceStart: CGFloat?
+    let spaceGuide = UIView(), spaceBand = CAShapeLayer(), spaceLine = CAShapeLayer(), spaceLabel = UILabel()
+    var lastZoomLabel = 0
+    var lastBarKey = ""
+    /// Set when the board sits beside the sidebar: the bar's sidebar button calls it.
+    var onSidebar: (() -> Void)?
+
     init(root: URL, path: String, focus: CGRect?) {
         self.root = root
         self.path = path
@@ -78,8 +91,11 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         super.viewDidLoad()
         overrideUserInterfaceStyle = .light
         edgesForExtendedLayout = []
-        view.backgroundColor = UIColor(white: 0.96, alpha: 1)
+        view.backgroundColor = PaperView.back(false)
         title = boardName
+        paperView.frame = view.bounds
+        paperView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.addSubview(paperView)
 
         world.layer.anchorPoint = .zero
         world.layer.position = .zero
@@ -99,6 +115,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         canvas.drawingPolicy = .pencilOnly
         canvas.minimumZoomScale = 0.2
         canvas.maximumZoomScale = 5
+        canvas.bouncesZoom = false // a bounce moved the canvas without telling us, so the items and PDF slid off the ink
         canvas.contentInsetAdjustmentBehavior = .never
         canvas.alwaysBounceVertical = true
         canvas.alwaysBounceHorizontal = true
@@ -109,12 +126,9 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         canvas.delegate = self
         setUpGestures()
         setUpSnap()
-        updateBar()
-
-        toolPicker.colorUserInterfaceStyle = .light
-        toolPicker.overrideUserInterfaceStyle = .light
-        toolPicker.addObserver(canvas)
-        toolPicker.setVisible(!readOnly, forFirstResponder: canvas)
+        setUpSpaceGuide()
+        setUpBar()
+        applyTool()
 
         NotificationCenter.default.addObserver(self, selector: #selector(saveNowSelector), name: UIApplication.willResignActiveNotification, object: nil)
         poll = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.checkOutside() }
@@ -125,10 +139,11 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         guard view.bounds.width > 0 else { return }
+        layOutBar()
         if !didFirstLayout {
             didFirstLayout = true
             updateContentSize()
-            showStart()
+            if focus != nil || !restorePlace() { showStart() }
         }
         updateContentSize()
         syncWorld()
@@ -136,13 +151,17 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        navigationController?.setNavigationBarHidden(true, animated: false)
+        watchSystemStyle()
+        applyTheme()
         if !readOnly { canvas.becomeFirstResponder() }
-        if let p = loadProblem ?? content.readOnly { tell(p) }
+        if let p = loadProblem ?? content.readOnly { tell(p) } else { showHintOnce() }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         if presentedViewController == nil { endWriting() }
+        rememberPlace()
         saveNow()
         poll?.invalidate()
     }
@@ -165,6 +184,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         strokeCount = canvas.drawing.strokes.count
         shifting = false
         canvas.undoManager?.removeAllActions()
+        paperView.paper = paper
         rebuildItems()
         dirty = false
     }
@@ -188,26 +208,26 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
 
     /// Where to look first: the place asked for, the first PDF page, or the top left of what is there.
     func showStart() {
-        let W = view.bounds.width, H = view.bounds.height
+        let W = view.bounds.width, top = topInset, H = view.bounds.height - top
         if let f = focus {
             let z = min(2, max(0.5, min(W / max(f.width + 200, 1), H / max(f.height + 200, 1))))
             canvas.zoomScale = z
             updateContentSize()
-            scroll(toBoard: CGPoint(x: f.midX - W / 2 / z, y: f.midY - H / 2 / z))
+            scroll(toBoard: CGPoint(x: f.midX - W / 2 / z, y: f.midY - (H / 2 + top) / z))
         } else if let pdf = content.items.first(where: { $0.type == "pdf" }) {
             let w = pdf.w ?? BoardFormat.pdfWidth
             let z = min(1.5, max(0.3, (W - 80) / (w + 80)))
             canvas.zoomScale = z
             updateContentSize()
-            scroll(toBoard: CGPoint(x: pdf.x - 40 / z, y: pdf.y - 24 / z))
+            scroll(toBoard: CGPoint(x: pdf.x - 40 / z, y: pdf.y - (24 + top) / z))
         } else if let b = contentBounds() {
             canvas.zoomScale = 1
             updateContentSize()
-            scroll(toBoard: CGPoint(x: b.minX - 60, y: b.minY - 60))
+            scroll(toBoard: CGPoint(x: b.minX - 60, y: b.minY - 60 - top))
         } else {
             canvas.zoomScale = 1
             updateContentSize()
-            scroll(toBoard: CGPoint(x: -60, y: -60))
+            scroll(toBoard: CGPoint(x: -60, y: -60 - top))
         }
     }
 
@@ -232,7 +252,10 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
                 if let p = pdfs[it.id] {
                     if p.item.src == it.src { p.update(it) } else { p.remove(); pdfs[it.id] = nil }
                 }
-                if pdfs[it.id] == nil, let url = resolve(it.src), let p = PdfPrintout(item: it, url: url) { pdfs[it.id] = p }
+                if pdfs[it.id] == nil, let url = resolve(it.src), let p = PdfPrintout(item: it, url: url) {
+                    p.setDim(paperView.dark)
+                    pdfs[it.id] = p
+                }
                 pdfs[it.id]?.place(in: pdfLayer, offset: offset)
             case "image":
                 let v = (itemViews[it.id] as? ImageItemView) ?? ImageItemView(frame: .zero)
@@ -304,9 +327,13 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
             let first = p.refresh(visible: vis, zoom: z, screenScale: scale)
             if page.isEmpty, first > 0 { page = (pdfs.count > 1 ? p.name + " · " : "") + "p. \(first) of \(p.doc.pageCount)" }
         }
-        if page != currentPage {
+        paperView.show(visible: vis, zoom: z)
+        let zl = Int((z * 100).rounded())
+        if page != currentPage || zl != lastZoomLabel {
             currentPage = page
+            lastZoomLabel = zl
             title = page.isEmpty ? boardName : boardName + " · " + page
+            bar.updatePills()
         }
         writing?.place()
     }
@@ -424,41 +451,21 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
 
     func updateBar() {
         guard isViewLoaded else { return }
-        navigationItem.leftBarButtonItem = UIBarButtonItem(title: "Close", style: .done, target: self, action: #selector(close))
-        var items: [UIBarButtonItem] = []
-        if !readOnly {
-            items.append(UIBarButtonItem(image: UIImage(systemName: "arrow.uturn.forward"), style: .plain, target: self, action: #selector(redo)))
-            items.append(UIBarButtonItem(image: UIImage(systemName: "arrow.uturn.backward"), style: .plain, target: self, action: #selector(undo)))
-            items.append(UIBarButtonItem(image: UIImage(systemName: canvas.drawingPolicy == .pencilOnly ? "pencil.tip" : "hand.draw"),
-                                         style: .plain, target: self, action: #selector(togglePolicy(_:))))
-            items.append(UIBarButtonItem(title: nil, image: UIImage(systemName: "plus.circle"), primaryAction: nil, menu: insertMenu()))
-        }
-        if !pdfs.isEmpty {
-            items.append(UIBarButtonItem(image: UIImage(systemName: "list.bullet"), style: .plain, target: self, action: #selector(showContents(_:))))
-        }
-        if let id = selected, let it = content.items.first(where: { $0.id == id }), !readOnly {
-            items.append(UIBarButtonItem(image: UIImage(systemName: "trash"), style: .plain, target: self, action: #selector(deleteSelected)))
-            if it.type == "text" {
-                items.append(UIBarButtonItem(image: UIImage(systemName: "character.cursor.ibeam"), style: .plain, target: self, action: #selector(editSelected)))
-            }
-        }
-        navigationItem.rightBarButtonItems = items
+        // rebuilt only when something it shows changed (this runs on every item move)
+        let key = "\(selected ?? "")|\(pdfs.count)|\(readOnly)|\(paper.kind.rawValue)\(paper.size)|\(canvas.isRulerActive)"
+        guard key != lastBarKey else { return }
+        lastBarKey = key
+        bar.refresh()
     }
 
     @objc func close() {
+        rememberPlace()
         saveNow()
         onClose?()
     }
 
     @objc func undo() { canvas.undoManager?.undo() }
     @objc func redo() { canvas.undoManager?.redo() }
-
-    @objc func togglePolicy(_ sender: UIBarButtonItem) {
-        let pencilOnly = canvas.drawingPolicy == .pencilOnly
-        canvas.drawingPolicy = pencilOnly ? .anyInput : .pencilOnly
-        updateBar()
-        toast(pencilOnly ? "Fingers draw too" : "Pencil only: fingers scroll and pick things")
-    }
 
     func tell(_ message: String, brief: Bool = false) {
         guard presentedViewController == nil else { return }
@@ -474,10 +481,9 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
 
     // MARK: Contents (the PDF's chapters)
 
-    @objc func showContents(_ sender: UIBarButtonItem) {
+    func showContents(from anchor: UIView) {
         // the printout nearest the middle of the screen
-        let mid = CGPoint(x: visibleBoard.midX, y: visibleBoard.midY)
-        guard let p = pdfs.values.min(by: { dist($0.box, mid) < dist($1.box, mid) }) else { return }
+        guard let p = nearestPrintout else { return }
         let items = p.outline().map { BoardViewController.OutlineItem(title: $0.title, page: $0.page, depth: $0.depth) }
         let list = ContentsViewController(items: items, pageCount: p.doc.pageCount)
         list.onPick = { [weak self] page in
@@ -489,7 +495,8 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         }
         let nav = UINavigationController(rootViewController: list)
         nav.modalPresentationStyle = .popover
-        nav.popoverPresentationController?.barButtonItem = sender
+        nav.popoverPresentationController?.sourceView = anchor
+        nav.popoverPresentationController?.sourceRect = anchor.bounds
         nav.preferredContentSize = CGSize(width: 380, height: 560)
         present(nav, animated: true)
     }
@@ -513,6 +520,6 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         guard !p.frames.isEmpty else { return }
         let f = p.frames[min(max(i, 0), p.frames.count - 1)]
         let z = canvas.zoomScale
-        scroll(toBoard: CGPoint(x: f.midX - canvas.bounds.width / 2 / z, y: f.minY - 20 / z))
+        scroll(toBoard: CGPoint(x: f.midX - canvas.bounds.width / 2 / z, y: f.minY - (20 + topInset) / z))
     }
 }
