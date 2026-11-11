@@ -124,13 +124,7 @@ extension BoardController {
 
     // MARK: History
 
-    func historyButton() -> UIBarButtonItem {
-        let b = UIBarButtonItem(image: UIImage(systemName: "clock.arrow.circlepath"), style: .plain, target: self, action: #selector(openHistory))
-        b.accessibilityLabel = "History"
-        return b
-    }
-
-    /// The History view over the board: the board replayed from empty, Restore to here, Copy out.
+    /// The History view over the board (the board menu's Earlier versions): the board replayed from empty, Restore to here, Copy out.
     @objc func openHistory() {
         guard presentedViewController == nil else { return }
         saveNow()

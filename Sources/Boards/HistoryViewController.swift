@@ -86,6 +86,8 @@ final class HistoryViewController: UIViewController {
         addChild(board)
         _ = board.view
         board.canvas.drawingGestureRecognizer.isEnabled = false
+        board.bar.isHidden = true
+        board.showBarsButton.isHidden = true
         board.poll?.invalidate()
         board.offset = replayOffset()
         stage.addSubview(board.view)

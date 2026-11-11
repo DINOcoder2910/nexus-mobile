@@ -1,0 +1,243 @@
+import UIKit
+import NexusCore
+
+/// The formatting row over the keyboard (at the bottom of the screen with a keyboard attached), in the laptop's text bar's order:
+/// Style | Bold, Italic, Underline, Strike, Highlight, Code | Bullets, Numbers, Checklist, Link | Font, Size, Colour, Background |
+/// … (the block's menu) and Done.
+final class FormatBar: UIInputView {
+    weak var session: WritingSession?
+    private let scroll = UIScrollView()
+    private let stack = UIStackView()
+    private var styleButton = UIButton(type: .system)
+    private var countLabel = UILabel()
+
+    init(session: WritingSession) {
+        self.session = session
+        super.init(frame: CGRect(x: 0, y: 0, width: 800, height: 50), inputViewStyle: .keyboard)
+        autoresizingMask = [.flexibleWidth]
+        scroll.showsHorizontalScrollIndicator = false
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        stack.axis = .horizontal
+        stack.spacing = 2
+        stack.alignment = .center
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(scroll)
+        scroll.addSubview(stack)
+        NSLayoutConstraint.activate([
+            scroll.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+            scroll.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+            scroll.topAnchor.constraint(equalTo: topAnchor),
+            scroll.bottomAnchor.constraint(equalTo: bottomAnchor),
+            stack.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor),
+            stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor),
+            stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor),
+            stack.heightAnchor.constraint(equalTo: scroll.frameLayoutGuide.heightAnchor),
+        ])
+        build()
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    override var intrinsicContentSize: CGSize { CGSize(width: UIView.noIntrinsicMetric, height: 50) }
+
+    private func button(_ symbol: String, _ label: String, action: String? = nil, menu: UIMenu? = nil) -> UIButton {
+        var config = UIButton.Configuration.plain()
+        config.image = UIImage(systemName: symbol)
+        config.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 9, bottom: 8, trailing: 9)
+        let b = UIButton(configuration: config)
+        b.accessibilityLabel = label
+        b.toolTip = label
+        if let menu {
+            b.menu = menu
+            b.showsMenuAsPrimaryAction = true
+        } else if let action {
+            b.addAction(UIAction { [weak self] _ in self?.session?.perform(action) }, for: .touchUpInside)
+        }
+        return b
+    }
+
+    private func divider() -> UIView {
+        let v = UIView()
+        v.backgroundColor = UIColor.separator
+        v.translatesAutoresizingMaskIntoConstraints = false
+        v.widthAnchor.constraint(equalToConstant: 1).isActive = true
+        v.heightAnchor.constraint(equalToConstant: 22).isActive = true
+        let wrap = UIView()
+        wrap.translatesAutoresizingMaskIntoConstraints = false
+        wrap.addSubview(v)
+        NSLayoutConstraint.activate([
+            wrap.widthAnchor.constraint(equalToConstant: 13),
+            wrap.heightAnchor.constraint(equalToConstant: 30),
+            v.centerXAnchor.constraint(equalTo: wrap.centerXAnchor),
+            v.centerYAnchor.constraint(equalTo: wrap.centerYAnchor),
+        ])
+        return wrap
+    }
+
+    private func build() {
+        var config = UIButton.Configuration.plain()
+        config.title = "Body"
+        config.image = UIImage(systemName: "chevron.down")
+        config.imagePlacement = .trailing
+        config.imagePadding = 4
+        config.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: 10, weight: .semibold)
+        styleButton = UIButton(configuration: config)
+        styleButton.showsMenuAsPrimaryAction = true
+        styleButton.menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self] done in done(self?.styleItems() ?? []) }])
+        styleButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 110).isActive = true
+
+        let views: [UIView] = [
+            styleButton, divider(),
+            button("bold", "Bold", action: "bold"),
+            button("italic", "Italic", action: "italic"),
+            button("underline", "Underline", action: "underline"),
+            button("strikethrough", "Strikethrough", action: "strike"),
+            button("highlighter", "Highlight", menu: highlightMenu()),
+            button("chevron.left.forwardslash.chevron.right", "Code", action: "code"),
+            divider(),
+            button("list.bullet", "Bulleted list", action: "bullets"),
+            button("list.number", "Numbered list", action: "numbers"),
+            button("checklist", "Checklist", action: "checklist"),
+            button("link", "Link", action: "link"),
+            divider(),
+            button("textformat", "Font", menu: deferred { [weak self] in self?.fontItems() ?? [] }),
+            button("textformat.size", "Size", menu: deferred { [weak self] in self?.sizeItems() ?? [] }),
+            button("paintpalette", "Colour", menu: colourMenu()),
+            button("square.fill.on.square", "Background", menu: deferred { [weak self] in self?.fillItems() ?? [] }),
+            divider(),
+            button("ellipsis.circle", "More", menu: deferred { [weak self] in self?.moreItems() ?? [] }),
+        ]
+        for v in views { stack.addArrangedSubview(v) }
+        countLabel.font = UIFont.monospacedDigitSystemFont(ofSize: 12, weight: .regular)
+        countLabel.textColor = .secondaryLabel
+        stack.addArrangedSubview(countLabel)
+        var doneConfig = UIButton.Configuration.plain()
+        doneConfig.title = "Done"
+        let done = UIButton(configuration: doneConfig)
+        done.addAction(UIAction { [weak self] _ in self?.session?.perform("done") }, for: .touchUpInside)
+        stack.addArrangedSubview(done)
+    }
+
+    private func deferred(_ items: @escaping () -> [UIMenuElement]) -> UIMenu {
+        UIMenu(children: [UIDeferredMenuElement.uncached { done in done(items()) }])
+    }
+
+    /// Show where the caret is: its style, and the block's word count.
+    func refresh() {
+        guard let s = session else { return }
+        var config = styleButton.configuration
+        config?.title = s.currentStyle.label
+        styleButton.configuration = config
+        let c = LiveMarkdown.count(s.text)
+        countLabel.text = c.words == 1 ? "1 word" : "\(c.words) words"
+    }
+
+    // MARK: menus
+
+    private func styleItems() -> [UIMenuElement] {
+        guard let s = session else { return [] }
+        let current = s.currentStyle
+        return BlockStyle.allCases.map { st in
+            UIAction(title: st.label, state: st == current ? .on : .off) { [weak s] _ in s?.setStyle(st) }
+        }
+    }
+
+    private func swatch(_ c: UIColor) -> UIImage {
+        let size = CGSize(width: 18, height: 18)
+        return UIGraphicsImageRenderer(size: size).image { _ in
+            c.setFill()
+            UIBezierPath(ovalIn: CGRect(origin: .zero, size: size).insetBy(dx: 1, dy: 1)).fill()
+            UIColor(white: 0, alpha: 0.2).setStroke()
+            UIBezierPath(ovalIn: CGRect(origin: .zero, size: size).insetBy(dx: 1, dy: 1)).stroke()
+        }.withRenderingMode(.alwaysOriginal)
+    }
+
+    private func highlightMenu() -> UIMenu {
+        UIMenu(title: "Highlight", children: BlockLook.highlights.map { h in
+            UIAction(title: h.label, image: swatch(h.color)) { [weak self] _ in self?.session?.highlight(h.key) }
+        })
+    }
+
+    /// Text colour: for the selected words; "Whole block" sets the block's own colour.
+    private func colourMenu() -> UIMenu {
+        let words = BlockLook.textColors.dropFirst().map { c in
+            UIAction(title: c.label, image: swatch(c.color)) { [weak self] _ in self?.session?.textColor(c.key) }
+        }
+        let block = UIMenu(title: "Whole block", children: [UIDeferredMenuElement.uncached { [weak self] done in
+            done(self?.blockColourItems() ?? [])
+        }])
+        return UIMenu(title: "Text colour", children: [UIMenu(options: .displayInline, children: words), block])
+    }
+
+    private func blockColourItems() -> [UIMenuElement] {
+        guard let s = session, let it = s.item else { return [] }
+        let current = (TextLook.look(it).color ?? TextLook.colors[0].hex).uppercased()
+        return TextLook.colors.enumerated().map { i, c in
+            UIAction(title: c.label, image: swatch(BlockLook.hex(c.hex)), state: current == c.hex.uppercased() ? .on : .off) { [weak s] _ in
+                s?.board?.setBlockLook(s?.id ?? "", "color", i == 0 ? nil : c.hex)
+            }
+        }
+    }
+
+    private func fontItems() -> [UIMenuElement] {
+        guard let s = session else { return [] }
+        return BlockLook.families.map { f in
+            UIAction(title: f.label, state: s.look.family == f.key ? .on : .off) { [weak s] _ in
+                s?.board?.setBlockField(s?.id ?? "", "font", f.key == "sans" ? nil : .string(f.key))
+            }
+        }
+    }
+
+    private func sizeItems() -> [UIMenuElement] {
+        guard let s = session, let it = s.item else { return [] }
+        let current = TextLook.look(it).size ?? TextLook.defaultSize
+        return TextLook.sizes.map { z in
+            UIAction(title: z.label, state: current == z.px ? .on : .off) { [weak s] _ in
+                s?.board?.setBlockLook(s?.id ?? "", "size", String(z.px))
+            }
+        }
+    }
+
+    private func fillItems() -> [UIMenuElement] {
+        guard let s = session, let it = s.item else { return [] }
+        let current = (TextLook.look(it).fill ?? "").uppercased()
+        return TextLook.fills.map { f in
+            UIAction(title: f.label, image: f.hex.isEmpty ? UIImage(systemName: "circle.slash") : swatch(BlockLook.hex(f.hex)),
+                     state: current == f.hex.uppercased() ? .on : .off) { [weak s] _ in
+                s?.board?.setBlockLook(s?.id ?? "", "fill", f.hex.isEmpty ? nil : f.hex)
+            }
+        }
+    }
+
+    private func moreItems() -> [UIMenuElement] {
+        guard let s = session, let b = s.board, let it = s.item else { return [] }
+        let id = s.id
+        let c = LiveMarkdown.count(s.text)
+        var out: [UIMenuElement] = []
+        out.append(UIAction(title: "Writing view", image: UIImage(systemName: "arrow.up.left.and.arrow.down.right")) { [weak b] _ in b?.openWritingView(id) })
+        out.append(UIAction(title: "Find and replace", image: UIImage(systemName: "magnifyingglass")) { [weak b] _ in b?.openFind(id) })
+        out.append(UIAction(title: "\(c.words) words · \(c.characters) characters", attributes: .disabled) { _ in })
+        let push = it.json["push"]?.bool ?? false
+        out.append(UIMenu(options: .displayInline, children: [
+            UIAction(title: "Make room", image: UIImage(systemName: "arrow.down.to.line")) { [weak b] _ in b?.makeRoom(id) },
+            UIAction(title: "Push things below", image: UIImage(systemName: "arrow.down.square"), state: push ? .on : .off) { [weak b] _ in
+                b?.setBlockField(id, "push", push ? nil : .bool(true))
+            },
+        ]))
+        let lang = it.string("lang")
+        out.append(UIMenu(title: "Language", image: UIImage(systemName: "globe"), children: [
+            UIAction(title: "Detect", state: lang == nil ? .on : .off) { [weak b] _ in b?.setBlockField(id, "lang", nil) },
+            UIAction(title: "English", state: lang == "en" ? .on : .off) { [weak b] _ in b?.setBlockField(id, "lang", .string("en")) },
+            UIAction(title: "Spanish", state: lang == "es" ? .on : .off) { [weak b] _ in b?.setBlockField(id, "lang", .string("es")) },
+        ]))
+        let chem = it.json["chem"]?.bool ?? true
+        out.append(UIAction(title: "Chemistry subscripts", image: UIImage(systemName: "flask"), state: chem ? .on : .off) { [weak b] _ in
+            b?.setBlockField(id, "chem", chem ? .bool(false) : nil)
+        })
+        out.append(UIMenu(options: .displayInline, children: [
+            UIAction(title: "Delete block", image: UIImage(systemName: "trash"), attributes: .destructive) { [weak b] _ in b?.deleteBlock(id) },
+        ]))
+        return out
+    }
+}
