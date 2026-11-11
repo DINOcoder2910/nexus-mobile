@@ -67,10 +67,10 @@ public struct BoardRecording: Equatable, Identifiable {
         var s = 0
         while s < a.count - p, s < b.count - p, a[a.count - 1 - s] == b[b.count - 1 - s] { s += 1 }
         guard b.count - s > p else { return "" }
-        // widen to whole words
+        // widen to whole words, only where the typing began or ended inside a word
         var lo = p, hi = b.count - s
-        while lo > 0, !b[lo - 1].isWhitespace { lo -= 1 }
-        while hi < b.count, !b[hi].isWhitespace { hi += 1 }
+        if !b[lo].isWhitespace { while lo > 0, !b[lo - 1].isWhitespace { lo -= 1 } }
+        if !b[hi - 1].isWhitespace { while hi < b.count, !b[hi].isWhitespace { hi += 1 } }
         return String(b[lo..<hi]).replacingOccurrences(of: #"[#*_`>\[\]]+"#, with: "", options: .regularExpression)
             .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression).trimmingCharacters(in: .whitespaces)
     }
