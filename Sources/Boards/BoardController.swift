@@ -27,6 +27,10 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     var dirty = false
     var loadProblem: String?
     var stamps: [String: String] = [:]
+    /// The version history log and the board's picture (BoardController+History.swift).
+    let log = BoardLog()
+    /// A board shown inside the History view: never saved, nothing drawn on it (BoardController+History.swift).
+    var replay = false
 
     // views
     let canvas = PKCanvasView()
@@ -66,7 +70,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    var readOnly: Bool { content.readOnly != nil || loadProblem != nil }
+    var readOnly: Bool { content.readOnly != nil || loadProblem != nil || replay }
 
     // MARK: setup
 
@@ -140,6 +144,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         super.viewWillDisappear(animated)
         saveNow()
         poll?.invalidate()
+        boardClosing()
     }
 
     // MARK: reading
@@ -162,6 +167,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         canvas.undoManager?.removeAllActions()
         rebuildItems()
         dirty = false
+        if !replay { log.loaded(content, board: boardURL) }
     }
 
     /// Everything on the board (board units): the ink and the items.
@@ -373,6 +379,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
                                           remove: { url in try FileManager.default.removeItem(at: url) })
             dirty = false
             stamps = fileStamps()
+            afterSave()
             onSaved?(path)
         } catch {
             tell("Couldn't save the board: \(error.localizedDescription)")
@@ -429,6 +436,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         if !pdfs.isEmpty {
             items.append(UIBarButtonItem(image: UIImage(systemName: "list.bullet"), style: .plain, target: self, action: #selector(showContents(_:))))
         }
+        if !replay { items.append(historyButton()) }
         if let id = selected, let it = content.items.first(where: { $0.id == id }), !readOnly {
             items.append(UIBarButtonItem(image: UIImage(systemName: "trash"), style: .plain, target: self, action: #selector(deleteSelected)))
             if it.type == "text" {

@@ -118,7 +118,7 @@ public enum BoardHistory {
     }
 
     /// A draft field as a key part (a string, or a number as JavaScript prints it).
-    static func draftKey(_ v: JSONValue?) -> String {
+    public static func draftKey(_ v: JSONValue?) -> String {
         switch v {
         case .string(let s)?: return s
         case .number(let n)?: return JSONValue.format(n)
@@ -539,6 +539,10 @@ public final class HistoryReplayer {
 
     /// The strokes as of now, in drawing order.
     public var strokes: [BoardStroke] { st.order.compactMap { st.strokes[$0]?.s } }
+    /// The same, each with the event that wrote it (a stroke's look changes only when that does: a cache key).
+    public var strokesWithEvent: [(s: BoardStroke, ev: Int)] { st.order.compactMap { st.strokes[$0] } }
+    /// How many events are applied: the board changes only when this does (or a stroke is being written).
+    public var applied: Int { n }
 
     /// The strokes still being written at this moment, with how far (seconds into the stroke).
     public var writing: [(s: BoardStroke, upTo: Double)] {
