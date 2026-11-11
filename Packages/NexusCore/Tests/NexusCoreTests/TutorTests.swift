@@ -21,7 +21,7 @@ final class TutorTests: XCTestCase {
         XCTAssertNil(step(#"{"type":"text","id":"has space","text":"a"}"#))
         XCTAssertNil(step(#"{"type":"text","text":"  "}"#))
         XCTAssertNil(step(#"{"type":"text","text":"a","color":"teal"}"#)!.color)
-        XCTAssertEqual(step(#"{"type":"text","text":"a","color":"#00aa00"}"#)!.color, "#00AA00")
+        XCTAssertEqual(step(##"{"type":"text","text":"a","color":"#00aa00"}"##)!.color, "#00AA00")
         let l = step(#"{"type":"line","from":[0.123,"5"],"to":[1e9,2]}"#)!
         XCTAssertEqual(l.from, .point(0.12, 5))
         XCTAssertEqual(l.to, .point(100000, 2))
