@@ -90,7 +90,7 @@ public struct TutorSession: Equatable {
     /// tutor.json's text: JSON.stringify(session, null, 1) and a newline, as the laptop writes it.
     public var serialized: String {
         JSONValue.object([("format", .string(TutorSession.format)), ("created", .string(created)), ("title", .string(title)),
-                          ("sessionId", sessionId.map { .string($0) } ?? .null), ("turns", .array(turns))]).pretty(indent: 1) + "\n"
+                          ("sessionId", sessionId.map { .string($0) } ?? .null), ("turns", .array(turns))]).indented(1) + "\n"
     }
 
     public struct Parsed {
@@ -245,17 +245,17 @@ public enum TutorPrompt {
 
 extension JSONValue {
     /// JSON.stringify(value, null, indent): each array entry and object key on its own line, empty ones as [] and {}.
-    public func pretty(indent: Int = 1, level: Int = 0) -> String {
+    public func indented(_ indent: Int = 1, level: Int = 0) -> String {
         let pad = String(repeating: " ", count: indent * (level + 1)), end = String(repeating: " ", count: indent * level)
         switch self {
         case .array(let a):
             if a.isEmpty { return "[]" }
-            return "[\n" + a.map { pad + $0.pretty(indent: indent, level: level + 1) }.joined(separator: ",\n") + "\n" + end + "]"
+            return "[\n" + a.map { pad + $0.indented(indent, level: level + 1) }.joined(separator: ",\n") + "\n" + end + "]"
         case .object(let o):
             if o.isEmpty { return "{}" }
             return "{\n" + o.map { kv -> String in
                 var k = ""; JSONValue.quote(kv.0, &k)
-                return pad + k + ": " + kv.1.pretty(indent: indent, level: level + 1)
+                return pad + k + ": " + kv.1.indented(indent, level: level + 1)
             }.joined(separator: ",\n") + "\n" + end + "}"
         default: return text
         }

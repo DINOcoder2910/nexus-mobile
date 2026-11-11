@@ -251,7 +251,7 @@ final class TutorTests: XCTestCase {
         XCTAssertFalse(TutorSession.parse("{").ok)
         let newer = TutorSession.parse("{\"format\":\"nexus-tutor/2\"}")
         XCTAssertTrue(!newer.ok && newer.newer)
-        XCTAssertEqual(JSONValue.object([("a", .array([])), ("b", .object([]))]).pretty(), "{\n \"a\": [],\n \"b\": {}\n}")
+        XCTAssertEqual(JSONValue.object([("a", .array([])), ("b", .object([]))]).indented(), "{\n \"a\": [],\n \"b\": {}\n}")
     }
 
     func testIPadTurn() {

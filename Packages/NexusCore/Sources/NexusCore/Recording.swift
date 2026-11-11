@@ -139,7 +139,7 @@ public struct BoardRecording: Equatable, Identifiable {
         return .object(o)
     }
 
-    public var text: String { json.pretty(indent: 1) + "\n" }
+    public var text: String { json.indented(1) + "\n" }
 
     /// Reads one; nil when it isn't a recording this app knows.
     public static func parse(_ text: String) -> BoardRecording? {
