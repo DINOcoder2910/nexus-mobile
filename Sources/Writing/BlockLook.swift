@@ -1,4 +1,5 @@
 import UIKit
+import PencilKit
 import NexusCore
 
 /// How a typed block looks (its item's fields, nexus docs/data-format.md "Typed blocks"): size, colour and background as before,
@@ -35,8 +36,8 @@ struct BlockLook {
     static let muted = hex("#6B6B6B")
     static let doneGrey = hex("#8A8A8A")
     static let accent = hex("#1F5FD1")
-    static let rule = UIColor(white: 0, alpha: 0.15)
-    static let codeBack = UIColor(white: 0, alpha: 0.05)
+    static let rule = UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 1, alpha: 0.2) : UIColor(white: 0, alpha: 0.15) }
+    static let codeBack = UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 1, alpha: 0.08) : UIColor(white: 0, alpha: 0.05) }
     static let added = hex("#188038")
     static let deleted = hex("#D93025")
 
@@ -59,7 +60,16 @@ struct BlockLook {
         textColors.first { $0.key == name }?.color
     }
 
-    static func hex(_ hex: String) -> UIColor {
+    /// A stored colour as it shows: itself on a light board, PencilKit's dark-board version of it on a dark one (as ink is shown),
+    /// so black words read white on a dark board and colours keep their hue.
+    static func hex(_ hex: String) -> UIColor { adapt(rgb(hex)) }
+
+    static func adapt(_ c: UIColor) -> UIColor {
+        UIColor { t in t.userInterfaceStyle == .dark ? PKInkingTool.convertColor(c, from: .light, to: .dark) : c }
+    }
+
+    /// The colour exactly as stored (#RGB, #RRGGBB or #RRGGBBAA).
+    static func rgb(_ hex: String) -> UIColor {
         var s = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
         if s.count == 3 { s = s.map { "\($0)\($0)" }.joined() }
         if s.count == 8 { s = String(s.prefix(6)) }

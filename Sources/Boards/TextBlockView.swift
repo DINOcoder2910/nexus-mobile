@@ -56,6 +56,10 @@ final class TextBlockView: UIView {
     }
 
     private func setUp() {
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (v: TextBlockView, _: UITraitCollection) in
+            v.applyFill()
+            v.setNeedsDisplay()
+        }
         isOpaque = false
         backgroundColor = .clear
         contentMode = .redraw
@@ -68,8 +72,18 @@ final class TextBlockView: UIView {
         let l = TextBlockLayout(TextBlockRender.layout(md, item: item))
         layout = l
         frame = CGRect(origin: frame.origin, size: l.size)
-        if let fill = TextLook.look(item).fill {
-            layer.backgroundColor = TextBlockRender.color(fill).cgColor
+        fill = TextLook.look(item).fill.map(TextBlockRender.color)
+        applyFill()
+        setNeedsDisplay()
+    }
+
+    private var fill: UIColor?
+
+    /// The block's background for the board's light or dark look.
+    private func applyFill() {
+        guard let l = layout else { return }
+        if let fill {
+            layer.backgroundColor = fill.resolvedColor(with: traitCollection).cgColor
             layer.cornerRadius = 4
             layer.shadowColor = UIColor.black.cgColor
             layer.shadowOpacity = 0.14

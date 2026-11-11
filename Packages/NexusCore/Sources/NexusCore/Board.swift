@@ -20,7 +20,7 @@ public enum BoardFormat {
     public static let itemTypes: Set<String> = ["text", "image", "pdf", "shape"]
     /// The board redesign's features this app understands (nexus docs/data-format.md "Features"): a board.json naming one not here
     /// opens read-only. Add a name in the same change that makes the app read and write that feature.
-    public static let features: Set<String> = ["writing", "drafts", "marks"]
+    public static let features: Set<String> = ["writing", "space", "drafts", "marks"]
     /// A placeholder's size when a foreign item has none.
     public static let foreignSize = (w: 200.0, h: 80.0)
 
@@ -380,14 +380,55 @@ public enum BoardFiles {
     }
 
     /// A PDF printout's page frames on the board: each `w` wide, `gap` apart, from the page sizes (rotation applied).
+    /// Each page's frame on the board, from its top to its bottom (a page opened in two spans the room between its parts).
     public static func pdfFrames(_ item: BoardItem, sizes: [(w: Double, h: Double)]) -> [(x: Double, y: Double, w: Double, h: Double)] {
-        let w = item.w ?? BoardFormat.pdfWidth, gap = item.number("gap") ?? BoardFormat.pdfGap
-        var y = item.y
-        return sizes.map { s in
-            let h = w * (s.h / max(1, s.w))
-            defer { y += h + gap }
-            return (item.x, y, w, h)
+        var out = sizes.map { _ in (x: item.x, y: Double.nan, w: 0.0, h: 0.0) }
+        for s in pdfSegments(item, sizes: sizes) {
+            let f = out[s.page]
+            if f.y.isNaN { out[s.page] = (s.x, s.y, s.w, s.h) } else { out[s.page].h = s.y + s.h - f.y }
         }
+        return out
+    }
+
+    /// One drawn piece of a page: the whole page, or one part of a page opened in two (`top`, `bottom`: fractions of its height).
+    public struct PdfSegment: Equatable {
+        public var page: Int // from 0
+        public var x, y, w, h: Double
+        public var top, bottom: Double
+    }
+
+    /// Room in a printout (the pdf item's `space`, nexus docs/data-format.md "Space in a PDF"), cleaned: pages from 1, `at` 0...1,
+    /// `gap` > 0, sorted by page then at.
+    public static func pdfSpace(_ item: BoardItem) -> [(page: Int, at: Double, gap: Double)] {
+        (item.json["space"]?.array ?? []).compactMap { v -> (page: Int, at: Double, gap: Double)? in
+            guard let p = v["page"]?.number, p >= 1, let g = v["gap"]?.number, g > 0 else { return nil }
+            return (Int(p), min(1, max(0, v["at"]?.number ?? 1)), g)
+        }.sorted { ($0.page, $0.at) < ($1.page, $1.at) }
+    }
+
+    /// The pages laid down the board from the item's x, y, each `w` wide and `gap` apart, with the room in `space`: `at` 0 opens room
+    /// above the page, 1 after it, and in between opens the page in two there (the lower part moves down by `gap`).
+    public static func pdfSegments(_ item: BoardItem, sizes: [(w: Double, h: Double)]) -> [PdfSegment] {
+        let w = item.w ?? BoardFormat.pdfWidth, gap = item.number("gap") ?? BoardFormat.pdfGap
+        let space = pdfSpace(item)
+        var y = item.y
+        var out: [PdfSegment] = []
+        for (i, s) in sizes.enumerated() {
+            let h = w * (s.h / max(1, s.w))
+            var top = 0.0
+            for sp in space where sp.page == i + 1 {
+                if sp.at <= 0 { y += sp.gap; continue }
+                if sp.at >= 1 { continue }
+                guard sp.at > top else { y += sp.gap; continue }
+                out.append(PdfSegment(page: i, x: item.x, y: y, w: w, h: h * (sp.at - top), top: top, bottom: sp.at))
+                y += h * (sp.at - top) + sp.gap
+                top = sp.at
+            }
+            out.append(PdfSegment(page: i, x: item.x, y: y, w: w, h: h * (1 - top), top: top, bottom: 1))
+            y += h * (1 - top) + gap
+            for sp in space where sp.page == i + 1 && sp.at >= 1 { y += sp.gap }
+        }
+        return out
     }
 
     /// A path relative to the board ("files/a.png", "../Book.pdf") as a URL, or nil when it leaves `root` (the data folder).

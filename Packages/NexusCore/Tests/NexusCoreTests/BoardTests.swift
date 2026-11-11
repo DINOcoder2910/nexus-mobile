@@ -187,9 +187,9 @@ final class BoardTests: XCTestCase {
     }
 
     func testUnknownFeaturesAreReadOnly() throws {
-        try write("F.board/board.json", "{\"format\":\"nexus-board/1\",\"features\":[\"space\",\"links\",\"space\"],\"paper\":{\"kind\":\"dots\"}}")
+        try write("F.board/board.json", "{\"format\":\"nexus-board/1\",\"features\":[\"tape\",\"links\",\"tape\"],\"paper\":{\"kind\":\"dots\"}}")
         let c = try BoardFiles.load(dir.appendingPathComponent("F.board"))
-        XCTAssertEqual(c.readOnly, "This board uses space, links from a newer Nexus. Update the iPad app to edit it.")
+        XCTAssertEqual(c.readOnly, "This board uses tape, links from a newer Nexus. Update the iPad app to edit it.")
         var wrote = false
         _ = try BoardFiles.save(c, to: dir.appendingPathComponent("F.board"), write: { _, _ in wrote = true })
         XCTAssertFalse(wrote)
