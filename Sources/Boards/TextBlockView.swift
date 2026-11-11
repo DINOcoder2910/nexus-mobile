@@ -411,6 +411,14 @@ final class TextBlockLayout {
         return manager.boundingRect(forGlyphRange: g, in: container).offsetBy(dx: origin.x, dy: origin.y)
     }
 
+    /// The box of these words as drawn (block coordinates), where they first appear; nil when they aren't there (a link to words).
+    func rect(ofWords words: String) -> CGRect? {
+        let parts = words.split(whereSeparator: \.isWhitespace).map { NSRegularExpression.escapedPattern(for: String($0)) }
+        guard !parts.isEmpty, let re = try? NSRegularExpression(pattern: parts.joined(separator: "\\s+"), options: [.caseInsensitive]),
+              let m = re.firstMatch(in: storage.string, range: fullRange) else { return nil }
+        return rect(of: m.range)
+    }
+
     func draw(in ctx: CGContext) {
         guard storage.length > 0 else { return }
         let width: CGFloat = container.size.width
@@ -542,4 +550,7 @@ final class TextBlockView: UIView {
     func taskLine(at point: CGPoint) -> Int? {
         layout?.taskLine(at: point)
     }
+
+    /// Where these words are drawn, in this view's coordinates.
+    func wordsRect(_ words: String) -> CGRect? { layout?.rect(ofWords: words) }
 }

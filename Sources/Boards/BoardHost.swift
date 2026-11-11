@@ -4,6 +4,7 @@ import NexusCore
 
 /// A data-folder board, full screen, in its own navigation bar (PencilKit lives in UIKit).
 struct BoardHost: UIViewControllerRepresentable {
+    @Environment(NexusStore.self) private var store
     let target: NexusStore.BoardTarget
     let root: URL
     let onClose: () -> Void
@@ -13,6 +14,7 @@ struct BoardHost: UIViewControllerRepresentable {
         let vc = BoardController(root: root, path: target.path, focus: target.focus)
         vc.onClose = onClose
         vc.onSaved = onSaved
+        vc.store = store
         return UINavigationController(rootViewController: vc)
     }
 

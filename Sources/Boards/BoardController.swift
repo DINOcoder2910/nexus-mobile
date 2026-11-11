@@ -38,7 +38,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     var pdfs: [String: PdfPrintout] = [:]
     var itemViews: [String: UIView] = [:]
     var textSizes: [String: CGSize] = [:]
-    var selected: String? { didSet { showSelection(); updateBar() } }
+    var selected: String? { didSet { showSelection(); updateBar(); paintLinks() } }
 
     var offset = CGPoint(x: 1200, y: 1200)
     let pad: CGFloat = 1200
@@ -56,6 +56,14 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     var pendingShape: Shapes.Recognized?
     var awaitingSnap: Int?
     let toastLabel = UILabel()
+
+    // links (BoardController+Links.swift)
+    let linkOverlay = LinkOverlay()
+    var links = LinkState()
+    /// The app's store (task titles for link ends, the task panel); BoardHost sets it.
+    weak var store: NexusStore?
+    /// An end on this board to show first (a link opened from another board).
+    var focusEnd: JSONValue?
 
     init(root: URL, path: String, focus: CGRect?) {
         self.root = root
@@ -105,6 +113,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         canvas.delegate = self
         setUpGestures()
         setUpSnap()
+        setUpLinks()
         updateBar()
 
         toolPicker.colorUserInterfaceStyle = .light
@@ -134,6 +143,14 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         super.viewDidAppear(animated)
         if !readOnly { canvas.becomeFirstResponder() }
         if let p = loadProblem ?? content.readOnly { tell(p) }
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        // back from a board opened on top (a link's far end): look for outside changes again
+        if poll?.isValid != true, isViewLoaded {
+            poll = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.checkOutside() }
+        }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -172,7 +189,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         } else if includeInk, !canvas.drawing.strokes.isEmpty {
             r = canvas.drawing.bounds.offsetBy(dx: -offset.x, dy: -offset.y)
         }
-        for it in content.items { r = r.union(box(of: it)) }
+        for it in content.items where !BoardLinks.isLink(it) { r = r.union(box(of: it)) }
         return r.isNull ? nil : r
     }
 
@@ -223,6 +240,8 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         for (id, p) in pdfs where !ids.contains(id) { p.remove(); pdfs[id] = nil }
         for it in content.items.sorted(by: { $0.id < $1.id }) {
             switch it.type {
+            case "link":
+                continue // drawn over the board by paintLinks
             case "pdf":
                 if let p = pdfs[it.id] {
                     if p.item.src == it.src { p.update(it) } else { p.remove(); pdfs[it.id] = nil }
@@ -303,6 +322,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
             currentPage = page
             title = page.isEmpty ? boardName : boardName + " · " + page
         }
+        paintLinks()
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) { syncWorld() }
@@ -435,6 +455,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
                 items.append(UIBarButtonItem(image: UIImage(systemName: "character.cursor.ibeam"), style: .plain, target: self, action: #selector(editSelected)))
             }
         }
+        items.append(contentsOf: linkBarItems())
         navigationItem.rightBarButtonItems = items
     }
 
