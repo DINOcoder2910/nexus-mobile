@@ -13,7 +13,7 @@ struct BoardHost: UIViewControllerRepresentable {
         let vc = BoardController(root: root, path: target.path, focus: target.focus)
         vc.onClose = onClose
         vc.onSaved = onSaved
-        return UINavigationController(rootViewController: vc)
+        return BoardNavigationController(rootViewController: vc)
     }
 
     func updateUIViewController(_ controller: UINavigationController, context: Context) {}

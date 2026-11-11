@@ -56,6 +56,9 @@ struct Sidebar: View {
         }
         .listStyle(.sidebar)
         .notebookPrompts(notebookActions, store: store)
+        .onChange(of: ShortcutCenter.shared.notebookRequest) { _, _ in
+            if s.isDataFolder { notebookActions.ask(.notebook, in: BoardFormat.notebooks) }
+        }
         .navigationTitle("Nexus")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
