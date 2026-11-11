@@ -49,7 +49,7 @@ public enum Chem {
                 i += 1
                 lastWasPart = false
             } else if ch == ")" || ch == "]" {
-                guard depth > 0, lastWasPart else { return nil }
+                guard depth > 0, let last = out.last, last != "(", last != "[" else { return nil }
                 depth -= 1
                 out.append(ch)
                 i += 1
