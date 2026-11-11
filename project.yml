@@ -15,7 +15,11 @@ targets:
   NexusMobile:
     type: application
     platform: iOS
-    sources: [Sources]
+    sources:
+      - Sources
+      # the laptop's maths and chemistry renderers (tools/render/build.mjs), kept as a folder so render.html finds its fonts
+      - path: Resources/Render
+        type: folder
     dependencies:
       - package: NexusCore
     info:

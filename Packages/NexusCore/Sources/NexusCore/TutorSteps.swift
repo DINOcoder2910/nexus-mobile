@@ -350,11 +350,10 @@ Ink. A position is [x, y], an id (the edge of that thing facing the other end), 
 On the screen (the screenshot, in its pixels): {"type":"point"|"circle"|"underline"|"highlight","on":"screen","target":[x, y] or [x, y, w, h],"label":"..."}; when unsure of the exact spot, "area":"C2" (a cell of the grid drawn on the screenshot) instead of "target".
 """#
 
-    /// The format as the iPad tells it: no screen overlay, and no chemistry diagrams (they are the laptop's study tools), so Claude
-    /// draws structures with text, lines and paths instead.
+    /// The format as the iPad tells it: no screen overlay. Chemistry diagrams stay: the iPad draws them with the laptop's own study tools
+    /// (the app's Sources/Render).
     public static var iPadPrompt: String {
-        prompt.components(separatedBy: "\n").filter { !$0.hasPrefix("On the screen") && !$0.hasPrefix("- {\"type\":\"chem\"") }.joined(separator: "\n")
-            + "\nThere are no ready-made chemistry diagrams here: draw a structure with text blocks for the atoms and lines between them."
+        prompt.components(separatedBy: "\n").filter { !$0.hasPrefix("On the screen") }.joined(separator: "\n")
     }
 }
 

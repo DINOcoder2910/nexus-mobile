@@ -142,16 +142,39 @@ final class TutorDrawer {
         return (box, strokes, items)
     }
 
-    /// The laptop draws Nexus's chemistry diagrams with its study tools; the iPad writes the formula instead (with its subscripts).
+    /// Nexus's chemistry diagrams, drawn by the laptop's own study tools (Sources/Render) and kept as a PNG in the board's files/, as the
+    /// laptop does (tutorboard.js _chem). When there is no diagram for it, the formula is written instead.
     private func chem(_ s: TutorStep) async -> (box: TutorBox?, strokes: [String], items: [String])? {
+        switch await ChemRender.picture(kind: s.kind ?? "", molecule: s.molecule, compound: s.compound, bp: s.bp, lp: s.lp) {
+        case .success(let pic):
+            let w = s.w ?? TutorSteps.chemSize[s.kind ?? ""]?.0 ?? 220, hh = (w * pic.h / pic.w).rounded()
+            let p = TutorSteps.placeBlock(s.at, size: [w, hh], lookup, frame: frame, flow: flow)
+            let id = BoardFormat.newId(taken: board.allIds), rel = "files/tutor-" + id + ".png"
+            do { try FolderAccess.writeData(board.boardURL.appendingPathComponent(rel), pic.png) } catch {
+                problems.append("chem: " + error.localizedDescription)
+                return await chemAsText(s)
+            }
+            let it = BoardItem(id: id, type: "image", x: p[0].rounded(), y: p[1].rounded(), fields: [("src", .string(rel)), ("w", .number(w)), ("h", .number(hh))])
+            board.changeItems("Tutor") { c in c.items.append(it) }
+            let b = TutorBox(it.x, it.y, w, hh)
+            show(b)
+            await reveal(id, seconds: 1.1 / pace)
+            return (b, [], [id])
+        case .failure(let e):
+            problems.append("chem: " + e.message)
+            return await chemAsText(s)
+        }
+    }
+
+    /// The formula (with its subscripts) and what the diagram would have been.
+    private func chemAsText(_ s: TutorStep) async -> (box: TutorBox?, strokes: [String], items: [String])? {
         let sub: [Character: Character] = ["0": "₀", "1": "₁", "2": "₂", "3": "₃", "4": "₄", "5": "₅", "6": "₆", "7": "₇", "8": "₈", "9": "₉"]
         let what = s.molecule ?? s.compound ?? "\(s.bp ?? 0) bonding, \(s.lp ?? 0) lone pairs"
         let formula = String(what.map { sub[$0] ?? $0 })
         let name = s.kind == "lewis" ? "Lewis structure" : s.kind == "vsepr" ? "shape (VSEPR)" : "Born–Haber cycle"
         var t = TutorStep(type: "text")
         t.id = s.id; t.at = s.at; t.color = s.color; t.size = TutorSteps.sizes["large"]
-        t.text = "**\(formula)**: \(name) (drawn on the laptop)"
-        problems.append("chem: drawn as text on the iPad")
+        t.text = "**\(formula)**: \(name)"
         return await textBlock(t)
     }
 

@@ -57,7 +57,7 @@ final class TutorTests: XCTestCase {
     func testPromptsCarryEveryType() {
         for t in TutorSteps.stepTypes { XCTAssertTrue(TutorSteps.prompt.contains("\"" + t + "\""), t) }
         XCTAssertFalse(TutorSteps.iPadPrompt.contains("\"on\":\"screen\""), "the iPad has no screen overlay")
-        XCTAssertFalse(TutorSteps.iPadPrompt.contains("\"kind\":\"lewis\""), "nor the laptop's chemistry diagrams")
+        XCTAssertTrue(TutorSteps.iPadPrompt.contains("\"kind\":\"lewis\""), "the iPad draws the laptop's chemistry diagrams too (Sources/Render)")
         let sys = TutorPrompt.iPadSystem(name: "Sam")
         XCTAssertTrue(sys.contains("Sam's study app") && sys.contains("tutor button") && sys.contains("<handwriting>"))
         XCTAssertEqual(TutorPrompt.iPadSystem(name: "Sam"), sys, "the same every turn, so it caches")
