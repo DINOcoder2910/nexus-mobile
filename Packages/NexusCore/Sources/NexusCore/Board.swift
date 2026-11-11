@@ -24,6 +24,17 @@ public enum BoardFormat {
     /// A placeholder's size when a foreign item has none.
     public static let foreignSize = (w: 200.0, h: 80.0)
 
+    /// board.json with `name` added to its features (the first time this app writes that feature); the same when it is there already.
+    public static func withFeature(_ meta: JSONValue, _ name: String) -> JSONValue {
+        var f = meta["features"]?.array ?? []
+        if f.contains(where: { $0.string == name }) { return meta }
+        f.append(.string(name))
+        return meta.setting("features", .array(f))
+    }
+
+    /// board.json's text as the laptop writes it (`JSON.stringify(meta, null, 2)` and a newline).
+    public static func metaText(_ meta: JSONValue) -> String { meta.pretty + "\n" }
+
     /// The features a board.json names that this app doesn't know, in the order named.
     public static func unknownFeatures(_ meta: JSONValue?, known: Set<String> = features) -> [String] {
         var out: [String] = []
@@ -197,6 +208,10 @@ public struct BoardContent {
     /// What each tile file held when read (or last written), to write only what changed.
     public var tilesOnDisk: [String: String] = [:]
     public var textsOnDisk: [String: String] = [:]
+    /// board.json as read (unknown keys kept), and what it was on disk: save writes it when the two differ (paper, features, ...).
+    /// Change it with `BoardFormat.withFeature` or `setting`; nil for an ink test board until its first save.
+    public var meta: JSONValue?
+    public var metaOnDisk: JSONValue?
     /// A newer format: shown, never written.
     public var readOnly: String?
     public var created: String?
@@ -238,6 +253,7 @@ public enum BoardFiles {
         let meta = try? JSONValue.parse(String(decoding: metaData, as: UTF8.self))
         let fmt = meta?["format"]?.string ?? ""
         c.created = meta?["created"]?.string
+        if fmt == BoardFormat.format { c.meta = meta; c.metaOnDisk = meta }
         if fmt != BoardFormat.format {
             if fmt.hasPrefix("nexus-board/") { c.readOnly = "This board was made by a newer Nexus (\(fmt))." }
             else if fmt == "nexus-board-test/1" { return legacy(board, meta: meta) }
@@ -325,9 +341,16 @@ public enum BoardFiles {
         let fm = FileManager.default
         let metaURL = board.appendingPathComponent("board.json")
         if let d = try? Data(contentsOf: metaURL), (try? JSONValue.parse(String(decoding: d, as: UTF8.self)))?["format"]?.string != BoardFormat.format {
-            try write(metaURL, BoardFormat.boardJSON()) // an ink test board becomes a real one on its first save
+            let text = BoardFormat.boardJSON() // an ink test board becomes a real one on its first save
+            try write(metaURL, text)
+            out.meta = try? JSONValue.parse(text)
+            out.metaOnDisk = out.meta
         } else if !fm.fileExists(atPath: metaURL.path) {
-            try write(metaURL, BoardFormat.boardJSON())
+            try write(metaURL, c.meta.map(BoardFormat.metaText) ?? BoardFormat.boardJSON())
+            out.metaOnDisk = c.meta
+        } else if let m = c.meta, m != c.metaOnDisk {
+            try write(metaURL, BoardFormat.metaText(m))
+            out.metaOnDisk = m
         }
         let ch = changes(c)
         for (key, text) in ch.tiles {
@@ -346,14 +369,55 @@ public enum BoardFiles {
     }
 
     /// A PDF printout's page frames on the board: each `w` wide, `gap` apart, from the page sizes (rotation applied).
+    /// Each page's frame on the board, from its top to its bottom (a page opened in two spans the room between its parts).
     public static func pdfFrames(_ item: BoardItem, sizes: [(w: Double, h: Double)]) -> [(x: Double, y: Double, w: Double, h: Double)] {
-        let w = item.w ?? BoardFormat.pdfWidth, gap = item.number("gap") ?? BoardFormat.pdfGap
-        var y = item.y
-        return sizes.map { s in
-            let h = w * (s.h / max(1, s.w))
-            defer { y += h + gap }
-            return (item.x, y, w, h)
+        var out = sizes.map { _ in (x: item.x, y: Double.nan, w: 0.0, h: 0.0) }
+        for s in pdfSegments(item, sizes: sizes) {
+            let f = out[s.page]
+            if f.y.isNaN { out[s.page] = (s.x, s.y, s.w, s.h) } else { out[s.page].h = s.y + s.h - f.y }
         }
+        return out
+    }
+
+    /// One drawn piece of a page: the whole page, or one part of a page opened in two (`top`, `bottom`: fractions of its height).
+    public struct PdfSegment: Equatable {
+        public var page: Int // from 0
+        public var x, y, w, h: Double
+        public var top, bottom: Double
+    }
+
+    /// Room in a printout (the pdf item's `space`, nexus docs/data-format.md "Space in a PDF"), cleaned: pages from 1, `at` 0...1,
+    /// `gap` > 0, sorted by page then at.
+    public static func pdfSpace(_ item: BoardItem) -> [(page: Int, at: Double, gap: Double)] {
+        (item.json["space"]?.array ?? []).compactMap { v -> (page: Int, at: Double, gap: Double)? in
+            guard let p = v["page"]?.number, p >= 1, let g = v["gap"]?.number, g > 0 else { return nil }
+            return (Int(p), min(1, max(0, v["at"]?.number ?? 1)), g)
+        }.sorted { ($0.page, $0.at) < ($1.page, $1.at) }
+    }
+
+    /// The pages laid down the board from the item's x, y, each `w` wide and `gap` apart, with the room in `space`: `at` 0 opens room
+    /// above the page, 1 after it, and in between opens the page in two there (the lower part moves down by `gap`).
+    public static func pdfSegments(_ item: BoardItem, sizes: [(w: Double, h: Double)]) -> [PdfSegment] {
+        let w = item.w ?? BoardFormat.pdfWidth, gap = item.number("gap") ?? BoardFormat.pdfGap
+        let space = pdfSpace(item)
+        var y = item.y
+        var out: [PdfSegment] = []
+        for (i, s) in sizes.enumerated() {
+            let h = w * (s.h / max(1, s.w))
+            var top = 0.0
+            for sp in space where sp.page == i + 1 {
+                if sp.at <= 0 { y += sp.gap; continue }
+                if sp.at >= 1 { continue }
+                guard sp.at > top else { y += sp.gap; continue }
+                out.append(PdfSegment(page: i, x: item.x, y: y, w: w, h: h * (sp.at - top), top: top, bottom: sp.at))
+                y += h * (sp.at - top) + sp.gap
+                top = sp.at
+            }
+            out.append(PdfSegment(page: i, x: item.x, y: y, w: w, h: h * (1 - top), top: top, bottom: 1))
+            y += h * (1 - top) + gap
+            for sp in space where sp.page == i + 1 && sp.at >= 1 { y += sp.gap }
+        }
+        return out
     }
 
     /// A path relative to the board ("files/a.png", "../Book.pdf") as a URL, or nil when it leaves `root` (the data folder).

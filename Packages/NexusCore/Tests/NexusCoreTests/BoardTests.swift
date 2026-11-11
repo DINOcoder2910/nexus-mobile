@@ -89,8 +89,9 @@ final class BoardTests: XCTestCase {
         XCTAssertEqual(t.strokes.count, 1)
         XCTAssertEqual(t.strokes[0].points, [[1, 2, 0.5, 0, Double.pi / 2, 0, 2, 2, 1]])
         XCTAssertEqual(t.strokes[0].color, "#000000FF")
-        XCTAssertEqual(t.items.count, 1)
-        XCTAssertEqual(t.items[0].shape, "rect")
+        XCTAssertEqual(t.items.count, 2, "an item of a type a newer Nexus made is kept")
+        XCTAssertTrue(t.items[0].isForeign)
+        XCTAssertEqual(t.items[1].shape, "rect")
     }
 
     func testTileKeys() {
@@ -195,6 +196,25 @@ final class BoardTests: XCTestCase {
         XCTAssertEqual(BoardFormat.unknownFeatures(try JSONValue.parse("{\"features\":[\"space\"]}"), known: ["space"]), [])
         try write("E.board/board.json", "{\"format\":\"nexus-board/1\",\"features\":[]}")
         XCTAssertNil(try BoardFiles.load(dir.appendingPathComponent("E.board")).readOnly)
+    }
+
+    /// board.json changes (a feature, the paper) are written as the laptop writes them, keeping keys this app doesn't know.
+    func testMetaIsWrittenWhenItChanges() throws {
+        try write("M.board/board.json", "{\n  \"format\": \"nexus-board/1\",\n  \"created\": \"2026-11-12T09:00Z\",\n  \"tile\": 1024,\n  \"later\": {\"a\": [1, 2]}\n}\n")
+        let board = dir.appendingPathComponent("M.board")
+        var c = try BoardFiles.load(board)
+        var writes: [String: String] = [:]
+        let w: (URL, String) throws -> Void = { url, text in writes[url.lastPathComponent] = text; try text.write(to: url, atomically: true, encoding: .utf8) }
+        c = try BoardFiles.save(c, to: board, write: w)
+        XCTAssertNil(writes["board.json"], "nothing changed, nothing written")
+        let m = BoardFormat.withFeature(c.meta!, "space")
+        XCTAssertEqual(BoardFormat.withFeature(m, "space"), m)
+        c.meta = m.setting("paper", .object([("kind", .string("dots")), ("size", .number(24))]))
+        c = try BoardFiles.save(c, to: board, write: w)
+        XCTAssertEqual(writes["board.json"], "{\n  \"format\": \"nexus-board/1\",\n  \"created\": \"2026-11-12T09:00Z\",\n  \"tile\": 1024,\n  \"later\": {\n    \"a\": [\n      1,\n      2\n    ]\n  },\n  \"features\": [\n    \"space\"\n  ],\n  \"paper\": {\n    \"kind\": \"dots\",\n    \"size\": 24\n  }\n}\n")
+        XCTAssertEqual(try BoardFiles.load(board).meta, c.meta)
+        XCTAssertEqual(JSONValue.object([]).pretty, "{}")
+        XCTAssertEqual(JSONValue.array([]).pretty, "[]")
     }
 
     /// An item a newer Nexus made is kept and written back exactly as the laptop writes it (JSON.stringify of what was read).
