@@ -271,8 +271,8 @@ final class CaptureParseTests: XCTestCase {
             ws("pat", "Pat Example", "people"), ws("sam-lee", "Sam Lee", "people"),
         ]
         for w in all { s.workstreams[w.id] = w }
-        func g(_ id: String, _ label: String, _ order: Double, _ wss: [String], def: String? = nil) -> WorkGroup {
-            WorkGroup(id: id, label: label, order: order, color: nil, kind: nil, defaultWorkstream: def, workstreams: wss)
+        func g(_ id: String, _ label: String, _ order: Double, _ wss: [String], def: String? = nil) -> NexusCore.WorkGroup {
+            NexusCore.WorkGroup(id: id, label: label, order: order, color: nil, kind: nil, defaultWorkstream: def, workstreams: wss)
         }
         s.groups = [
             g("classes", "Classes", 1, ["beta", "beta-lab"]), g("ias-ee", "IAs & EE", 2, ["math-ia"]),

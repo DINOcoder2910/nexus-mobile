@@ -21,7 +21,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: NexusCore tests (data folder, YAML edits, planning)
-        run: swift test --package-path Packages/NexusCore 2>&1 | tail -n 120
+        run: |
+          set -o pipefail
+          swift test --package-path Packages/NexusCore 2>&1 | tail -n 150
 
   build:
     runs-on: macos-latest

@@ -523,7 +523,10 @@ final class TextBlockView: UIView {
 
     /// Draw sharper when the board is zoomed in (the board may call this with its zoom; 1 is the screen's own scale).
     func setRenderScale(_ zoom: CGFloat) {
-        let scale: CGFloat = max(1, min(zoom, 4)) * max(1, traitCollection.displayScale)
+        var scale: CGFloat = max(1, min(zoom, 4)) * max(1, traitCollection.displayScale)
+        // keep a long block's backing store bounded (about 16 million pixels)
+        let area = max(1, bounds.width * bounds.height)
+        scale = max(1, min(scale, (16_000_000 / area).squareRoot()))
         if abs(contentScaleFactor - scale) > 0.01 {
             contentScaleFactor = scale
             setNeedsDisplay()
