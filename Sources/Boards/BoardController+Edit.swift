@@ -118,6 +118,7 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
             let t = g.translation(in: canvas)
             let dx = Double(t.x / z), dy = Double(t.y / z)
             content.items[i] = d.resize ? resized(d, dx, dy) : d.start.with("x", .number(d.start.x + dx)).with("y", .number(d.start.y + dy))
+            if !d.resize, d.start.type == "pdf" { movePageBlocks(of: d.id, from: d.before.0, dx: dx, dy: dy) }
             rebuildItems()
         case .ended, .cancelled, .failed:
             guard let d = drag else { return }

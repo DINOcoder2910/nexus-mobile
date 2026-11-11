@@ -160,8 +160,8 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
             beginWriting(it, at: p)
             return
         }
-        let id = BoardFormat.newId(taken: allIds)
-        let it = BoardItem(id: id, type: "text", x: Double((p.x - 4).rounded()), y: Double((p.y - 14).rounded()))
+        let it = newTextBlockItem(at: p) // on a PDF page: typed on that page
+        let id = it.id
         changeItems("Add text") { c in
             c.items.append(it)
             c.texts[id] = ""

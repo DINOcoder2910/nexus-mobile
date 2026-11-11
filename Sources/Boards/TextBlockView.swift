@@ -67,14 +67,50 @@ final class TextBlockView: UIView {
         clipsToBounds = false
     }
 
+    /// A folded block (`chip`): its title and one line of facts, drawn instead of the words.
+    private(set) var chip: BlockFacts.Chip?
+
     /// Lay the block out again for its markdown and item; keeps the origin, sets the size.
     func update(md: String, item: BoardItem) {
         let l = TextBlockLayout(TextBlockRender.layout(md, item: item))
         layout = l
-        frame = CGRect(origin: frame.origin, size: l.size)
-        fill = TextLook.look(item).fill.map(TextBlockRender.color)
+        if item.json["chip"]?.bool == true {
+            let c = BlockFacts.chip(item, md)
+            chip = c
+            let title = (c.title as NSString).size(withAttributes: [.font: TextBlockView.chipTitle]).width
+            let line = (c.line as NSString).size(withAttributes: [.font: TextBlockView.chipLine]).width
+            frame = CGRect(origin: frame.origin, size: CGSize(width: min(360, ceil(max(title, line)) + 52), height: 48))
+            fill = BlockLook.hex("#FFFFFF")
+        } else {
+            chip = nil
+            frame = CGRect(origin: frame.origin, size: l.size)
+            fill = TextLook.look(item).fill.map(TextBlockRender.color)
+        }
         applyFill()
         setNeedsDisplay()
+    }
+
+    static let chipTitle = UIFont.systemFont(ofSize: 15, weight: .semibold)
+    static let chipLine = UIFont.systemFont(ofSize: 12)
+
+    private func drawChip(_ c: BlockFacts.Chip) {
+        let icon: String
+        switch c.kind {
+        case "checklist": icon = "checklist"
+        case "spanish": icon = "globe.europe.africa"
+        case "heading": icon = "text.alignleft"
+        default: icon = "text.justify.left"
+        }
+        let ink = BlockLook.ink, muted = BlockLook.muted
+        UIImage(systemName: icon, withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .medium))?
+            .withTintColor(BlockLook.accent, renderingMode: .alwaysOriginal).draw(in: CGRect(x: 12, y: 15, width: 20, height: 18))
+        let width = bounds.width - 52
+        func line(_ s: String, _ font: UIFont, _ color: UIColor, y: CGFloat) {
+            let p = NSMutableParagraphStyle(); p.lineBreakMode = .byTruncatingTail
+            (s as NSString).draw(in: CGRect(x: 42, y: y, width: width, height: font.lineHeight + 1), withAttributes: [.font: font, .foregroundColor: color, .paragraphStyle: p])
+        }
+        line(c.title, TextBlockView.chipTitle, ink, y: 6)
+        line(c.line, TextBlockView.chipLine, muted, y: 27)
     }
 
     private var fill: UIColor?
@@ -84,12 +120,12 @@ final class TextBlockView: UIView {
         guard let l = layout else { return }
         if let fill {
             layer.backgroundColor = fill.resolvedColor(with: traitCollection).cgColor
-            layer.cornerRadius = 4
+            layer.cornerRadius = chip == nil ? 4 : 12
             layer.shadowColor = UIColor.black.cgColor
             layer.shadowOpacity = 0.14
             layer.shadowRadius = 1.5
             layer.shadowOffset = CGSize(width: 0, height: 1)
-            layer.shadowPath = UIBezierPath(roundedRect: CGRect(origin: .zero, size: l.size), cornerRadius: 4).cgPath
+            layer.shadowPath = UIBezierPath(roundedRect: CGRect(origin: .zero, size: chip == nil ? l.size : frame.size), cornerRadius: chip == nil ? 4 : 12).cgPath
         } else {
             layer.backgroundColor = UIColor.clear.cgColor
             layer.cornerRadius = 0
@@ -112,6 +148,7 @@ final class TextBlockView: UIView {
     }
 
     override func draw(_ rect: CGRect) {
+        if let chip { drawChip(chip); return }
         guard let layout, let ctx = UIGraphicsGetCurrentContext() else { return }
         layout.text.drawMarked(marked, in: ctx)
         layout.text.draw(in: ctx)
@@ -119,7 +156,7 @@ final class TextBlockView: UIView {
 
     /// The 0-based markdown line of the task checkbox under `point` (in this view's coordinates), or nil.
     func taskLine(at point: CGPoint) -> Int? {
-        layout?.text.taskLine(at: point)
+        chip == nil ? layout?.text.taskLine(at: point) : nil
     }
 }
 

@@ -1,5 +1,6 @@
 import UIKit
 import PencilKit
+import PDFKit
 import NexusCore
 
 /// Typing on the board (piece 4 of the board redesign): a block opens in place, over the board, with the formatting row; its words
@@ -267,5 +268,58 @@ extension BoardController {
         let vc = FindReplaceController(board: self)
         vc.modalPresentationStyle = .formSheet
         present(vc, animated: true)
+    }
+}
+
+// MARK: a new block where you tap (typing on a PDF page too)
+
+extension BoardController {
+    /// A new, empty text item at a board point. On a PDF page it is typed on that page (docs/board-writing.md "Typing on a PDF
+    /// page"): `on` and `page`, a white fill, as wide as the rest of the page, and the size of the page's own words nearest the tap.
+    func newTextBlockItem(at p: CGPoint) -> BoardItem {
+        let id = BoardFormat.newId(taken: allIds)
+        let x = Double((p.x - 4).rounded()), y = Double((p.y - 14).rounded())
+        for (pid, pdf) in pdfs {
+            guard let i = pdf.frames.firstIndex(where: { $0.contains(p) }) else { continue }
+            let f = pdf.frames[i]
+            var fields: [(String, JSONValue)] = [("on", .string(pid)), ("page", .number(Double(i + 1))), ("fill", .string("#FFFFFF")),
+                                                 ("w", .number(max(60, Double(f.maxX - p.x - 8).rounded())))]
+            if let size = pdfWordSize(pdf, page: i, frame: f, at: p) { fields.append(("size", .number(size))) }
+            addFeature("writing")
+            return BoardItem(id: id, type: "text", x: x - 10, y: y + 4, fields: fields)
+        }
+        return BoardItem(id: id, type: "text", x: x, y: y)
+    }
+
+    /// The size (board units) of the PDF's own words nearest a point on page `i`, or nil when the page has no text layer there.
+    func pdfWordSize(_ pdf: PdfPrintout, page i: Int, frame f: CGRect, at p: CGPoint) -> Double? {
+        guard let page = pdf.doc.page(at: i) else { return nil }
+        let bounds = page.bounds(for: .cropBox)
+        guard bounds.width > 0, f.width > 0 else { return nil }
+        let k = bounds.width / f.width
+        let pt = CGPoint(x: bounds.minX + (p.x - f.minX) * k, y: bounds.maxY - (p.y - f.minY) * k)
+        // the word under the tap, else the nearest line within a few lines up or down
+        var sel = page.selectionForWord(at: pt)
+        if sel?.string?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true {
+            for dy in stride(from: 6.0, through: 60.0, by: 6.0) {
+                for q in [CGPoint(x: pt.x, y: pt.y + dy), CGPoint(x: pt.x, y: pt.y - dy)] {
+                    if let s = page.selectionForLine(at: q), !(s.string?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) { sel = s; break }
+                }
+                if sel?.string?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false { break }
+            }
+        }
+        guard let a = sel?.attributedString, a.length > 0, let font = a.attribute(.font, at: 0, effectiveRange: nil) as? UIFont else { return nil }
+        let size = (Double(font.pointSize) / Double(k)).rounded()
+        return size >= 8 && size <= 200 ? size : nil
+    }
+}
+
+extension BoardController {
+    /// Blocks typed on a PDF's pages move with it (from where they were when the drag began).
+    func movePageBlocks(of pdfId: String, from start: [BoardItem], dx: Double, dy: Double) {
+        for old in start where old.type == "text" && old.string("on") == pdfId {
+            guard let k = content.items.firstIndex(where: { $0.id == old.id }) else { continue }
+            content.items[k] = old.with("x", .number((old.x + dx).rounded())).with("y", .number((old.y + dy).rounded()))
+        }
     }
 }

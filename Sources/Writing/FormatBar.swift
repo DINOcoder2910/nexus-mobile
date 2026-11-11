@@ -254,6 +254,16 @@ final class FormatBar: UIInputView {
             UIAction(title: "All comments", image: UIImage(systemName: "list.bullet.rectangle")) { [weak b] _ in b?.openComments() },
             UIAction(title: "Show comments", image: UIImage(systemName: "eye"), state: shown ? .on : .off) { [weak b] _ in b?.marksShown = !shown },
         ]))
+        if it.json["chip"]?.bool == true {
+            out.append(UIAction(title: "Unfold", subtitle: "Show the words on the board again", image: UIImage(systemName: "rectangle.expand.vertical")) { [weak b] _ in
+                b?.setBlockField(id, "chip", nil)
+            })
+        } else {
+            out.append(UIAction(title: "Fold into a chip", image: UIImage(systemName: "rectangle.compress.vertical")) { [weak b] _ in
+                b?.endWriting()
+                b?.setBlockField(id, "chip", .bool(true))
+            })
+        }
         let push = it.json["push"]?.bool ?? false
         out.append(UIMenu(options: .displayInline, children: [
             UIAction(title: "Make room", image: UIImage(systemName: "arrow.down.to.line")) { [weak b] _ in b?.makeRoom(id) },
