@@ -1,11 +1,13 @@
 import Foundation
 import Security
 
-/// The hub's token lives in the Keychain, never in UserDefaults or the data folder.
+/// Secrets live in the Keychain, never in UserDefaults or the data folder: the hub's token (this service) and the Claude API key
+/// (`Keychain.claude`).
 enum Keychain {
     static let service = "app.nexus.mobile.sync"
+    static let claude = "app.nexus.mobile.claude"
 
-    static func get(_ account: String) -> String? {
+    static func get(_ account: String, service: String = Keychain.service) -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -20,7 +22,7 @@ enum Keychain {
 
     /// Saves (or, for an empty value, removes) the item. Readable after the first unlock, so a sync in the background works.
     @discardableResult
-    static func set(_ value: String, for account: String) -> Bool {
+    static func set(_ value: String, for account: String, service: String = Keychain.service) -> Bool {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
