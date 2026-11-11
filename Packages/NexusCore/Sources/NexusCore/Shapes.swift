@@ -181,4 +181,17 @@ public enum Shapes {
         }
         return out
     }
+
+    /// Whether a written stroke's own points show it ended in a hold: its last points stay within `still` units of the end for at
+    /// least `hold` seconds (`t`, index 5). The iPad's third way of noticing a hold, for when the Pencil's touches don't tell.
+    public static func endsInHold(_ written: [[Double]], still: Double, hold: Double) -> Bool {
+        guard written.count >= 2, let last = written.last, last.count > 5 else { return false }
+        var since = last[5]
+        for p in written.reversed() {
+            guard p.count > 5 else { return false }
+            if hypot(p[0] - last[0], p[1] - last[1]) > still { break }
+            since = p[5]
+        }
+        return last[5] - since >= hold
+    }
 }
