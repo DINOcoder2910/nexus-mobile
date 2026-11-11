@@ -167,12 +167,21 @@ public final class HTTPSyncTransport: SyncTransport {
     let token: String
     let device: String
     let session: URLSession
+    /// What this app tells the hub on every request (`X-Nexus-App`, docs/sync.md "When one app is behind"):
+    /// `app=nexus-mobile; build=<commit>; features=<board features it knows>`.
+    let appInfo: String
 
-    public init(base: URL, token: String, device: String, session: URLSession = .shared) {
+    public init(base: URL, token: String, device: String, session: URLSession = .shared, appInfo: String = "") {
         self.base = base
         self.token = token
         self.device = device
         self.session = session
+        self.appInfo = appInfo
+    }
+
+    /// The `X-Nexus-App` value for this app.
+    public static func appInfo(build: String) -> String {
+        "app=nexus-mobile; build=\(build); features=" + BoardFormat.features.sorted().joined(separator: ",")
     }
 
     public static let defaultPort = 8743
@@ -208,6 +217,7 @@ public final class HTTPSyncTransport: SyncTransport {
         r.httpMethod = method
         r.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         r.setValue(device, forHTTPHeaderField: "X-Nexus-Device")
+        if !appInfo.isEmpty { r.setValue(appInfo, forHTTPHeaderField: "X-Nexus-App") }
         return r
     }
 
@@ -288,6 +298,23 @@ public final class HTTPSyncTransport: SyncTransport {
         r.setValue(hash, forHTTPHeaderField: "X-Nexus-Hash")
         r.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
         return try decode(PutResult.self, try await send(r, body: body))
+    }
+
+    // MARK: presence (docs/sync.md "Presence"): where this iPad is working, and where the other devices are
+
+    /// Tells the hub where this iPad is working (nil board: nowhere); the answer is everyone else's.
+    public func tellPresence(board: String?, block: String?, what: String?) async throws -> HubPresenceReply {
+        var r = try request("presence", method: "POST", timeout: 15)
+        r.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var o: [(String, JSONValue)] = []
+        if let board, let what { o = [("board", .string(board)), ("block", block.map { .string($0) } ?? .null), ("what", .string(what))] }
+        return try decode(HubPresenceReply.self, try await send(r, body: .data(Data(JSONValue.object(o).text.utf8))))
+    }
+
+    /// Waits (a long poll) until where the other devices are differs from `psig`, or the time is up.
+    public func waitPresence(psig: String, seconds: Int) async throws -> HubPresenceReply {
+        let r = try request("changes", [("since", "1000000000000"), ("wait", String(seconds)), ("psig", psig)], timeout: TimeInterval(seconds + 30))
+        return try decode(HubPresenceReply.self, try await send(r))
     }
 
     public func delete(path: String, base: String) async throws -> DeleteResult {
