@@ -23,8 +23,12 @@ enum ShortcutRegistry {
     /// The gesture row that leaves the Pencil to what Settings › Apple Pencil on the iPad says.
     static let systemPencil = "gesture.ios"
 
-    static func key(_ id: String, _ name: String, _ group: String, _ scope: String = "app", _ keys: [String]) -> Shortcut {
-        Shortcut(id: id, name: name, group: group, scope: scope, defaults: keys)
+    static func key(_ id: String, _ name: String, _ group: String, _ keys: [String]) -> Shortcut {
+        Shortcut(id: id, name: name, group: group, scope: "app", defaults: keys)
+    }
+
+    static func onBoard(_ id: String, _ name: String, _ group: String, _ keys: [String]) -> Shortcut {
+        Shortcut(id: id, name: name, group: group, scope: "board", defaults: keys)
     }
 
     static func gesture(_ id: String, _ name: String, _ keys: [String]) -> Shortcut {
@@ -46,30 +50,30 @@ enum ShortcutRegistry {
         key("app.newNotebook", "New notebook", "Add and find", ["Cmd+Shift+N"]),
         key("app.undo", "Undo the last change (the undo bar)", "Add and find", ["Cmd+Z"]),
 
-        key("board.close", "Close the board", "Board", "board", ["Cmd+W"]),
-        key("board.undo", "Undo", "Board", "board", ["Cmd+Z"]),
-        key("board.redo", "Redo", "Board", "board", ["Cmd+Shift+Z"]),
-        key("board.zoomIn", "Zoom in", "Board", "board", ["Cmd+="]),
-        key("board.zoomOut", "Zoom out", "Board", "board", ["Cmd+-"]),
-        key("board.zoomReset", "Actual size", "Board", "board", ["Cmd+0"]),
-        key("board.contents", "PDF contents", "Board", "board", ["Cmd+G"]),
-        key("board.fingers", "Fingers draw too, or only scroll", "Board", "board", ["Cmd+Shift+P"]),
-        key("board.tools", "Show or hide the tools", "Board", "board", []),
+        onBoard("board.close", "Close the board", "Board", ["Cmd+W"]),
+        onBoard("board.undo", "Undo", "Board", ["Cmd+Z"]),
+        onBoard("board.redo", "Redo", "Board", ["Cmd+Shift+Z"]),
+        onBoard("board.zoomIn", "Zoom in", "Board", ["Cmd+="]),
+        onBoard("board.zoomOut", "Zoom out", "Board", ["Cmd+-"]),
+        onBoard("board.zoomReset", "Actual size", "Board", ["Cmd+0"]),
+        onBoard("board.contents", "PDF contents", "Board", ["Cmd+G"]),
+        onBoard("board.fingers", "Fingers draw too, or only scroll", "Board", ["Cmd+Shift+P"]),
+        onBoard("board.tools", "Show or hide the tools", "Board", []),
 
-        key("board.pen", "Pen", "Board tools", "board", ["P"]),
-        key("board.eraser", "Eraser, and back", "Board tools", "board", ["E"]),
-        key("board.lasso", "Lasso", "Board tools", "board", ["L"]),
-        key("board.lastTool", "Last tool", "Board tools", "board", []),
-        key("board.addText", "Add text", "Board tools", "board", ["T"]),
-        key("board.addImage", "Add an image…", "Board tools", "board", []),
-        key("board.addPdf", "Add a PDF printout…", "Board tools", "board", []),
-        key("board.addRect", "Add a rectangle", "Board tools", "board", []),
-        key("board.addEllipse", "Add an ellipse", "Board tools", "board", []),
-        key("board.addLine", "Add a line", "Board tools", "board", []),
-        key("board.addArrow", "Add an arrow", "Board tools", "board", []),
-        key("board.edit", "Edit the picked text", "Board tools", "board", ["Enter"]),
-        key("board.delete", "Delete the picked item", "Board tools", "board", ["Backspace"]),
-        key("board.deselect", "Let go of the picked item", "Board tools", "board", ["Esc"]),
+        onBoard("board.pen", "Pen", "Board tools", ["P"]),
+        onBoard("board.eraser", "Eraser, and back", "Board tools", ["E"]),
+        onBoard("board.lasso", "Lasso", "Board tools", ["L"]),
+        onBoard("board.lastTool", "Last tool", "Board tools", []),
+        onBoard("board.addText", "Add text", "Board tools", ["T"]),
+        onBoard("board.addImage", "Add an image…", "Board tools", []),
+        onBoard("board.addPdf", "Add a PDF printout…", "Board tools", []),
+        onBoard("board.addRect", "Add a rectangle", "Board tools", []),
+        onBoard("board.addEllipse", "Add an ellipse", "Board tools", []),
+        onBoard("board.addLine", "Add a line", "Board tools", []),
+        onBoard("board.addArrow", "Add an arrow", "Board tools", []),
+        onBoard("board.edit", "Edit the picked text", "Board tools", ["Enter"]),
+        onBoard("board.delete", "Delete the picked item", "Board tools", ["Backspace"]),
+        onBoard("board.deselect", "Let go of the picked item", "Board tools", ["Esc"]),
 
         gesture(systemPencil, "What iPadOS says (Settings › Apple Pencil)", [pencilDoubleTap, pencilSqueeze]),
         gesture("gesture.undo", "Undo", [twoFingerTap]),
