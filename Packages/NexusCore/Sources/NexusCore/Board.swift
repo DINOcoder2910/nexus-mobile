@@ -448,6 +448,8 @@ public struct Notebook: Identifiable, Hashable {
     public var path: String
     /// 0 for a top-level notebook.
     public var depth: Int
+    /// Its colour from `notebook.json` (`#RRGGBB`), or nil.
+    public var color: String?
     public var boards: [BoardRef]
     public var notebooks: [Notebook]
     public var id: String { path }
@@ -476,7 +478,8 @@ public struct Notebook: Identifiable, Hashable {
         }
         func node(_ rel: String, _ depth: Int) -> Notebook {
             let kids = dirs(rel)
-            return Notebook(name: (rel as NSString).lastPathComponent, path: rel, depth: depth,
+            let meta = try? String(contentsOf: root.appendingPathComponent(rel).appendingPathComponent(NotebookMeta.file), encoding: .utf8)
+            return Notebook(name: (rel as NSString).lastPathComponent, path: rel, depth: depth, color: NotebookMeta.color(meta),
                             boards: kids.filter { $0.lowercased().hasSuffix(".board") }.map { BoardRef(name: String($0.dropLast(6)), path: rel + "/" + $0) },
                             notebooks: kids.filter { !$0.lowercased().hasSuffix(".board") }.map { node(rel + "/" + $0, depth + 1) })
         }

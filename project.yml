@@ -30,6 +30,8 @@ targets:
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
         NSLocalNetworkUsageDescription: Nexus syncs your notes with your home hub.
+        NSCameraUsageDescription: Nexus scans pages into a new board.
+        NSPhotoLibraryUsageDescription: Nexus puts a photo on a new board.
         UISupportedInterfaceOrientations~ipad:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationPortraitUpsideDown

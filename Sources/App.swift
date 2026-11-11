@@ -19,6 +19,8 @@ struct NexusMobileApp: App {
 /// Where the sidebar can take you.
 enum Screen: Hashable {
     case today, planner, tasks, someday, inbox, workstream(String), boards, boardSearch, settings
+    /// A notebook's page (its path in the data folder, "notebooks/Chem").
+    case notebook(String)
 }
 
 /// The shell: the sidebar on the left (where you go), the screen on the right, and the task panel, add sheet and undo bar over both.
@@ -93,6 +95,7 @@ struct RootView: View {
             case .workstream(let id): WorkstreamView(workstreamId: id)
             case .boards: BoardsView()
             case .boardSearch: BoardSearchView()
+            case .notebook(let path): NotebookPage(path: path, go: { screen = $0 })
             case .settings: SettingsView()
             }
         }
