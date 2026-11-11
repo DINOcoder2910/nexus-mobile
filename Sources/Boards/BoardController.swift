@@ -51,6 +51,12 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     var strokeCount = 0
     var drag: Drag?
 
+    // hold to make a shape (BoardController+Snap.swift)
+    let snapOverlay = UIView(), snapLine = CAShapeLayer(), snapHalo = CAShapeLayer()
+    var pendingShape: Shapes.Recognized?
+    var awaitingSnap: Int?
+    let toastLabel = UILabel()
+
     init(root: URL, path: String, focus: CGRect?) {
         self.root = root
         self.path = path
@@ -98,6 +104,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         load()
         canvas.delegate = self
         setUpGestures()
+        setUpSnap()
         updateBar()
 
         toolPicker.colorUserInterfaceStyle = .light
@@ -239,7 +246,9 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
                 textSizes[it.id] = v.frame.size
                 v.frame.origin = CGPoint(x: it.x + offset.x, y: it.y + offset.y)
             default:
-                break
+                let v = (itemViews[it.id] as? ForeignItemView) ?? ForeignItemView(frame: .zero)
+                if v.superview == nil { shapeLayer.addSubview(v); itemViews[it.id] = v }
+                v.update(it, offset: offset)
             }
         }
         showSelection()
@@ -333,31 +342,12 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
         if shifting { return }
         let n = canvas.drawing.strokes.count
-        if hold.take(), n == strokeCount + 1, let last = canvas.drawing.strokes.last { snapToShape(last) }
+        if n == strokeCount + 1 { strokeLanded() }
         strokeCount = canvas.drawing.strokes.count
         if selected != nil { selected = nil }
         growIfNeeded()
         updateContentSize()
         changed()
-    }
-
-    /// Hold at the end of a stroke: a line, circle, ellipse or polygon you meant comes out straight (the laptop's shapes.js).
-    func snapToShape(_ stroke: PKStroke) {
-        let s = InkConvert.boardStroke(stroke, offset: offset, id: "")
-        let pts = s.points.map { SIMD2<Double>($0[0], $0[1]) }
-        guard let shape = Shapes.recognize(pts) else { return }
-        let points = Shapes.shapePoints(shape, written: s.points)
-        guard points.count >= 2 else { return }
-        var snapped = s
-        snapped.points = points
-        snapped.ranges = nil
-        guard let k = InkConvert.pkStrokes(snapped, offset: offset).first else { return }
-        let ink = PKInk(stroke.ink.inkType, color: stroke.ink.color)
-        var strokes = canvas.drawing.strokes
-        strokes[strokes.count - 1] = PKStroke(ink: ink, path: k.path, transform: .identity, mask: nil)
-        shifting = true
-        canvas.drawing = PKDrawing(strokes: strokes)
-        shifting = false
     }
 
     // MARK: saving
@@ -460,7 +450,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         let pencilOnly = canvas.drawingPolicy == .pencilOnly
         canvas.drawingPolicy = pencilOnly ? .anyInput : .pencilOnly
         updateBar()
-        tell(pencilOnly ? "Fingers draw too" : "Pencil only: fingers scroll and pick things", brief: true)
+        toast(pencilOnly ? "Fingers draw too" : "Pencil only: fingers scroll and pick things")
     }
 
     func tell(_ message: String, brief: Bool = false) {

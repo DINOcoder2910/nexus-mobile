@@ -17,11 +17,39 @@ func boardBox(_ it: BoardItem, textSize: CGSize? = nil) -> CGRect {
         let s = textSize ?? CGSize(width: it.w ?? BoardFormat.textWidth, height: 40)
         return CGRect(x: x, y: y, width: s.width, height: s.height)
     default:
+        if it.isForeign { return CGRect(x: x, y: y, width: it.w ?? BoardFormat.foreignSize.w, height: it.h ?? BoardFormat.foreignSize.h) }
         return CGRect(x: x, y: y, width: it.w ?? 0, height: it.h ?? 0)
     }
 }
 
 /// A rectangle, ellipse, line or arrow, drawn as the laptop draws it (boarditems.js drawShape).
+/// An item a newer Nexus made (a type this app doesn't know): a grey dashed box saying so. The item is kept and written back as it is.
+final class ForeignItemView: UIView {
+    private let label = UILabel()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isUserInteractionEnabled = false
+        backgroundColor = UIColor.black.withAlphaComponent(0.04)
+        layer.cornerRadius = 6
+        layer.borderWidth = 1
+        layer.borderColor = UIColor.black.withAlphaComponent(0.3).cgColor
+        label.text = "Made by a newer Nexus"
+        label.font = .systemFont(ofSize: 12)
+        label.textColor = UIColor.black.withAlphaComponent(0.5)
+        label.textAlignment = .center
+        label.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        addSubview(label)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    func update(_ it: BoardItem, offset: CGPoint) {
+        frame = boardBox(it).offsetBy(dx: offset.x, dy: offset.y)
+        label.frame = bounds
+    }
+}
+
 final class ShapeItemView: UIView {
     private let body = CAShapeLayer()
     private let head = CAShapeLayer()

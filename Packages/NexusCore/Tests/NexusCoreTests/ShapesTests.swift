@@ -101,4 +101,27 @@ final class ShapesTests: XCTestCase {
         XCTAssertEqual(sp[1][1], -5.68, accuracy: 1e-12)
         XCTAssertEqual(Array(sp[1][2...]), [1, 0, Double.pi / 2, 0, 2, 2, 1])
     }
+
+    /// a point at (x, y) written at time t
+    func T(_ x: Double, _ y: Double, _ t: Double) -> [Double] { [x, y, 1, 0, Double.pi / 2, t, 3, 3, 1] }
+
+    func testEndsInHoldFromTheStrokesOwnTimes() {
+        // drawn in 0.3 s, then 0.6 s of tiny wobble at the end: a hold
+        var held = (0...30).map { T(Double($0) * 5, 0, Double($0) * 0.01) }
+        held += (1...12).map { T(150 + sin(Double($0)) * 1.2, cos(Double($0)) * 1.2, 0.3 + Double($0) * 0.05) }
+        XCTAssertTrue(Shapes.endsInHold(held, still: 4, hold: 0.55))
+        // the same stroke lifted without stopping
+        let lifted = (0...30).map { T(Double($0) * 5, 0, Double($0) * 0.01) }
+        XCTAssertFalse(Shapes.endsInHold(lifted, still: 4, hold: 0.55))
+        // a slow stroke that keeps moving is not a hold
+        let slow = (0...30).map { T(Double($0) * 5, 0, Double($0) * 0.1) }
+        XCTAssertFalse(Shapes.endsInHold(slow, still: 4, hold: 0.55))
+        // a pause in the middle that then moves on is not a hold at the end
+        var paused = (0...10).map { T(Double($0) * 5, 0, Double($0) * 0.01) }
+        paused += (1...12).map { T(50, 0, 0.1 + Double($0) * 0.05) }
+        paused += (1...10).map { T(50 + Double($0) * 5, 0, 0.7 + Double($0) * 0.01) }
+        XCTAssertFalse(Shapes.endsInHold(paused, still: 4, hold: 0.55))
+        XCTAssertFalse(Shapes.endsInHold([T(0, 0, 0)], still: 4, hold: 0.55))
+        XCTAssertFalse(Shapes.endsInHold([[0, 0], [1, 1]], still: 4, hold: 0.55))
+    }
 }

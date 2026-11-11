@@ -69,6 +69,32 @@ public indirect enum JSONValue: Equatable {
         }
     }
 
+    /// As JavaScript's `JSON.stringify(v, null, 2)` writes it (the laptop's board.json): two-space indents, `"key": value`.
+    public var pretty: String {
+        var out = ""
+        writePretty(&out, depth: 0)
+        return out
+    }
+
+    func writePretty(_ out: inout String, depth: Int) {
+        let pad = String(repeating: "  ", count: depth + 1), end = String(repeating: "  ", count: depth)
+        switch self {
+        case .array(let a) where !a.isEmpty:
+            out += "[\n"
+            for (i, v) in a.enumerated() { if i > 0 { out += ",\n" }; out += pad; v.writePretty(&out, depth: depth + 1) }
+            out += "\n" + end + "]"
+        case .object(let o) where !o.isEmpty:
+            out += "{\n"
+            for (i, kv) in o.enumerated() {
+                if i > 0 { out += ",\n" }
+                out += pad; JSONValue.quote(kv.0, &out); out += ": "; kv.1.writePretty(&out, depth: depth + 1)
+            }
+            out += "\n" + end + "}"
+        default:
+            write(&out)
+        }
+    }
+
     /// A number as JavaScript prints it (Number.prototype.toString): 100, 2.4, -0.5, 0.00001, 1e-7, 1e+21.
     public static func format(_ n: Double) -> String {
         guard n.isFinite else { return "null" }
