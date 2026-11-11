@@ -306,4 +306,26 @@ final class TutorTests: XCTestCase {
         XCTAssertEqual(BoardRecording.addedText(old: "a b c", new: "a c"), "", "a deletion adds nothing")
         XCTAssertEqual(BoardRecording.addedText(old: "", new: "**Bold** start"), "Bold start")
     }
+
+    func testTypingKeyByKey() {
+        var r = BoardRecording(id: "r2", started: Date(timeIntervalSince1970: 0))
+        var text = "", t = 20.0
+        func type(_ s: String, gap: Double = 0.2) { for ch in s { let old = text; text.append(ch); r.typing(item: "b1", old: old, new: text, at: t); t += gap } }
+        type("Oxidation is loss")
+        XCTAssertEqual(r.marks.count, 1)
+        XCTAssertEqual(r.marks[0].text, "Oxidation is loss", "the burst's words, not each key")
+        XCTAssertEqual(r.marks[0].at, 20)
+        t += 5
+        type(" of electrons")
+        XCTAssertEqual(r.marks.count, 2, "a pause of 3 s starts a new mark")
+        XCTAssertEqual(r.marks[1].text, "of electrons")
+        XCTAssertEqual(r.time(ofItem: "b1", word: "electrons"), r.marks[1].at)
+        t += 5
+        type(String(repeating: "a ", count: 40))
+        XCTAssertGreaterThan(r.marks.count, 3, "long typing is split every 10 s")
+        let old = text; text.removeLast(4)
+        r.typing(item: "b1", old: old, new: text, at: t + 10)
+        XCTAssertEqual(r.marks.last?.item, "b1")
+        XCTAssertFalse(r.marks.contains { $0.text?.isEmpty ?? false }, "a deletion adds no mark")
+    }
 }

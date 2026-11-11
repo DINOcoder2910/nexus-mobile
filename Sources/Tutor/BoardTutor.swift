@@ -287,15 +287,19 @@ extension BoardController {
     var tutorPanelView: UIView? { (objc_getAssociatedObject(self, &panelKey) as? UIViewController)?.view }
 
     /// The tutor button for the bar: hold to ask out loud, tap to open the panel (and type).
-    func tutorBarItem() -> UIBarButtonItem {
-        let b = TutorHoldButton(type: .system)
-        b.setImage(UIImage(systemName: "graduationcap"), for: .normal)
+    func tutorButton() -> UIButton {
+        var c = UIButton.Configuration.plain()
+        c.image = UIImage(systemName: "graduationcap", withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .regular))
+        c.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 9, bottom: 8, trailing: 9)
+        c.cornerStyle = .medium
+        let b = TutorHoldButton(configuration: c)
+        b.tintColor = .label
         b.accessibilityLabel = "Tutor: hold to ask, tap to type"
+        b.toolTip = "Tutor: hold to ask, tap to type"
         b.onTap = { [weak self] in self?.toggleTutorPanel() }
         b.onHoldStart = { [weak self] in self?.showTutorPanel(); self?.tutor.startListening() }
         b.onHoldEnd = { [weak self] in self?.tutor.stopListening() }
-        b.sizeToFit()
-        return UIBarButtonItem(customView: b)
+        return b
     }
 
     func toggleTutorPanel() {

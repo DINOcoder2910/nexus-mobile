@@ -105,8 +105,13 @@ private var readBarKey: UInt8 = 0
 private var pdfMarkKey: UInt8 = 0
 
 extension BoardController {
-    /// The read aloud button: the picked block, or the PDF page in the middle of the screen.
-    func readAloudBarItem() -> UIBarButtonItem? {
+    /// The read aloud button: the picked block, or the PDF page in the middle of the screen (worked out when the menu opens).
+    func readAloudButton() -> UIButton {
+        let menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self] done in done(self?.readAloudMenu() ?? []) }])
+        return extraButton("speaker.wave.2", "Read aloud", menu: menu)
+    }
+
+    private func readAloudMenu() -> [UIMenuElement] {
         var children: [UIMenuElement] = []
         if let id = selected, let it = content.items.first(where: { $0.id == id }), it.type == "text" {
             children.append(UIAction(title: "Read this block", image: UIImage(systemName: "text.bubble")) { [weak self] _ in self?.readBlock(id) })
@@ -114,11 +119,13 @@ extension BoardController {
         if pagePrintout() != nil {
             children.append(UIAction(title: "Read this page", image: UIImage(systemName: "doc.text")) { [weak self] _ in self?.readPage() })
         }
-        guard !children.isEmpty else { return nil }
         if ReadAloud.shared.reading {
             children.append(UIAction(title: "Stop reading", image: UIImage(systemName: "stop.circle")) { _ in ReadAloud.shared.stop() })
         }
-        return UIBarButtonItem(title: "Read aloud", image: UIImage(systemName: "speaker.wave.2"), primaryAction: nil, menu: UIMenu(children: children))
+        if children.isEmpty {
+            children.append(UIAction(title: "Pick a text block, or show a PDF page, to read it aloud", attributes: .disabled) { _ in })
+        }
+        return children
     }
 
     func readBlock(_ id: String) {

@@ -29,6 +29,9 @@ public struct BoardRecording: Equatable, Identifiable {
     public var marks: [Mark]
     /// The file as read (fields this app doesn't know are kept).
     public var raw: JSONValue?
+    /// The typing going on now (not saved): which block, its words when the burst began, when it began and was last typed in.
+    struct Burst: Equatable { var item: String; var base: String; var began: Double; var last: Double; var mark: Int? }
+    var burst: Burst?
 
     public init(id: String, started: Date = Date()) {
         self.id = id; file = BoardRecording.audioPath(id); self.started = TutorSession.iso(started); duration = 0; marks = []
@@ -55,6 +58,31 @@ public struct BoardRecording: Equatable, Identifiable {
             return
         }
         marks.append(Mark(item: item, text: t, at: BoardRecording.r1(at)))
+    }
+
+    /// A block's words changed while recording (called as each key is typed): typing without a pause of 3 s, for up to 10 s, is one
+    /// mark at the time it began, whose text is every word added since then.
+    public mutating func typing(item: String, old: String, new: String, at: Double) {
+        guard !item.isEmpty else { return }
+        if var b = burst, b.item == item, at - b.last < 3, at - b.began < 10 {
+            b.last = at
+            let words = BoardRecording.addedText(old: b.base, new: new)
+            if let i = b.mark, i < marks.count, marks[i].item == item {
+                if !words.isEmpty { marks[i].text = words }
+            } else if !words.isEmpty {
+                marks.append(Mark(item: item, text: words, at: BoardRecording.r1(b.began)))
+                b.mark = marks.count - 1
+            }
+            burst = b
+            return
+        }
+        var b = Burst(item: item, base: old, began: at, last: at, mark: nil)
+        let words = BoardRecording.addedText(old: old, new: new)
+        if !words.isEmpty {
+            marks.append(Mark(item: item, text: words, at: BoardRecording.r1(at)))
+            b.mark = marks.count - 1
+        }
+        burst = b
     }
 
     static func r1(_ v: Double) -> Double { (max(0, v) * 10).rounded() / 10 }

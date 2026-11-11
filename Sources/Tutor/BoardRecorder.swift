@@ -95,7 +95,7 @@ final class BoardRecorder {
     /// Words typed into a block while recording.
     func typed(_ id: String, old: String, new: String) {
         guard mode == .recording, var r = current else { return }
-        r.markTyped(item: id, text: BoardRecording.addedText(old: old, new: new), at: now)
+        r.typing(item: id, old: old, new: new, at: now)
         current = r
     }
 
@@ -121,7 +121,7 @@ final class BoardRecorder {
         self.temp = nil
         current = nil
         reload()
-        board.updateBar()
+        board.refreshExtraButtons()
     }
 
     // MARK: playing back
@@ -252,11 +252,17 @@ extension BoardController {
     private var existingRecorder: BoardRecorder? { objc_getAssociatedObject(self, &recorderKey) as? BoardRecorder }
 
     /// The record button: start or stop recording, or play one of the board's recordings.
-    func recordBarItem() -> UIBarButtonItem {
+    func recordButton() -> UIButton {
         let r = recorder
         if r.mode == .recording {
-            return UIBarButtonItem(title: "Stop recording", image: UIImage(systemName: "stop.circle.fill"), primaryAction: UIAction { [weak self] _ in self?.recorder.stop() }, menu: nil)
+            return extraButton("stop.circle.fill", "Stop recording", tinted: true) { [weak self] in self?.recorder.stop() }
         }
+        let menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self] done in done(self?.recordMenu() ?? []) }])
+        return extraButton(r.recordings.isEmpty ? "mic" : "waveform", "Record", menu: menu)
+    }
+
+    private func recordMenu() -> [UIMenuElement] {
+        let r = recorder
         var children: [UIMenuElement] = []
         if !readOnly {
             children.append(UIAction(title: "Record", image: UIImage(systemName: "record.circle")) { [weak self] _ in
@@ -275,11 +281,12 @@ extension BoardController {
                 self?.recorder.open(rec)
             })
         }
-        return UIBarButtonItem(title: "Record", image: UIImage(systemName: r.recordings.isEmpty ? "mic" : "waveform"), primaryAction: nil, menu: UIMenu(children: children))
+        if children.isEmpty { children.append(UIAction(title: "No recordings on this board", attributes: .disabled) { _ in }) }
+        return children
     }
 
     func showRecordingBar() {
-        if let v = objc_getAssociatedObject(self, &recordingBarKey) as? UIViewController { v.view.isHidden = false; view.bringSubviewToFront(v.view); updateBar(); return }
+        if let v = objc_getAssociatedObject(self, &recordingBarKey) as? UIViewController { v.view.isHidden = false; view.bringSubviewToFront(v.view); refreshExtraButtons(); return }
         let host = UIHostingController(rootView: RecordingBar(rec: recorder))
         host.view.backgroundColor = .clear
         host.sizingOptions = .intrinsicContentSize
@@ -292,12 +299,12 @@ extension BoardController {
         ])
         host.didMove(toParent: self)
         objc_setAssociatedObject(self, &recordingBarKey, host, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
-        updateBar()
+        refreshExtraButtons()
     }
 
     func hideRecordingBar() {
         (objc_getAssociatedObject(self, &recordingBarKey) as? UIViewController)?.view.isHidden = true
-        updateBar()
+        refreshExtraButtons()
     }
 
     // hooks the board calls
