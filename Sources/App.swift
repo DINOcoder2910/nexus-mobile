@@ -4,11 +4,13 @@ import NexusCore
 @main
 struct NexusMobileApp: App {
     @State private var store = NexusStore()
+    @State private var sync = SyncService()
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environment(store)
+                .environment(sync)
                 .tint(Theme.accent)
         }
     }
@@ -22,6 +24,7 @@ enum Screen: Hashable {
 /// The shell: the sidebar on the left (where you go), the screen on the right, and the task panel, add sheet and undo bar over both.
 struct RootView: View {
     @Environment(NexusStore.self) private var store
+    @Environment(SyncService.self) private var sync
     @Environment(\.scenePhase) private var phase
     @State private var screen: Screen? = .today
     @State private var columns = NavigationSplitViewVisibility.all
@@ -45,12 +48,25 @@ struct RootView: View {
         .alert("Couldn't do that", isPresented: Binding(get: { store.problem != nil }, set: { if !$0 { store.problem = nil } })) {
             Button("OK", role: .cancel) {}
         } message: { Text(store.problem ?? "") }
-        .onChange(of: phase) { _, now in if now == .active { store.reloadIfChanged() } }
+        .onChange(of: phase) { _, now in
+            switch now {
+            case .active:
+                store.reloadIfChanged()
+                sync.becameActive()
+            case .background:
+                sync.enteredBackground()
+            default:
+                break
+            }
+        }
+        .onChange(of: store.folder) { _, _ in sync.restart() }
         .task {
-            // Another writer (sync, the Files app) can change the folder at any time: look every few seconds while open.
+            sync.attach(store)
+            // Another writer (sync, the Files app) can change the folder at any time: look every few seconds while open,
+            // and let sync send what changed.
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(3))
-                if phase == .active { store.reloadIfChanged() }
+                if phase == .active, store.reloadIfChanged() { sync.wake() }
             }
         }
     }

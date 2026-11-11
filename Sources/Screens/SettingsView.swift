@@ -31,8 +31,10 @@ struct SettingsView: View {
                 if store.pickedFolder { Button("Go back to On My iPad › Nexus › nexus-data") { store.useDefaultFolder() } }
                 if !s.isDataFolder && !store.pickedFolder { Button("Fill it with sample data to try the app") { confirmSample = true } }
             } footer: {
-                Text("Syncing with the laptop and the G14 will keep On My iPad › Nexus › nexus-data up to date. Until then you can copy your data folder there with the Files app, or pick a folder another app keeps in sync.")
+                Text("Sync (below) keeps this folder the same as the laptop's through the hub on the G14. You can also copy a data folder into On My iPad › Nexus › nexus-data with the Files app, or pick a folder another app keeps in sync.")
             }
+
+            SyncSettings()
 
             if !s.problems.isEmpty {
                 Section("Things to check") {
@@ -69,7 +71,7 @@ struct FolderSetupView: View {
         VStack(spacing: 22) {
             Image(systemName: "folder.badge.questionmark").font(.system(size: 54)).foregroundStyle(.secondary)
             Text("No data folder yet").font(.title.weight(.semibold))
-            Text("Nexus reads your plain files: the same data folder as on the laptop. Put a copy in **On My iPad › Nexus › nexus-data** with the Files app (sync will keep it up to date later), pick a folder from Files, or try it with sample data first.")
+            Text("Nexus reads your plain files: the same data folder as on the laptop. Turn on **Sync** in Settings to download it from your hub, put a copy in **On My iPad › Nexus › nexus-data** with the Files app, pick a folder from Files, or try it with sample data first.")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: 520)

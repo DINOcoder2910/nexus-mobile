@@ -19,6 +19,21 @@ The app reads `On My iPad › Nexus › nexus-data` (or a folder picked from Fil
 
 The pure part is the `NexusCore` package (`Packages/NexusCore`): the folder, the YAML edits and the planning model, with tests on a copy of the laptop's `dev/fixtures/data-vault`.
 
+## Sync
+
+The iPad keeps its own full copy of the data folder and syncs it with the laptop through the hub on the always-on G14 PC (the protocol is `docs/sync.md` in the Nexus repo). It works offline; while the app is open a change shows on the other device within a few seconds.
+
+To set it up on the iPad:
+
+1. Start the hub on the G14 and sync the laptop with it first (the iPad never fills an empty hub).
+2. Install Tailscale on the iPad and sign in with the same account as the G14, or be on the home Wi-Fi.
+3. In Nexus, open **Settings › Sync** and fill in the **hub address** (the G14's Tailscale address or name, e.g. `http://100.x.y.z:8743`; without a port, 8743 is used), the **hub token** (the hub prints it on its first start), and **this device's name** (`iPad` unless you have more than one).
+4. Turn on **Sync with the hub**. If the iPad's folder is empty, everything is downloaded. If it already has files that differ from the hub's, Nexus asks how to start: **Use the hub's copy** (recommended: the iPad's folder is moved aside to `nexus-data before sync <date>` in On My iPad › Nexus, then everything is downloaded) or **Merge with this iPad's files** (where a file differs, the iPad's version is kept beside it as a conflict copy).
+
+Settings › Sync shows where things stand (Up to date, Syncing, Offline), lists conflict copies (files with `(conflict …)` in their name: open both, keep what you want, delete the copy) and files that are left alone because their name can't be used on Windows. If more than 25 files and more than a quarter of the folder disappear at once, sync stops and asks before deleting them on the hub. A folder without `nexus.yaml` is never synced, so a missing folder can't look like everything was deleted.
+
+The code: `Packages/NexusCore/Sources/NexusCore/Sync*.swift` (the paths, the state, the hub's HTTP protocol and the client's cycle, tested against an in-process hub) and `Sources/Sync/` (running it while the app is open, the token in the Keychain). The sync state lives in Application Support, never in the data folder.
+
 ## Building
 
 There is no Mac in the loop: every push builds on a GitHub-hosted Mac (`.github/workflows/build.yml`), running the NexusCore tests and building the app side by side. The project file is generated from `project.yml` with XcodeGen, and the build is unsigned. `main` publishes **Releases › latest › NexusMobile.ipa**; any other branch publishes **Releases › preview**.

@@ -19,6 +19,8 @@ final class NexusStore {
     var openTaskId: String?
     /// The capture sheet, with what it starts from.
     var capture: CaptureStart?
+    /// Called after the app wrote to the data folder (sync sends it soon after).
+    @ObservationIgnored var onWrite: (() -> Void)?
 
     struct Toast: Identifiable, Equatable {
         let id = UUID()
@@ -58,10 +60,13 @@ final class NexusStore {
         fingerprint = DataFolder.fingerprint(folder)
     }
 
-    /// Cheap check for another writer; reloads only when something changed.
-    func reloadIfChanged() {
+    /// Cheap check for another writer; reloads only when something changed. True when the files changed.
+    @discardableResult
+    func reloadIfChanged() -> Bool {
         let now = DataFolder.fingerprint(folder)
-        if now != fingerprint || Days.today() != today { reload() }
+        let changed = now != fingerprint
+        if changed || Days.today() != today { reload() }
+        return changed
     }
 
     func useFolder(_ url: URL) {
@@ -80,6 +85,7 @@ final class NexusStore {
     func makeSample() {
         do { try SampleFolder.make(at: folder, today: today) } catch { problem = error.localizedDescription }
         reload()
+        onWrite?()
     }
 
     // MARK: lookups for the screens
@@ -101,6 +107,7 @@ final class NexusStore {
         do {
             let c = try make(editor, snapshot)
             reload()
+            onWrite?()
             toast = Toast(message: c.message, change: c, offerParent: c.offerParent)
         } catch {
             problem = "\(error)"
@@ -131,6 +138,7 @@ final class NexusStore {
         do {
             let (c, id) = try editor.add(title: title, to: file, parent: parent, due: due, plan: plan, key: key, est: est, in: snapshot, today: today)
             reload()
+            onWrite?()
             toast = Toast(message: c.message, change: c)
             return id
         } catch {
@@ -143,6 +151,7 @@ final class NexusStore {
         guard let c = toast?.change else { return }
         do { try editor.undo(c); toast = Toast(message: "Undone") } catch { problem = "\(error)" }
         reload()
+        onWrite?()
     }
 
     func tickOfferedParent() {
