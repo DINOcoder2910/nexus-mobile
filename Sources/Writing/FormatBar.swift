@@ -106,6 +106,7 @@ final class FormatBar: UIInputView {
             button("paintpalette", "Colour", menu: colourMenu()),
             button("square.fill.on.square", "Background", menu: deferred { [weak self] in self?.fillItems() ?? [] }),
             divider(),
+            button("text.badge.checkmark", "Review", menu: deferred { [weak self] in self?.reviewItems() ?? [] }),
             button("square.on.square", "Drafts", menu: deferred { [weak self] in
                 guard let s = self?.session, let b = s.board else { return [] }
                 return b.draftMenu(s.id)
@@ -212,6 +213,29 @@ final class FormatBar: UIInputView {
                 s?.board?.setBlockLook(s?.id ?? "", "fill", f.hex.isEmpty ? nil : f.hex)
             }
         }
+    }
+
+    private func reviewItems() -> [UIMenuElement] {
+        guard let s = session, let b = s.board, let it = s.item else { return [] }
+        let id = s.id
+        let on = it.json["review"]?.bool ?? false
+        let n = s.suggestions.count
+        var out: [UIMenuElement] = [
+            UIAction(title: "Review mode", subtitle: on ? "Typing suggests changes" : "Typing changes the words", image: UIImage(systemName: "pencil.and.list.clipboard"),
+                     state: on ? .on : .off) { [weak b] _ in b?.setBlockField(id, "review", on ? nil : .bool(true)) },
+            UIAction(title: n == 1 ? "1 suggestion" : "\(n) suggestions", attributes: .disabled) { _ in },
+        ]
+        guard n > 0 else { return out }
+        out.append(UIMenu(options: .displayInline, children: [
+            UIAction(title: "Next suggestion", image: UIImage(systemName: "arrow.down.circle")) { [weak s] _ in s?.nextSuggestion() },
+            UIAction(title: "Accept", image: UIImage(systemName: "checkmark")) { [weak s] _ in s?.acceptHere(true) },
+            UIAction(title: "Reject", image: UIImage(systemName: "xmark")) { [weak s] _ in s?.acceptHere(false) },
+        ]))
+        out.append(UIMenu(options: .displayInline, children: [
+            UIAction(title: "Accept all", image: UIImage(systemName: "checkmark.circle")) { [weak s] _ in s?.reviewAll(true) },
+            UIAction(title: "Reject all", image: UIImage(systemName: "xmark.circle"), attributes: .destructive) { [weak s] _ in s?.reviewAll(false) },
+        ]))
+        return out
     }
 
     private func moreItems() -> [UIMenuElement] {

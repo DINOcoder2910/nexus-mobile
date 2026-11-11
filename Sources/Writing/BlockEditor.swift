@@ -215,8 +215,42 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
             apply(e)
             return false
         }
+        if look.review, text != "\n", textView.markedTextRange == nil {
+            // Review mode: the change becomes a suggestion
+            apply(Review.type(self.text, range: range, with: text))
+            return false
+        }
         if (text as NSString).length == 1, range.length == 0 { lastTyped = range.location + 1 }
         return true
+    }
+
+    // MARK: Review mode
+
+    var suggestions: [Suggestion] { Review.suggestions(text) }
+
+    func acceptHere(_ accept: Bool) {
+        guard let s = Review.at(text, textView.selectedRange) else {
+            board?.tell("Put the caret in a suggestion first.", brief: true)
+            return
+        }
+        apply(accept ? Review.accept(text, s) : Review.reject(text, s))
+    }
+
+    func reviewAll(_ accept: Bool) {
+        let t = Review.all(text, accept: accept)
+        guard t != text else { return }
+        apply(MDEdit(t, NSRange(location: min(textView.selectedRange.location, (t as NSString).length), length: 0)))
+    }
+
+    /// Selects the next suggestion after the caret (from the top again at the end).
+    func nextSuggestion() {
+        let all = suggestions
+        guard !all.isEmpty else { board?.tell("No suggestions in this block.", brief: true); return }
+        let caret = NSMaxRange(textView.selectedRange)
+        let s = all.first { $0.range.location >= caret } ?? all[0]
+        textView.selectedRange = s.range
+        restyle()
+        keepCaretVisible()
     }
 
     func textViewDidChange(_ textView: UITextView) {
