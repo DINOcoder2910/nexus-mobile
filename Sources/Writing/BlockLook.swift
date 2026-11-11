@@ -43,8 +43,8 @@ struct BlockLook {
 
     /// Highlights by name (`==x==` is yellow; `<mark data-c="…">`).
     static let highlights: [(key: String, label: String, color: UIColor)] = [
-        ("yellow", "Yellow", hex("#FFF0A0")), ("green", "Green", hex("#C8F0CF")), ("blue", "Blue", hex("#CFE2FF")),
-        ("pink", "Pink", hex("#FFD3E4")), ("orange", "Orange", hex("#FFDDB8")),
+        ("yellow", "Yellow", hex("#FFE14D")), ("green", "Green", hex("#B8F0B8")), ("blue", "Blue", hex("#BFE3FF")),
+        ("pink", "Pink", hex("#FFC7E0")), ("orange", "Orange", hex("#FFD59E")),
     ]
 
     /// Text colours by name (`<span data-c="…">`), the board's colours.
@@ -95,17 +95,18 @@ struct BlockLook {
     func style(_ s: BlockStyle) -> Style {
         var st: Style
         switch s {
-        case .title: st = Style(size: size * 1.75, weight: .bold, color: color, line: 1.25, before: size * 0.7, after: size * 0.35, indent: 0)
-        case .h1: st = Style(size: size * 1.4, weight: .semibold, color: color, line: 1.3, before: size * 0.56, after: size * 0.28, indent: 0)
-        case .h2: st = Style(size: size * 1.15, weight: .semibold, color: color, line: 1.35, before: size * 0.46, after: size * 0.23, indent: 0)
-        case .h3: st = Style(size: size, weight: .semibold, color: color, line: 1.5, before: size * 0.4, after: size * 0.2, indent: 0)
-        case .body: st = Style(size: size, weight: .regular, color: color, line: 1.5, before: 0, after: 0, indent: 0)
-        case .quote: st = Style(size: size, weight: .regular, color: BlockLook.muted, line: 1.5, before: 0, after: 0, indent: 0)
-        case .code: st = Style(size: size * 0.875, weight: .regular, color: color, line: 1.55, before: 0, after: 0, indent: 0, mono: true)
+        // the laptop's STYLE_DEFAULTS (docs/board-writing.md "Styles"), in em of the block's size
+        case .title: st = Style(size: size * 2.1, weight: .bold, color: color, line: 1.2, before: size * 0.2, after: size * 0.35, indent: 0)
+        case .h1: st = Style(size: size * 1.6, weight: .semibold, color: color, line: 1.25, before: size * 0.6, after: size * 0.25, indent: 0)
+        case .h2: st = Style(size: size * 1.3, weight: .semibold, color: color, line: 1.3, before: size * 0.5, after: size * 0.2, indent: 0)
+        case .h3: st = Style(size: size * 1.1, weight: .semibold, color: color, line: 1.35, before: size * 0.4, after: size * 0.15, indent: 0)
+        case .body: st = Style(size: size, weight: .regular, color: color, line: 1.5, before: 0, after: size * 0.4, indent: 0)
+        case .quote: st = Style(size: size, weight: .regular, color: BlockLook.muted, line: 1.5, before: 0, after: size * 0.4, indent: 0)
+        case .code: st = Style(size: size * 0.9, weight: .regular, color: color, line: 1.45, before: 0, after: size * 0.4, indent: 0, mono: true)
         }
         guard let own = styles?[s.rawValue] else { return st }
-        if let v = own["size"]?.number, v >= 6, v <= 300 { st.size = CGFloat(v) }
-        if let v = own["weight"]?.number { st.weight = BlockLook.weight(v) }
+        if let v = own["size"]?.number, v >= 6, v <= 200 { st.size = CGFloat(v) }
+        if let v = own["weight"]?.number, v >= 100, v <= 900 { st.weight = BlockLook.weight((v / 100).rounded() * 100) }
         if let v = own["color"]?.string, TextLook.isHex(v) { st.color = BlockLook.hex(v) }
         if let v = own["line"]?.number, v >= 0.8, v <= 4 { st.line = CGFloat(v) }
         if let v = own["before"]?.number, v >= 0, v <= 400 { st.before = CGFloat(v) }

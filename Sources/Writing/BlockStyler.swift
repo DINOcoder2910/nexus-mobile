@@ -136,11 +136,20 @@ enum BlockStyler {
             let natural = font.lineHeight
             ps.lineSpacing = max(0, size * st.line - natural)
             if index > 0 { ps.paragraphSpacingBefore = st.before * s }
-            ps.paragraphSpacing = st.after * s
+            // body, quote and code space after a paragraph (the laptop's `p`), not after every line of it; headings after themselves
+            var after = st.after * s
+            if !isHeading(line), index + 1 < lines.count, !isHeading(lines[index + 1]), lines[index + 1].kind != .blank,
+               lineStyle(lines[index + 1]) == lineStyle(line) {
+                after = 0
+            }
+            if line.kind == .blank { after = 0 }
+            ps.paragraphSpacing = after
             storage.addAttribute(.paragraphStyle, value: ps, range: lineAll)
         }
         return Result(lines: lines, quoteStep: quoteStep)
     }
+
+    static func isHeading(_ line: MDLine) -> Bool { if case .heading = line.kind { return true }; return false }
 
     /// Which style a line is drawn in.
     static func lineStyle(_ line: MDLine) -> BlockStyle {
