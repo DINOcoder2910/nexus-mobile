@@ -177,9 +177,14 @@ final class FormatBar: UIInputView {
     private func styleItems() -> [UIMenuElement] {
         guard let s = session else { return [] }
         let current = s.currentStyle
-        return BlockStyle.allCases.map { st in
+        let styles: [UIMenuElement] = BlockStyle.allCases.map { st in
             UIAction(title: st.label, state: st == current ? .on : .off) { [weak s] _ in s?.setStyle(st) }
         }
+        let id = s.id
+        return [UIMenu(options: .displayInline, children: styles),
+                UIAction(title: "Edit styles and font…", image: UIImage(systemName: "slider.horizontal.3")) { [weak b = s.board] _ in
+                    b?.openStyles(id, style: current)
+                }]
     }
 
     private func swatch(_ c: UIColor) -> UIImage {
