@@ -1,95 +1,75 @@
 import SwiftUI
-import UniformTypeIdentifiers
+import NexusCore
 
 @main
 struct NexusMobileApp: App {
+    @State private var store = NexusStore()
+
     var body: some Scene {
-        WindowGroup { HomeView() }
+        WindowGroup {
+            RootView()
+                .environment(store)
+                .tint(Theme.accent)
+        }
     }
 }
 
-/// The test's home: make a blank board or a board from a PDF, reopen saved boards.
-struct HomeView: View {
-    @State private var boards: [BoardInfo] = []
-    @State private var open: BoardInfo?
-    @State private var importing = false
-    @State private var problem: String?
+/// Where the sidebar can take you.
+enum Screen: Hashable {
+    case today, planner, tasks, someday, inbox, workstream(String), boards, settings
+}
+
+/// The shell: the sidebar on the left (where you go), the screen on the right, and the task panel, add sheet and undo bar over both.
+struct RootView: View {
+    @Environment(NexusStore.self) private var store
+    @Environment(\.scenePhase) private var phase
+    @State private var screen: Screen? = .today
+    @State private var columns = NavigationSplitViewVisibility.all
 
     var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    Button { newBlank() } label: { Label("New blank board", systemImage: "square.and.pencil") }
-                    Button { importing = true } label: { Label("New board from a PDF…", systemImage: "doc.richtext") }
-                }
-                Section("Boards") {
-                    if boards.isEmpty { Text("No boards yet").foregroundStyle(.secondary) }
-                    ForEach(boards) { b in
-                        Button { open = b } label: {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(b.name).font(.headline)
-                                Text(b.pdfName ?? "Blank board").font(.caption).foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    .onDelete { rows in
-                        rows.forEach { BoardStore.delete(boards[$0].id) }
-                        reload()
-                    }
-                }
-                Section("What to try") {
-                    Text("Write fast and slow on a blank board, zoom in and out, and see if the ink keeps up like OneNote or Apple Notes.")
-                    Text("Make a board from your longest PDF (a 300-page textbook is ideal). Scroll top to bottom quickly, use Contents to jump to chapters, and write on and beside the pages.")
-                    Text("Close and reopen a board: your writing should still be there. Boards are saved in Files › On My iPad › Nexus.")
-                    Text("The pen button switches between Pencil only (fingers scroll) and fingers draw too.")
-                }
-                .font(.callout)
+        @Bindable var store = store
+        NavigationSplitView(columnVisibility: $columns) {
+            Sidebar(selection: $screen)
+                .navigationSplitViewColumnWidth(min: 240, ideal: 280, max: 340)
+        } detail: {
+            NavigationStack {
+                detail
             }
-            .navigationTitle("Nexus ink test")
-            .fileImporter(isPresented: $importing, allowedContentTypes: [.pdf]) { result in
-                switch result {
-                case .success(let url):
-                    do {
-                        let b = try BoardStore.create(name: url.deletingPathExtension().lastPathComponent, pdf: url)
-                        reload()
-                        open = b
-                    } catch { problem = error.localizedDescription }
-                case .failure(let error): problem = error.localizedDescription
-                }
+            .id(screen)
+        }
+        .overlay(alignment: .bottom) { UndoBar().animation(.snappy, value: store.toast) }
+        .sheet(isPresented: Binding(get: { store.openTaskId != nil }, set: { if !$0 { store.openTaskId = nil } })) {
+            if let id = store.openTaskId { TaskDetailView(taskId: id).id(id) }
+        }
+        .sheet(item: $store.capture) { start in CaptureSheet(start: start) }
+        .alert("Couldn't do that", isPresented: Binding(get: { store.problem != nil }, set: { if !$0 { store.problem = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: { Text(store.problem ?? "") }
+        .onChange(of: phase) { _, now in if now == .active { store.reloadIfChanged() } }
+        .task {
+            // Another writer (sync, the Files app) can change the folder at any time: look every few seconds while open.
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(3))
+                if phase == .active { store.reloadIfChanged() }
             }
-            .fullScreenCover(item: $open, onDismiss: reload) { b in
-                BoardScreen(board: b) { open = nil }.ignoresSafeArea()
-            }
-            .alert("Something went wrong", isPresented: Binding(get: { problem != nil }, set: { if !$0 { problem = nil } })) {
-                Button("OK", role: .cancel) {}
-            } message: { Text(problem ?? "") }
-            .onAppear(perform: reload)
         }
     }
 
-    private func reload() { boards = BoardStore.list() }
-
-    private func newBlank() {
-        let f = DateFormatter()
-        f.dateFormat = "d MMM, HH:mm"
-        do {
-            let b = try BoardStore.create(name: "Board " + f.string(from: Date()), pdf: nil)
-            reload()
-            open = b
-        } catch { problem = error.localizedDescription }
+    @ViewBuilder
+    private var detail: some View {
+        if !store.snapshot.isDataFolder, screen != .boards, screen != .settings {
+            FolderSetupView()
+        } else {
+            switch screen ?? .today {
+            case .today: TodayView()
+            case .planner: PlannerView()
+            case .tasks: TasksView(lens: .all)
+            case .someday: TasksView(lens: .someday)
+            case .inbox: WorkstreamView(workstreamId: nil)
+            case .workstream(let id): WorkstreamView(workstreamId: id)
+            case .boards: BoardsView()
+            case .settings: SettingsView()
+            }
+        }
     }
-}
-
-/// Hosts the UIKit board (PencilKit lives in UIKit) inside its own navigation bar.
-struct BoardScreen: UIViewControllerRepresentable {
-    let board: BoardInfo
-    let onClose: () -> Void
-
-    func makeUIViewController(context: Context) -> UINavigationController {
-        let vc = BoardViewController(board: board)
-        vc.onClose = onClose
-        return UINavigationController(rootViewController: vc)
-    }
-
-    func updateUIViewController(_ controller: UINavigationController, context: Context) {}
 }

@@ -239,6 +239,24 @@ final class FolderTests: XCTestCase {
         XCTAssertNil(Repeat(freq: "weekly", on: [], until: nil).next(today: "2026-11-11", anchor: nil))
     }
 
+    func testSampleFolderLoadsCleanly() throws {
+        let root = dir.appendingPathComponent("sample")
+        try SampleFolder.make(at: root, today: "2026-11-11")
+        let s = DataFolder.load(root)
+        XCTAssertEqual(s.problems, [])
+        XCTAssertNil(s.readOnlyReason)
+        XCTAssertEqual(s.groups.map(\.id), ["classes", "projects"])
+        let p = Planning(s, today: "2026-11-11")
+        XCTAssertEqual(p.planned(on: "2026-11-11").map(\.id), ["smp4", "smp8", "smpb"])
+        XCTAssertEqual(p.slipped.map(\.id), ["smp6"])
+        XCTAssertEqual(p.repeatsToday.map(\.id), ["smp9"])
+        XCTAssertEqual(p.keyDates.map(\.id), ["smp3", "smpa"])
+        let print1 = DataFolder.fingerprint(root)
+        XCTAssertEqual(print1, DataFolder.fingerprint(root))
+        _ = try TaskEditor(root: root).tick(s.tasks["smp8"]!, in: s, today: "2026-11-11")
+        XCTAssertNotEqual(print1, DataFolder.fingerprint(root))
+    }
+
     func testABrokenFileIsReadOnly() throws {
         try "tasks:\n  - id: x\n   title: bad indent\n  - [\n".write(to: dir.appendingPathComponent("inbox.yaml"), atomically: true, encoding: .utf8)
         let s = DataFolder.load(dir)

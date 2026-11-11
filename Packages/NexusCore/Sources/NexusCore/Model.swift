@@ -129,7 +129,7 @@ public struct Workstream: Identifiable, Hashable {
     public var finished: Bool { status == "done" }
 }
 
-public struct Group: Identifiable, Hashable {
+public struct WorkGroup: Identifiable, Hashable {
     /// The folder name.
     public var id: String
     public var label: String

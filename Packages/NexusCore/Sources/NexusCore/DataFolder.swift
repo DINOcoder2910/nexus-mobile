@@ -3,7 +3,7 @@ import Foundation
 /// Everything the planner screens read from a data folder, built fresh from the files (the files are the truth).
 public struct Snapshot {
     public var root: URL
-    public var groups: [Group] = []
+    public var groups: [WorkGroup] = []
     public var workstreams: [String: Workstream] = [:]
     /// Every task by id, at every depth.
     public var tasks: [String: NexusTask] = [:]
@@ -32,7 +32,7 @@ public struct Snapshot {
         children(of: t).flatMap { [$0] + descendants(of: $0) }
     }
     /// The workstreams of a group, in name order like the sidebar.
-    public func workstreams(in g: Group) -> [Workstream] { g.workstreams.compactMap { workstreams[$0] } }
+    public func workstreams(in g: WorkGroup) -> [Workstream] { g.workstreams.compactMap { workstreams[$0] } }
     public var inboxTop: [NexusTask] { (top["inbox.yaml"] ?? []).compactMap { tasks[$0] } }
     /// A task counts in Today, the Planner and the lenses unless it is Someday or its workstream is parked.
     public func counts(_ t: NexusTask) -> Bool {
@@ -73,7 +73,7 @@ public enum DataFolder {
                 .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
         }
 
-        var groups: [Group] = []
+        var groups: [WorkGroup] = []
         for g in dirs("") {
             let groupYaml = read(g + "/group.yaml").flatMap { try? TaskFile.settings($0) }
             var wsIds: [String] = []
@@ -96,7 +96,7 @@ public enum DataFolder {
             guard groupYaml != nil || !wsIds.isEmpty else { continue }
             let label = groupYaml.flatMap { TaskFile.string($0["label"]) } ?? g.prefix(1).uppercased() + g.dropFirst()
             wsIds.sort { (s.workstreams[$0]?.name ?? $0).localizedStandardCompare(s.workstreams[$1]?.name ?? $1) == .orderedAscending }
-            groups.append(Group(id: g, label: label, order: groupYaml.flatMap { TaskFile.string($0["order"]) }.flatMap(Double.init) ?? 1000,
+            groups.append(WorkGroup(id: g, label: label, order: groupYaml.flatMap { TaskFile.string($0["order"]) }.flatMap(Double.init) ?? 1000,
                                 color: groupYaml.flatMap { TaskFile.string($0["color"]) }, kind: groupYaml.flatMap { TaskFile.string($0["kind"]) },
                                 defaultWorkstream: groupYaml.flatMap { TaskFile.string($0["default"]) }, workstreams: wsIds))
         }
@@ -122,6 +122,34 @@ public enum DataFolder {
         addFile("inbox.yaml", workstream: nil)
         s.loadedAt = Date()
         return s
+    }
+
+    /// A cheap summary of the files `load` reads (names, sizes, change times), so the app can notice another writer (sync, Files)
+    /// and load again only when something changed.
+    public static func fingerprint(_ root: URL) -> String {
+        let fm = FileManager.default
+        let keys: Set<URLResourceKey> = [.contentModificationDateKey, .fileSizeKey, .isDirectoryKey]
+        var parts: [String] = []
+        func stamp(_ url: URL) {
+            guard let v = try? url.resourceValues(forKeys: keys), v.isDirectory != true else { return }
+            parts.append("\(url.lastPathComponent):\(v.fileSize ?? 0):\(v.contentModificationDate?.timeIntervalSince1970 ?? 0)")
+        }
+        func list(_ url: URL) -> [URL] {
+            ((try? fm.contentsOfDirectory(at: url, includingPropertiesForKeys: Array(keys), options: [.skipsHiddenFiles])) ?? [])
+                .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        }
+        for a in list(root) {
+            if a.pathExtension == "yaml" { stamp(a); continue }
+            guard !skip.contains(a.lastPathComponent), (try? a.resourceValues(forKeys: keys).isDirectory) == true else { continue }
+            parts.append("/" + a.lastPathComponent)
+            for b in list(a) {
+                if b.lastPathComponent == "group.yaml" { stamp(b); continue }
+                guard (try? b.resourceValues(forKeys: keys).isDirectory) == true, !b.lastPathComponent.hasSuffix(".board") else { continue }
+                parts.append("//" + b.lastPathComponent)
+                for name in ["workstream.yaml", "tasks.yaml"] { stamp(b.appendingPathComponent(name)) }
+            }
+        }
+        return parts.joined(separator: "|")
     }
 
     /// Reads a text file of the folder (a workstream's notes.md), or nil.
