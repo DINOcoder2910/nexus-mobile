@@ -41,6 +41,26 @@ enum BoardStore {
         return out
     }
 
+    /// Where the PDF's first page sits on the board (it moves when the board grows left or up).
+    static func origin(_ id: String) -> CGPoint? {
+        guard let obj = readJSON(id), let x = obj["originX"] as? Double, let y = obj["originY"] as? Double else { return nil }
+        return CGPoint(x: x, y: y)
+    }
+
+    static func setOrigin(_ point: CGPoint, id: String) {
+        var obj = readJSON(id) ?? [:]
+        obj["originX"] = Double(point.x)
+        obj["originY"] = Double(point.y)
+        if let data = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted]) {
+            try? data.write(to: folder(id).appendingPathComponent("board.json"), options: .atomic)
+        }
+    }
+
+    private static func readJSON(_ id: String) -> [String: Any]? {
+        guard let data = try? Data(contentsOf: folder(id).appendingPathComponent("board.json")) else { return nil }
+        return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    }
+
     static func create(name: String, pdf: URL?) throws -> BoardInfo {
         let id = UUID().uuidString
         let dir = folder(id)

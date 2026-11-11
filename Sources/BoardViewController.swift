@@ -27,6 +27,12 @@ final class BoardViewController: UIViewController, PKCanvasViewDelegate {
     private let pageWidth: CGFloat = 820
     private let margin: CGFloat = 60
     private let pageGap: CGFloat = 24
+    /// Room left of and above the content. A scroll view can't go below 0, so the board grows left and up
+    /// by shifting everything right or down when ink comes within `edge` of the start.
+    private let pad: CGFloat = 1200
+    private let edge: CGFloat = 300
+    private var pageOrigin = CGPoint.zero
+    private var shifting = false
 
     init(board: BoardInfo) {
         self.board = board
@@ -58,6 +64,7 @@ final class BoardViewController: UIViewController, PKCanvasViewDelegate {
         canvas.contentInsetAdjustmentBehavior = .never
         canvas.alwaysBounceVertical = true
         canvas.alwaysBounceHorizontal = true
+        canvas.overrideUserInterfaceStyle = .light
         canvas.drawing = BoardStore.loadDrawing(board.id)
         canvas.delegate = self
         view.addSubview(canvas)
@@ -65,6 +72,10 @@ final class BoardViewController: UIViewController, PKCanvasViewDelegate {
         loadPDF()
         setUpBar()
 
+        // The board is always light. Without this the picker follows the iPad's dark mode, and PencilKit
+        // flips its black and white when they land on the light canvas.
+        toolPicker.colorUserInterfaceStyle = .light
+        toolPicker.overrideUserInterfaceStyle = .light
         toolPicker.addObserver(canvas)
         toolPicker.setVisible(true, forFirstResponder: canvas)
     }
@@ -75,6 +86,8 @@ final class BoardViewController: UIViewController, PKCanvasViewDelegate {
         if !didInitialZoom {
             didInitialZoom = true
             if pdf != nil { canvas.zoomScale = min(2, view.bounds.width / (pageWidth + 2 * margin)) }
+            updateContentSize()
+            if pdf != nil { goToPage(0) }
         }
         updateContentSize()
         syncPageLayer()
@@ -109,10 +122,21 @@ final class BoardViewController: UIViewController, PKCanvasViewDelegate {
         guard let name = board.pdfName,
               let doc = PDFDocument(url: BoardStore.folder(board.id).appendingPathComponent(name)) else { return }
         pdf = doc
-        var y = margin
+        if let saved = BoardStore.origin(board.id) {
+            pageOrigin = saved
+        } else {
+            // Boards made before the left gutter had pages at (margin, margin): move their ink with the pages once.
+            pageOrigin = CGPoint(x: pad, y: margin)
+            if !canvas.drawing.strokes.isEmpty {
+                canvas.drawing = canvas.drawing.transformed(using: CGAffineTransform(translationX: pad - margin, y: 0))
+                BoardStore.save(canvas.drawing, id: board.id)
+            }
+            BoardStore.setOrigin(pageOrigin, id: board.id)
+        }
+        var y = pageOrigin.y
         for i in 0..<doc.pageCount {
             let size = displaySize(doc.page(at: i))
-            let frame = CGRect(x: margin, y: y, width: pageWidth, height: pageWidth * size.height / max(size.width, 1))
+            let frame = CGRect(x: pageOrigin.x, y: y, width: pageWidth, height: pageWidth * size.height / max(size.width, 1))
             let v = UIImageView(frame: frame)
             v.backgroundColor = .white
             v.contentMode = .scaleToFill
@@ -202,7 +226,8 @@ final class BoardViewController: UIViewController, PKCanvasViewDelegate {
         let hasInk = !canvas.drawing.strokes.isEmpty
         let ink = canvas.drawing.bounds
         let pdfBottom = pageFrames.last?.maxY ?? 0
-        let w = max(pageWidth + 2 * margin + 1400, hasInk ? ink.maxX + 1200 : 0, view.bounds.width / canvas.zoomScale)
+        let pdfRight = pageFrames.last?.maxX ?? 0
+        let w = max(pdfRight + 1400, hasInk ? ink.maxX + 1200 : 0, view.bounds.width / canvas.zoomScale)
         let h = max(pdfBottom + 1200, hasInk ? ink.maxY + 1500 : 0, view.bounds.height * 2 / canvas.zoomScale)
         pageLayer.bounds = CGRect(x: 0, y: 0, width: w, height: h)
         let target = CGSize(width: w * canvas.zoomScale, height: h * canvas.zoomScale)
@@ -225,11 +250,39 @@ final class BoardViewController: UIViewController, PKCanvasViewDelegate {
     }
 
     func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
+        if shifting { return }
+        growLeftAndUpIfNeeded()
         updateContentSize()
         saveWork?.cancel()
         let work = DispatchWorkItem { [weak self] in self?.saveNow() }
         saveWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: work)
+    }
+
+    /// Ink near the left or top edge: move everything right or down by `pad` and scroll by the same amount,
+    /// so nothing moves on screen but there's room to keep going.
+    private func growLeftAndUpIfNeeded() {
+        guard !canvas.drawing.strokes.isEmpty else { return }
+        let ink = canvas.drawing.bounds
+        let dx: CGFloat = ink.minX < edge ? pad : 0
+        let dy: CGFloat = ink.minY < edge ? pad : 0
+        guard dx > 0 || dy > 0 else { return }
+        shifting = true
+        let z = canvas.zoomScale, o = canvas.contentOffset
+        canvas.drawing = canvas.drawing.transformed(using: CGAffineTransform(translationX: dx, y: dy))
+        canvas.undoManager?.removeAllActions()
+        for i in pageFrames.indices {
+            pageFrames[i] = pageFrames[i].offsetBy(dx: dx, dy: dy)
+            pageViews[i].frame = pageFrames[i]
+        }
+        if pdf != nil {
+            pageOrigin = CGPoint(x: pageOrigin.x + dx, y: pageOrigin.y + dy)
+            BoardStore.setOrigin(pageOrigin, id: board.id)
+        }
+        updateContentSize()
+        canvas.contentOffset = CGPoint(x: o.x + dx * z, y: o.y + dy * z)
+        syncPageLayer()
+        shifting = false
     }
 
     private func saveNow() {
@@ -288,7 +341,8 @@ final class BoardViewController: UIViewController, PKCanvasViewDelegate {
         guard !pageFrames.isEmpty else { return }
         let f = pageFrames[min(max(i, 0), pageFrames.count - 1)]
         let z = canvas.zoomScale
-        canvas.setContentOffset(CGPoint(x: max(0, (f.minX - 20) * z), y: max(0, (f.minY - 20) * z)), animated: false)
+        let x = max(0, f.midX * z - canvas.bounds.width / 2)
+        canvas.setContentOffset(CGPoint(x: x, y: max(0, (f.minY - 20) * z)), animated: false)
         syncPageLayer()
     }
 
