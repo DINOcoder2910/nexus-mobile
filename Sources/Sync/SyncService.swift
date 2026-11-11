@@ -66,7 +66,7 @@ final class SyncService {
     init() {
         let d = UserDefaults.standard
         hubAddress = d.string(forKey: Keys.hub) ?? ""
-        deviceName = d.string(forKey: Keys.device) ?? "iPad"
+        deviceName = d.string(forKey: Keys.device) ?? Device.name
         enabled = d.bool(forKey: Keys.enabled)
         token = Keychain.get(Keys.token) ?? ""
         lastSynced = d.object(forKey: Keys.last) as? Date
@@ -77,7 +77,7 @@ final class SyncService {
     private var cleanToken: String { token.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var cleanDevice: String {
         let n = deviceName.trimmingCharacters(in: .whitespacesAndNewlines)
-        return n.isEmpty ? "iPad" : n
+        return n.isEmpty ? Device.name : n
     }
 
     // MARK: settings

@@ -23,7 +23,7 @@ struct SyncSettings: View {
                     .multilineTextAlignment(.trailing)
             }
             LabeledContent("This device's name") {
-                TextField("This device's name", text: Binding(get: { sync.deviceName }, set: { sync.setDeviceName($0) }), prompt: Text("iPad"))
+                TextField("This device's name", text: Binding(get: { sync.deviceName }, set: { sync.setDeviceName($0) }), prompt: Text(Device.name))
                     .autocorrectionDisabled()
                     .multilineTextAlignment(.trailing)
             }
@@ -40,12 +40,12 @@ struct SyncSettings: View {
         } header: {
             Text("Sync")
         } footer: {
-            Text("Keeps this iPad's data folder the same as the laptop's, through the hub on the G14. The address and token come from the hub's first start (Tailscale's address works anywhere, the home network's at home). The device name goes into the name of a conflict copy made from this iPad.")
+            Text("Keeps this \(Device.name)'s data folder the same as the laptop's, through the hub on the G14. The address and token come from the hub's first start (Tailscale's address works anywhere, the home network's at home). The device name goes into the name of a conflict copy made from this \(Device.name).")
         }
 
         if let moved = sync.movedAside {
             Section {
-                Label("This iPad's old files are in On My iPad › Nexus › \(moved).", systemImage: "folder")
+                Label("This \(Device.name)'s old files are in On My \(Device.name) › Nexus › \(moved).", systemImage: "folder")
                     .foregroundStyle(.secondary)
             }
         }
@@ -89,19 +89,19 @@ struct SyncSettings: View {
             if sync.canMoveAside {
                 Button { sync.useHubCopy() } label: {
                     choice("Use the hub's copy (recommended)",
-                           "Moves this iPad's folder aside to “nexus-data before sync …” in On My iPad › Nexus (nothing is deleted), then downloads everything from the hub.")
+                           "Moves this \(Device.name)'s folder aside to “nexus-data before sync …” in On My \(Device.name) › Nexus (nothing is deleted), then downloads everything from the hub.")
                 }
                 .disabled(sync.working)
             }
             if s.localIsDataFolder {
                 Button { sync.mergeWithThisIPad() } label: {
-                    choice("Merge with this iPad's files",
-                           "Files only on this iPad go to the hub. Where a file differs, this iPad takes the hub's version and keeps its own beside it as a conflict copy.")
+                    choice("Merge with this \(Device.name)'s files",
+                           "Files only on this \(Device.name) go to the hub. Where a file differs, this \(Device.name) takes the hub's version and keeps its own beside it as a conflict copy.")
                 }
                 .disabled(sync.working)
             }
             if !sync.canMoveAside && !s.localIsDataFolder {
-                Text("This folder was picked from Files and isn't a Nexus data folder. Empty it in Files, or go back to On My iPad › Nexus › nexus-data, to download the hub's copy.")
+                Text("This folder was picked from Files and isn't a Nexus data folder. Empty it in Files, or go back to \(Device.defaultFolder), to download the hub's copy.")
                     .foregroundStyle(.secondary)
             }
         } header: {
@@ -111,7 +111,7 @@ struct SyncSettings: View {
 
     private func paused(_ paths: [String]) -> some View {
         Section {
-            Text("\(paths.count) files are gone from this iPad's folder. Sync stopped so they aren't deleted on the hub and the laptop too.")
+            Text("\(paths.count) files are gone from this \(Device.name)'s folder. Sync stopped so they aren't deleted on the hub and the laptop too.")
             Button("Bring them back from the hub") { sync.bringBack() }.disabled(sync.working)
             Button("Delete them everywhere", role: .destructive) { sync.deleteOnHubToo() }.disabled(sync.working)
             DisclosureGroup("Show the files") {
@@ -140,9 +140,9 @@ struct SyncSettings: View {
     }
 
     private func summary(_ s: FirstSyncSummary) -> String {
-        var parts = ["This iPad's folder has \(s.localFiles) files and the hub has \(s.hubFiles)."]
+        var parts = ["This \(Device.name)'s folder has \(s.localFiles) files and the hub has \(s.hubFiles)."]
         if s.differ > 0 { parts.append(s.differ == 1 ? "1 file is different." : "\(s.differ) files are different.") }
-        if s.onlyHere > 0 { parts.append(s.onlyHere == 1 ? "1 file is only on this iPad." : "\(s.onlyHere) files are only on this iPad.") }
+        if s.onlyHere > 0 { parts.append(s.onlyHere == 1 ? "1 file is only on this \(Device.name)." : "\(s.onlyHere) files are only on this \(Device.name).") }
         if !s.localIsDataFolder { parts.append("This folder has no nexus.yaml, so it isn't a Nexus data folder.") }
         return parts.joined(separator: " ")
     }

@@ -5,7 +5,9 @@ import NexusCore
 /// Wide (landscape) it is two columns: the plan on the left, the rest on the right.
 struct TodayView: View {
     @Environment(NexusStore.self) private var store
+    @Environment(CalendarStore.self) private var cal
     @State private var dropTargeted = false
+    @State private var eventSheet: EventSheet?
 
     var body: some View {
         let p = store.planning
@@ -33,6 +35,7 @@ struct TodayView: View {
         }
         .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle("Today")
+        .eventSheet($eventSheet, store: cal)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button { store.capture = .init(workstream: nil, parent: nil, plan: store.today) } label: { Label("Add for today", systemImage: "plus") }
@@ -52,6 +55,16 @@ struct TodayView: View {
                   hours > 0 ? hoursText(hours) : nil,
                   p.slipped.isEmpty ? nil : "\(p.slipped.count) slipped"].compactMap { $0 }.joined(separator: " · "))
                 .foregroundStyle(.secondary)
+            if cal.eventsOnPlan, let next = cal.next(today: store.today) {
+                Button { eventSheet = .show(next.event) } label: {
+                    Label(next.start <= Date() ? "Now: \(next.title)" : "Next: \(next.title) at \(next.start.formatted(date: .omitted, time: .shortened))",
+                          systemImage: "calendar")
+                        .font(.callout.weight(.medium))
+                        .foregroundStyle(next.color)
+                        .lineLimit(1)
+                }
+                .buttonStyle(.plain)
+            }
         }
     }
 
@@ -118,6 +131,7 @@ struct TodayView: View {
     @ViewBuilder
     private func sideCards(_ p: Planning) -> some View {
         let today = store.today
+        eventsCard(today)
         let due = p.dueNow
         if !due.isEmpty {
             Card(title: "Deadlines", count: due.count, icon: "flag") {
@@ -154,6 +168,30 @@ struct TodayView: View {
                 ForEach(store.snapshot.problems) { pr in
                     Text("\(pr.file): \(pr.message)").font(.caption).foregroundStyle(.secondary)
                 }
+            }
+        }
+    }
+
+    /// The day's events from the device's calendars (the laptop shows them on Today's timeline). Asks once, quietly, if
+    /// Nexus may read them; says nothing more if the answer was no.
+    @ViewBuilder
+    private func eventsCard(_ today: String) -> some View {
+        if cal.eventsOnPlan && cal.canRead {
+            let events = cal.events(on: today)
+            Card(title: "Calendar", count: events.count, icon: "calendar") {
+                if events.isEmpty {
+                    Text("No events today.").font(.callout).foregroundStyle(.secondary).padding(.vertical, 4)
+                }
+                ForEach(events) { e in
+                    Button { eventSheet = .show(e.event) } label: { EventLine(thing: CalThing(event: e, day: today)) }
+                        .buttonStyle(.plain)
+                        .opacity(!e.allDay && e.end < Date() ? 0.5 : 1)
+                }
+            }
+        } else if cal.notAsked {
+            Card(title: "Calendar", icon: "calendar") {
+                Text("Show today's events from this \(Device.name)'s calendars here.").font(.callout).foregroundStyle(.secondary)
+                Button("Show my calendars") { Task { await cal.requestAccess() } }.font(.callout)
             }
         }
     }

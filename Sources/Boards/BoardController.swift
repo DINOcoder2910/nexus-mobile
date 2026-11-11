@@ -86,7 +86,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         canvas.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         canvas.backgroundColor = .clear
         canvas.isOpaque = false
-        canvas.drawingPolicy = .pencilOnly
+        canvas.drawingPolicy = Device.isPhone ? .anyInput : .pencilOnly // an iPhone has no Pencil: the finger draws (two fingers scroll)
         canvas.minimumZoomScale = 0.2
         canvas.maximumZoomScale = 5
         canvas.contentInsetAdjustmentBehavior = .never
