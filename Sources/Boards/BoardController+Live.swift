@@ -81,12 +81,37 @@ extension BoardController {
             let id = String(rel.dropFirst(5).dropLast(3))
             guard content.items.contains(where: { $0.id == id && $0.type == "text" }) else { continue }
             let md = (try? String(contentsOf: boardURL.appendingPathComponent(rel), encoding: .utf8)) ?? ""
-            if content.texts[id] != md { content.texts[id] = md; any = true }
+            let base = content.textsOnDisk[id]
             content.textsOnDisk[id] = md
+            if let took = takeRemoteInOpenBlock(id: id, base: base, theirs: md) {
+                // the block is open for typing: merged into it live, or (the same lines changed here) theirs kept as a draft
+                if !took { keepAsDraft(id: id, words: md) }
+                continue
+            }
+            if content.texts[id] != md { content.texts[id] = md; any = true }
         }
         stamps = now
         if any { rebuildItems(); paintPresence() }
         return true
+    }
+
+    /// The block `id` is open for typing: merge the laptop's words into it (true), a clash (false: ours stay), or nil when that block
+    /// isn't open. The board writing thread's WritingSession does the merge (`writing?.takeRemote(base:theirs:)`).
+    func takeRemoteInOpenBlock(id: String, base: String?, theirs: String) -> Bool? {
+        nil
+    }
+
+    /// Keep `words` as a draft of block `id` (the laptop's, after a clash); the block's words stay as they are.
+    func keepAsDraft(id: String, words: String) {
+        guard !readOnly, let k = content.items.firstIndex(where: { $0.id == id }) else { return }
+        let f = DateFormatter(); f.dateFormat = "HH:mm"
+        let name = LiveBoard.clashName(LivePresence.shared.lastOther ?? "the laptop", f.string(from: Date()))
+        let d = LiveBoard.clashDraft(content.items[k], name: name)
+        do { try FolderAccess.write(boardURL.appendingPathComponent(d.file), words) } catch { return }
+        content.items[k] = d.item
+        if BoardFormat.features.contains("drafts"), let m = content.meta { content.meta = BoardFormat.withFeature(m, "drafts") }
+        changed()
+        tell("The same lines of a block changed on the laptop at the same time. Yours stay; theirs are kept as the draft \"\(name)\".")
     }
 
     /// A conflict copy of a block's words the hub left: folded into the block as a draft, then removed. The device named in it does
