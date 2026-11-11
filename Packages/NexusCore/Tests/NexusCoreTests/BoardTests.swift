@@ -89,8 +89,9 @@ final class BoardTests: XCTestCase {
         XCTAssertEqual(t.strokes.count, 1)
         XCTAssertEqual(t.strokes[0].points, [[1, 2, 0.5, 0, Double.pi / 2, 0, 2, 2, 1]])
         XCTAssertEqual(t.strokes[0].color, "#000000FF")
-        XCTAssertEqual(t.items.count, 1)
-        XCTAssertEqual(t.items[0].shape, "rect")
+        XCTAssertEqual(t.items.count, 2, "an item of a type a newer Nexus made is kept")
+        XCTAssertTrue(t.items[0].isForeign)
+        XCTAssertEqual(t.items[1].shape, "rect")
     }
 
     func testTileKeys() {
