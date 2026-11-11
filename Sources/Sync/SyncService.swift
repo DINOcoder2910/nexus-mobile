@@ -54,6 +54,7 @@ final class SyncService {
     @ObservationIgnored private var active = true
     @ObservationIgnored private var cycling = false
     @ObservationIgnored private var failures = 0
+    @ObservationIgnored private var presenceTransport: HTTPSyncTransport?
 
     private static let session: URLSession = {
         let c = URLSessionConfiguration.ephemeral
@@ -129,13 +130,15 @@ final class SyncService {
         loop?.cancel()
         loop = nil
         waiting?.cancel()
-        guard enabled else { status = .off; return }
+        guard enabled else { status = .off; LivePresence.shared.stop(); return }
         guard let store, let url = HTTPSyncTransport.hubURL(hubAddress), !cleanToken.isEmpty else { status = .notSetUp; return }
         let key = Self.folderKey(store.folder) + "|" + url.absoluteString
         let full = key + "|" + cleanToken + "|" + cleanDevice
         if client == nil || clientKey != full {
-            let transport = HTTPSyncTransport(base: url, token: cleanToken, device: cleanDevice, session: Self.session)
+            let transport = HTTPSyncTransport(base: url, token: cleanToken, device: cleanDevice, session: Self.session,
+                                              appInfo: HTTPSyncTransport.appInfo(build: LivePresence.build))
             client = SyncClient(folder: store.folder, stateURL: Self.stateURL(key), hubUrl: url.absoluteString, transport: transport)
+            presenceTransport = transport
             clientKey = full
             conflictCopies = []
             problems = []
@@ -143,6 +146,7 @@ final class SyncService {
         }
         if status == .off || status == .notSetUp { status = .connecting }
         guard active else { return }
+        if let presenceTransport { LivePresence.shared.start(presenceTransport) }
         loop = Task { await self.run() }
     }
 
@@ -169,6 +173,7 @@ final class SyncService {
         loop?.cancel()
         loop = nil
         waiting?.cancel()
+        LivePresence.shared.stop()
         guard enabled, let client else { return }
         let box = BackgroundTask()
         let work = Task { () -> Void in _ = try? await client.cycle() }
@@ -235,7 +240,10 @@ final class SyncService {
                 let now = Date()
                 lastSynced = now
                 UserDefaults.standard.set(now, forKey: Keys.last)
-                if !r.pulled.isEmpty { store?.reload() }
+                if !r.pulled.isEmpty {
+                    store?.reload()
+                    NotificationCenter.default.post(name: LivePresence.pulled, object: r.pulled) // an open board reads them now
+                }
                 return .longPoll
             case .notADataFolder:
                 status = .notDataFolder

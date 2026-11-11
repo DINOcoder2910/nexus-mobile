@@ -48,6 +48,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     var currentPage = ""
     var saveWork: DispatchWorkItem?
     var poll: Timer?
+    let live = LiveState()
     var strokeCount = 0
     var drag: Drag?
 
@@ -114,6 +115,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
 
         NotificationCenter.default.addObserver(self, selector: #selector(saveNowSelector), name: UIApplication.willResignActiveNotification, object: nil)
         poll = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.checkOutside() }
+        setUpLive()
     }
 
     deinit { poll?.invalidate() }
@@ -369,10 +371,17 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         let taken = Set(content.items.map(\.id))
         content.strokes = ledger.strokes(canvas.drawing, offset: offset, taken: taken)
         do {
+            // what the laptop wrote since this board was read is merged in first, never written over (BoardController+Live)
+            let merged = try reconcileBeforeSave()
+            content = merged.content
+            let ch = BoardFiles.changes(content)
+            var wrote = Set(ch.tiles.keys.map(BoardFormat.tileFile) + ch.texts.keys.map(BoardFormat.textFile) + ch.removedTexts.map(BoardFormat.textFile))
+            if content.meta != content.metaOnDisk { wrote.insert("board.json") }
             content = try BoardFiles.save(content, to: boardURL, write: { url, text in try FolderAccess.write(url, text) },
                                           remove: { url in try FileManager.default.removeItem(at: url) })
             dirty = false
-            stamps = fileStamps()
+            stamps = stampsAfterSave(wrote: wrote)
+            afterReconcile(merged)
             onSaved?(path)
         } catch {
             tell("Couldn't save the board: \(error.localizedDescription)")
@@ -402,6 +411,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         guard !dirty, presentedViewController == nil, !canvas.isTracking else { return }
         let now = fileStamps()
         guard now != stamps else { return }
+        if takeOutsideWords(now) { return } // only words changed (the laptop typing): the ink and its undo stay as they are
         let z = canvas.zoomScale
         let look = CGPoint(x: visibleBoard.minX, y: visibleBoard.minY)
         let keep = selected

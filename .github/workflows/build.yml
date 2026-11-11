@@ -44,7 +44,7 @@ jobs:
           set -o pipefail
           xcodebuild -project NexusMobile.xcodeproj -scheme NexusMobile -configuration Release \
             -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath DerivedData \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" NEXUS_BUILD="${GITHUB_SHA::7}" \
             build 2>&1 | grep -E "error:|warning: unre|BUILD|\*\*" | head -n 150
 
       - name: Package the .ipa
