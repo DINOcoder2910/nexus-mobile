@@ -135,12 +135,7 @@ struct TimeGridView: View {
             if targetDay == day { Theme.accent.opacity(0.06) }
             GeometryReader { g in
                 ForEach(placed) { pl in
-                    if let th = byId[pl.id] {
-                        let w = g.size.width / CGFloat(max(1, pl.columns))
-                        block(th, tall: pl.end - pl.start >= 45)
-                            .frame(width: max(0, w - 2), height: max(18, CGFloat(pl.end - pl.start) * hh / 60 - 1))
-                            .offset(x: CGFloat(pl.column) * w + 1, y: CGFloat(pl.start) * hh / 60)
-                    }
+                    if let th = byId[pl.id] { placedBlock(th, pl, columnWidth: g.size.width) }
                 }
                 if day == today { nowLine(width: g.size.width) }
             }
@@ -155,6 +150,19 @@ struct TimeGridView: View {
         } isTargeted: { on in
             if on { targetDay = day } else if targetDay == day { targetDay = nil }
         }
+    }
+
+    /// A block at its place: its share of the column's width, from its start to its end.
+    private func placedBlock(_ th: CalThing, _ pl: DayLayout.Placed, columnWidth: CGFloat) -> some View {
+        let cols: CGFloat = CGFloat(max(1, pl.columns))
+        let w: CGFloat = columnWidth / cols
+        let perMinute: CGFloat = hourHeight / 60
+        let length: CGFloat = CGFloat(pl.end - pl.start) * perMinute
+        let x: CGFloat = CGFloat(pl.column) * w + 1
+        let y: CGFloat = CGFloat(pl.start) * perMinute
+        return block(th, tall: pl.end - pl.start >= 45)
+            .frame(width: max(0, w - 2), height: max(18, length - 1))
+            .offset(x: x, y: y)
     }
 
     /// A place on the grid to a time, to the quarter hour.
@@ -206,7 +214,7 @@ struct TimeGridView: View {
                 Rectangle().fill(Theme.late).frame(width: width, height: 1.5)
                 Circle().fill(Theme.late).frame(width: 8, height: 8).offset(x: -4)
             }
-            .offset(y: CGFloat(m) * hourHeight / 60 - 0.75)
+            .offset(y: CGFloat(m) * (hourHeight / 60) - 0.75)
             .allowsHitTesting(false)
         }
     }

@@ -85,7 +85,12 @@ final class CalendarStore {
     }
 
     func reloadCalendars() {
-        calendars = canRead ? ek.calendars(for: .event).sorted { ($0.source.title, $0.title) < ($1.source.title, $1.title) } : []
+        guard canRead else { calendars = []; bump(); return }
+        let all: [EKCalendar] = ek.calendars(for: .event)
+        calendars = all.sorted { a, b in
+            let sa: String = a.source?.title ?? "", sb: String = b.source?.title ?? ""
+            return sa != sb ? sa < sb : a.title < b.title
+        }
         bump()
     }
 
@@ -122,18 +127,33 @@ final class CalendarStore {
         let shown = calendars.filter(isShown)
         guard !shown.isEmpty, let s = Days.date(first), let lastDay = Days.date(Days.add(last, 1)) else { cache[key] = []; return [] }
         let predicate = ek.predicateForEvents(withStart: s, end: lastDay, calendars: shown)
-        let list = ek.events(matching: predicate).map { e -> CalEvent in
-            let start: Date = e.startDate ?? s
-            let end: Date = e.endDate ?? start
-            let ident: String = e.eventIdentifier ?? e.calendarItemIdentifier
-            return CalEvent(id: "\(ident)|\(start.timeIntervalSince1970)", event: e, title: (e.title ?? "").isEmpty ? "(No title)" : e.title!,
-                            start: start, end: end, allDay: e.isAllDay, color: Color(cgColor: e.calendar.cgColor),
-                            calendarName: e.calendar.title, location: e.location.flatMap { $0.isEmpty ? nil : $0 })
-        }
-        .sorted { a, b in a.allDay != b.allDay ? a.allDay : a.start != b.start ? a.start < b.start : a.title < b.title }
+        let found: [EKEvent] = ek.events(matching: predicate)
+        var list: [CalEvent] = []
+        for e in found { list.append(Self.make(e, fallback: s)) }
+        list.sort(by: Self.before)
         if cache.count > 40 { cache = [:] }
         cache[key] = list
         return list
+    }
+
+    private static func make(_ e: EKEvent, fallback: Date) -> CalEvent {
+        let start: Date = e.startDate ?? fallback
+        let end: Date = e.endDate ?? start
+        let ident: String = e.eventIdentifier ?? e.calendarItemIdentifier
+        let raw: String = e.title ?? ""
+        let title: String = raw.isEmpty ? "(No title)" : raw
+        let calendar: EKCalendar? = e.calendar
+        let color: Color = calendar.map { Color(cgColor: $0.cgColor) } ?? .secondary
+        let place: String? = (e.location?.isEmpty ?? true) ? nil : e.location
+        return CalEvent(id: ident + "|" + String(start.timeIntervalSince1970), event: e, title: title, start: start, end: end,
+                        allDay: e.isAllDay, color: color, calendarName: calendar?.title ?? "", location: place)
+    }
+
+    /// All-day first, then by start, then by title.
+    private static func before(_ a: CalEvent, _ b: CalEvent) -> Bool {
+        if a.allDay != b.allDay { return a.allDay }
+        if a.start != b.start { return a.start < b.start }
+        return a.title < b.title
     }
 
     /// The events touching one day.
