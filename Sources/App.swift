@@ -18,7 +18,7 @@ struct NexusMobileApp: App {
 
 /// Where the sidebar can take you.
 enum Screen: Hashable {
-    case today, planner, tasks, someday, inbox, workstream(String), boards, settings
+    case today, planner, tasks, someday, inbox, workstream(String), boards, boardSearch, settings
 }
 
 /// The shell: the sidebar on the left (where you go), the screen on the right, and the task panel, add sheet and undo bar over both.
@@ -45,6 +45,13 @@ struct RootView: View {
             if let id = store.openTaskId { TaskDetailView(taskId: id).id(id) }
         }
         .sheet(item: $store.capture) { start in CaptureSheet(start: start) }
+        .fullScreenCover(item: $store.openBoard) { target in
+            BoardHost(target: target, root: store.folder, onClose: { store.openBoard = nil }, onSaved: { path in
+                store.boardsChanged()
+                HandwritingIndex.shared.refresh(board: path, root: store.folder)
+            })
+            .ignoresSafeArea()
+        }
         .alert("Couldn't do that", isPresented: Binding(get: { store.problem != nil }, set: { if !$0 { store.problem = nil } })) {
             Button("OK", role: .cancel) {}
         } message: { Text(store.problem ?? "") }
@@ -62,6 +69,7 @@ struct RootView: View {
         .onChange(of: store.folder) { _, _ in sync.restart() }
         .task {
             sync.attach(store)
+            InkBoardMove.runIfNeeded(store)
             // Another writer (sync, the Files app) can change the folder at any time: look every few seconds while open,
             // and let sync send what changed.
             while !Task.isCancelled {
@@ -84,6 +92,7 @@ struct RootView: View {
             case .inbox: WorkstreamView(workstreamId: nil)
             case .workstream(let id): WorkstreamView(workstreamId: id)
             case .boards: BoardsView()
+            case .boardSearch: BoardSearchView()
             case .settings: SettingsView()
             }
         }

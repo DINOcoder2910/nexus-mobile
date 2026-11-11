@@ -60,4 +60,18 @@ enum FolderAccess {
         if let coordError { throw coordError }
         try result.get()
     }
+
+    /// Coordinated, atomic write of bytes (an image or a PDF put on a board).
+    static func writeData(_ url: URL, _ data: Data) throws {
+        var result: Result<Void, Error> = .success(())
+        var coordError: NSError?
+        NSFileCoordinator().coordinate(writingItemAt: url, options: [.forReplacing], error: &coordError) { u in
+            result = Result {
+                try FileManager.default.createDirectory(at: u.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try data.write(to: u, options: .atomic)
+            }
+        }
+        if let coordError { throw coordError }
+        try result.get()
+    }
 }

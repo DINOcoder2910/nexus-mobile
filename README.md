@@ -11,13 +11,18 @@ The iPad (and later iPhone) side of [Nexus](https://github.com/DINOcoder2910), a
   - **A workstream's page**: its task tree, Someday and Done, its notes.md and its files.
   - **The task panel**: title, ★, deadline, planned days and times, estimate, subtasks, Someday; waiting, repeats, tags and the note are shown.
   - **Add a task** anywhere with +, into a workstream or the Inbox.
-- **Boards** from the ink test (PencilKit, PDFs with chapters and go to page), kept in the sidebar until notebooks replace them.
+- **Notebooks**, as on the laptop: `notebooks/<notebook>/<section>/<board>.board` in the data folder, made, renamed and opened from the sidebar.
+  - **A board**: PencilKit ink on an endless canvas that grows in every direction, over PDF printouts (pages drawn only near the view, Contents with the PDF's chapters and go to page), images, shapes (rectangle, ellipse, line, arrow) and typed text blocks (markdown, size, colour, background, tick a checkbox with a tap).
+  - Fingers pick, move and resize items; hold the Pencil still at the end of a stroke to snap it to a line, circle, ellipse or polygon.
+  - Saved in the laptop's board format, byte for byte, 600 ms after an edit: only the tiles that changed are written, and every stroke keeps its id, so a sync merge sees only what changed. Another device's write is read in when nothing here is unsaved.
+  - **Search boards**: handwriting read on the iPad with Vision, plus typed text; tap a hit to open the board there. The index lives in the app, never in the data folder.
+  - The ink test's own boards were copied once into **Notebooks › Ink test**; the originals stay under Ink test boards.
 
 ## The data folder
 
 The app reads `On My iPad › Nexus › nexus-data` (or a folder picked from Files) in the laptop's format (`docs/data-format.md` in the Nexus repo). Reading never writes. Every change is a line-level edit of one `tasks.yaml` or `inbox.yaml`, checked by parsing the result before it is saved, so comments, order and formatting stay and the laptop sees a one-line change. A file that doesn't parse, a task without an id, and a folder in another format version are read-only. The app looks for changes every few seconds and when it comes back to the front, so sync can write underneath it.
 
-The pure part is the `NexusCore` package (`Packages/NexusCore`): the folder, the YAML edits and the planning model, with tests on a copy of the laptop's `dev/fixtures/data-vault`.
+The pure part is the `NexusCore` package (`Packages/NexusCore`): the folder, the YAML edits, the planning model, the board files, shape snapping and capture parsing, with tests on a copy of the laptop's `dev/fixtures/data-vault` and the laptop's own board and shape tests.
 
 ## Sync
 

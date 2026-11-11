@@ -21,6 +21,18 @@ final class NexusStore {
     var capture: CaptureStart?
     /// Called after the app wrote to the data folder (sync sends it soon after).
     @ObservationIgnored var onWrite: (() -> Void)?
+    /// The board open over everything (full screen), and where to look first.
+    var openBoard: BoardTarget?
+    /// Goes up when a notebook, section or board was made, renamed or removed, so the lists read the folder again.
+    var notebooksVersion = 0
+
+    struct BoardTarget: Identifiable {
+        let id = UUID()
+        /// The board folder, relative to the data folder ("notebooks/Chem/R3/Lesson 1.board").
+        var path: String
+        /// A place on the board (board units) to show first, e.g. a search hit.
+        var focus: CGRect?
+    }
 
     struct Toast: Identifiable, Equatable {
         let id = UUID()
@@ -80,6 +92,12 @@ final class NexusStore {
         let (url, picked) = FolderAccess.current()
         folder = url; pickedFolder = picked
         reload()
+    }
+
+    /// A board (or a notebook) was written: let sync send it.
+    func boardsChanged(listChanged: Bool = false) {
+        if listChanged { notebooksVersion += 1 }
+        onWrite?()
     }
 
     func makeSample() {

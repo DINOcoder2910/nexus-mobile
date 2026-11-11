@@ -30,10 +30,10 @@ struct BoardsView: View {
                     reload()
                 }
             } header: { Text("Boards") } footer: {
-                Text("These are the ink test's boards. Notebooks and sections, typing mixed with ink and the laptop's board format come next; these boards will move over then.")
+                Text("These are the ink test's own boards, kept as they were. Each one was copied once into Notebooks › Ink test in the laptop's format; write in those copies, which sync and open on the laptop.")
             }
         }
-        .navigationTitle("Boards")
+        .navigationTitle("Ink test boards")
         .fileImporter(isPresented: $importing, allowedContentTypes: [.pdf]) { result in
             switch result {
             case .success(let url):

@@ -6,6 +6,7 @@ struct Sidebar: View {
     @Environment(NexusStore.self) private var store
     @Binding var selection: Screen?
     @AppStorage("closedGroups") private var closedGroups = ""
+    @State private var notebookActions = NotebookActions()
 
     var body: some View {
         let p = store.planning
@@ -42,7 +43,9 @@ struct Sidebar: View {
             }
 
             Section("Notebooks") {
-                row(.boards, "Boards", "scribble.variable", count: nil)
+                if s.isDataFolder { NotebooksList(actions: notebookActions) }
+                row(.boardSearch, "Search boards", "text.magnifyingglass", count: nil)
+                row(.boards, "Ink test boards", "scribble.variable", count: nil)
             }
 
             Section {
@@ -52,6 +55,7 @@ struct Sidebar: View {
             }
         }
         .listStyle(.sidebar)
+        .notebookPrompts(notebookActions, store: store)
         .navigationTitle("Nexus")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
