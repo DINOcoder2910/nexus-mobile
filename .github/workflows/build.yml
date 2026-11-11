@@ -23,7 +23,8 @@ jobs:
       - name: NexusCore tests (data folder, YAML edits, planning)
         run: |
           set -o pipefail
-          swift test --package-path Packages/NexusCore 2>&1 | tail -n 150
+          # the failures first (they are above the last 150 lines when there are many tests)
+          swift test --package-path Packages/NexusCore 2>&1 | tee /tmp/test.log | tail -n 150 || { echo "---- failures"; grep -E "error:|failed \(" /tmp/test.log | head -n 80; exit 1; }
 
   build:
     runs-on: macos-latest

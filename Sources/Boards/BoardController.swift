@@ -50,6 +50,10 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     var poll: Timer?
     var strokeCount = 0
     var drag: Drag?
+    // typing (BoardController+Writing.swift)
+    var writing: WritingSession?
+    var pushedBottom: [String: CGFloat] = [:]
+    var pushedBy: [String: CGFloat] = [:]
 
     // hold to make a shape (BoardController+Snap.swift)
     let snapOverlay = UIView(), snapLine = CAShapeLayer(), snapHalo = CAShapeLayer()
@@ -138,6 +142,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        if presentedViewController == nil { endWriting() }
         saveNow()
         poll?.invalidate()
     }
@@ -303,6 +308,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
             currentPage = page
             title = page.isEmpty ? boardName : boardName + " · " + page
         }
+        writing?.place()
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) { syncWorld() }
@@ -311,6 +317,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         updateContentSize()
         syncWorld()
         sharpenText()
+        writing?.rescale()
     }
 
     /// Typed text draws itself: draw it again at the new zoom so it stays sharp.
@@ -399,7 +406,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
 
     /// Another device (sync) or app wrote the board: read it again, unless something here isn't saved yet (that wins on the next save).
     func checkOutside() {
-        guard !dirty, presentedViewController == nil, !canvas.isTracking else { return }
+        guard !dirty, writing == nil, presentedViewController == nil, !canvas.isTracking else { return }
         let now = fileStamps()
         guard now != stamps else { return }
         let z = canvas.zoomScale

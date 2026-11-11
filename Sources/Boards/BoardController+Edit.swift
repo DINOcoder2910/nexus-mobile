@@ -73,6 +73,8 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
     }
 
     @objc func tapped(_ g: UITapGestureRecognizer) {
+        // a tap away from the block being typed in closes it
+        if writing != nil { endWriting(); return }
         let p = boardPoint(g)
         guard let it = hitItem(p, pdf: false) else { selected = nil; return }
         if it.type == "text", !readOnly {
@@ -82,7 +84,7 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
                 changeItems("Tick") { $0.texts[it.id] = md }
                 return
             }
-            if selected == it.id { edit(it); return }
+            if selected == it.id { beginWriting(it, at: p); return }
         }
         selected = it.id
     }
@@ -188,33 +190,9 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
         if let id = selected, let it = content.items.first(where: { $0.id == id }) { edit(it) }
     }
 
-    /// The text block's editor: its markdown, size, colour and background.
+    /// Typing in a block, in place (BoardController+Writing.swift).
     func edit(_ it: BoardItem) {
-        guard !readOnly else { return }
-        let id = it.id
-        // the editor closes itself
-        let editor = TextBlockEditor(markdown: content.texts[id] ?? "", item: it, onDone: { [weak self] md, item in
-            self?.finishEdit(id, md, item)
-        }, onDelete: { [weak self] in
-            self?.selected = nil
-            self?.changeItems("Delete") { c in c.items.removeAll { $0.id == id }; c.texts[id] = nil }
-        })
-        let host = UIHostingController(rootView: AnyView(editor.onDisappear { [weak self] in self?.dropIfEmpty(id) }))
-        host.modalPresentationStyle = .formSheet
-        present(host, animated: true)
-    }
-
-    func finishEdit(_ id: String, _ md: String, _ item: BoardItem) {
-        guard content.items.contains(where: { $0.id == id }) else { return }
-        if md.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            selected = nil
-            changeItems("Delete") { c in c.items.removeAll { $0.id == id }; c.texts[id] = nil }
-            return
-        }
-        changeItems("Edit text") { c in
-            if let i = c.items.firstIndex(where: { $0.id == id }) { c.items[i] = item }
-            c.texts[id] = md
-        }
+        beginWriting(it)
     }
 
     /// A new block left empty goes away again (as on the laptop).
