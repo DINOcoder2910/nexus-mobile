@@ -102,10 +102,12 @@ enum WindowStart: Hashable, Codable {
     }
 }
 
-/// "New window" and "Open in a new window", where there can be several windows (the iPad; nothing on the iPhone).
+/// "Open in a new window" on a board's menu, where there can be several windows (the iPad; nothing on the iPhone).
+/// There is no plain "New window" button: it was too easy to press by accident (Nov 12). A new window comes from the system:
+/// hold the app's icon › New Window, or Show All Windows › +.
 struct NewWindowButton: View {
-    var start: WindowStart = .plain(UUID())
-    var label = "New window"
+    var start: WindowStart
+    var label = "Open in a new window"
     @Environment(\.openWindow) private var openWindow
     @Environment(\.supportsMultipleWindows) private var multiple
 

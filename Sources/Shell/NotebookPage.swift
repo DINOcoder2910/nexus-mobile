@@ -188,7 +188,7 @@ struct BoardCard: View {
         .draggable(b.path)
         .contextMenu {
             Button { store.openBoard = .init(path: b.path, focus: nil) } label: { Label("Open", systemImage: "arrow.up.right.square") }
-            NewWindowButton(start: .board(b.path), label: "Open in a new window")
+            NewWindowButton(start: .board(b.path))
             Button { actions.ask(.rename, in: b.path, name: b.name) } label: { Label("Rename…", systemImage: "pencil") }
             Button { actions.moving = b.path } label: { Label("Move to…", systemImage: "folder") }
             Button { actions.duplicate(b, store) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }

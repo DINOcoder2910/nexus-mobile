@@ -81,11 +81,32 @@ jobs:
           ls -la "$DATA/Documents/nexus-data/diagnostics" 2>/dev/null || echo "no diagnostics folder"
           for f in "$DATA"/Documents/nexus-data/diagnostics/*.txt; do [ -f "$f" ] && { echo "=================== $f"; cat "$f"; }; done
 
+      - name: Screenshots the tests took, as PNGs
+        if: always()
+        run: |
+          mkdir -p shots
+          xcrun xcresulttool export attachments --path ui.xcresult --output-path shots 2>&1 | tail -n 5 || true
+          ls shots | head -n 50
+
+      - name: Sidebar screenshot in the log (base64 JPEG, for a reader that can't download artifacts)
+        if: always()
+        run: |
+          F=$(python3 -c '
+          import json
+          m=json.load(open("shots/manifest.json"))
+          print(next((a["exportedFileName"] for t in m for a in t.get("attachments",[]) if a.get("suggestedHumanReadableName","").startswith("sidebar")),""))' 2>/dev/null || true)
+          [ -n "$F" ] || { echo "no sidebar shot"; exit 0; }
+          sips -Z 1200 -s format jpeg -s formatOptions 55 "shots/$F" --out sidebar.jpg >/dev/null
+          echo "SHOT-BEGIN sidebar.jpg $(stat -f%z sidebar.jpg)"
+          base64 -i sidebar.jpg | fold -w 3000
+          echo "SHOT-END"
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: ui-check
           path: |
+            shots
             samples
             ui.log
             ui.xcresult
