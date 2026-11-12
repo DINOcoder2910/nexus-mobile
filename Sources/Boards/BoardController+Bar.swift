@@ -51,14 +51,15 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
 
     func layOutBar() {
         let top = view.safeAreaInsets.top
-        bar.frame = CGRect(x: 0, y: 0, width: view.bounds.width, height: top + BoardBar.height)
+        bar.compact = view.bounds.width < BoardBar.compactWidth // a narrow screen gives the tools their own row
+        bar.frame = CGRect(x: 0, y: 0, width: view.bounds.width, height: top + bar.height)
         showBarsButton.frame = CGRect(x: view.bounds.width - view.safeAreaInsets.right - 56, y: top + 8, width: 44, height: 32)
         view.bringSubviewToFront(bar)
         view.bringSubviewToFront(showBarsButton)
     }
 
     /// How much of the top of the screen the bar covers.
-    var topInset: CGFloat { bar.isHidden ? view.safeAreaInsets.top : view.safeAreaInsets.top + BoardBar.height }
+    var topInset: CGFloat { bar.isHidden ? view.safeAreaInsets.top : view.safeAreaInsets.top + bar.height }
 
     /// Which gestures may start for the current tool (nil: the gesture's own rule decides).
     func toolGestureShouldBegin(_ g: UIGestureRecognizer) -> Bool? {
@@ -92,6 +93,7 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
     func applyTool() {
         let tools = BoardTools.shared
         canvas.drawingPolicy = Device.isPhone || tools.fingersDraw ? .anyInput : .pencilOnly // an iPhone has no Pencil
+        hold.fingers = canvas.drawingPolicy == .anyInput // hold to make a shape with the finger too
         if !readOnly, let pk = tools.pkTool(tools.tool, dark: boardIsDark) {
             canvas.tool = pk
             canvas.drawingGestureRecognizer.isEnabled = true
@@ -180,11 +182,14 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
     }
 
     func titleMenu() -> UIMenu {
-        UIMenu(children: [
-            UIAction(title: "Board info", image: UIImage(systemName: "info.circle")) { [weak self] _ in self?.showInfo() },
-            UIMenu(title: "Side by side", image: UIImage(systemName: "rectangle.split.2x1"), children: [
+        var top: [UIMenuElement] = [UIAction(title: "Board info", image: UIImage(systemName: "info.circle")) { [weak self] _ in self?.showInfo() }]
+        // (an iPhone is too narrow for two panes)
+        if !Device.isPhone {
+            top.append(UIMenu(title: "Side by side", image: UIImage(systemName: "rectangle.split.2x1"), children: [
                 UIDeferredMenuElement.uncached { [weak self] done in done(self?.sideBySideMenu() ?? []) },
-            ]),
+            ]))
+        }
+        return UIMenu(children: top + [
             UIMenu(options: .displayInline, children: [
                 UIAction(title: "All comments", image: UIImage(systemName: "text.bubble")) { [weak self] _ in self?.openComments() },
                 UIAction(title: "Lift all revision tape", image: UIImage(systemName: "eye")) { [weak self] _ in self?.peekAll(true) },
@@ -219,14 +224,14 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
                 self?.bar.refresh()
             }
         }
-        var items: [UIMenuElement] = [
-            UIMenu(title: "Dark board", image: UIImage(systemName: "moon"), children: dark),
-            UIAction(title: "Fingers draw too", image: UIImage(systemName: "hand.draw"), state: tools.fingersDraw ? .on : .off) { [weak self] _ in
+        var items: [UIMenuElement] = [UIMenu(title: "Dark board", image: UIImage(systemName: "moon"), children: dark)]
+        if !Device.isPhone { // on an iPhone the finger always draws
+            items.append(UIAction(title: "Fingers draw too", image: UIImage(systemName: "hand.draw"), state: tools.fingersDraw ? .on : .off) { [weak self] _ in
                 tools.fingersDraw.toggle()
                 self?.toolChanged()
                 self?.toast(tools.fingersDraw ? "Fingers draw too" : "Pencil only: fingers scroll and pick things")
-            },
-        ]
+            })
+        }
         if !pdfs.isEmpty {
             items.append(UIAction(title: "Contents", image: UIImage(systemName: "list.bullet")) { [weak self] _ in
                 guard let self else { return }
@@ -347,6 +352,10 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
         let tools = BoardTools.shared
         guard !tools.hintShown, !readOnly else { return }
         tools.hintShown = true
-        toast("The Pencil writes, fingers scroll. Pick tools in the bar; double-tap the Pencil for the eraser.")
+        if Device.isPhone {
+            toast("Your finger draws; two fingers scroll and zoom. The hand scrolls with one finger, Select picks things.")
+        } else {
+            toast("The Pencil writes, fingers scroll. Pick tools in the bar; double-tap the Pencil for the eraser.")
+        }
     }
 }

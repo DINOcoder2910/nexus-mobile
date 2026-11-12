@@ -264,14 +264,19 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
             scroll(toBoard: CGPoint(x: f.midX - W / 2 / z, y: f.midY - (H / 2 + top) / z))
         } else if let pdf = content.items.first(where: { $0.type == "pdf" }) {
             let w = pdf.w ?? BoardFormat.pdfWidth
-            let z = min(1.5, max(0.3, (W - 80) / (w + 80)))
+            let margin: CGFloat = W < BoardBar.compactWidth ? 16 : 80 // a narrow screen gives the page all its width
+            let z = min(1.5, max(0.3, (W - margin) / (w + margin)))
             canvas.zoomScale = z
             updateContentSize()
-            scroll(toBoard: CGPoint(x: pdf.x - 40 / z, y: pdf.y - (24 + top) / z))
+            scroll(toBoard: CGPoint(x: pdf.x - margin / 2 / z, y: pdf.y - (24 + top) / z))
         } else if let b = contentBounds() {
-            canvas.zoomScale = 1
+            // a narrow screen (an iPhone) starts zoomed out to the width of what is there (a board written on the laptop is wide)
+            let narrow = W < BoardBar.compactWidth
+            let z = narrow ? min(1, max(0.35, (W - 24) / max(b.width + 24, 1))) : 1
+            canvas.zoomScale = z
             updateContentSize()
-            scroll(toBoard: CGPoint(x: b.minX - 60, y: b.minY - 60 - top))
+            if narrow { scroll(toBoard: CGPoint(x: b.minX - 12 / z, y: b.minY - (24 + top) / z)) }
+            else { scroll(toBoard: CGPoint(x: b.minX - 60, y: b.minY - 60 - top)) }
         } else {
             canvas.zoomScale = 1
             updateContentSize()

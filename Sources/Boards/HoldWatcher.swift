@@ -23,6 +23,12 @@ final class HoldWatcher: UIGestureRecognizer {
     var onHold: (() -> Void)?
     /// The Pencil lifted (or the stroke was cancelled: false).
     var onEnd: ((Bool) -> Void)?
+    /// The finger draws too (an iPhone, or Fingers draw too): watch one finger as well as the Pencil.
+    var fingers = false {
+        didSet { allowedTouchTypes = fingers ? HoldWatcher.pencilAndFinger : HoldWatcher.pencil }
+    }
+    static let pencil = [NSNumber(value: UITouch.TouchType.pencil.rawValue)]
+    static let pencilAndFinger = [NSNumber(value: UITouch.TouchType.pencil.rawValue), NSNumber(value: UITouch.TouchType.direct.rawValue)]
 
     private var anchor = CGPoint.zero
     private var lastMove: TimeInterval = 0
@@ -38,6 +44,8 @@ final class HoldWatcher: UIGestureRecognizer {
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
         guard let t = touches.first else { return }
+        // a second finger is a scroll or a zoom, not a stroke ending in a hold
+        if touching || touches.count > 1 { held = false; end(false); return }
         touching = true
         held = false
         points = [t.location(in: view)]

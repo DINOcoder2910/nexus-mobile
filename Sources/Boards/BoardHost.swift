@@ -12,6 +12,8 @@ struct BoardHost: UIViewControllerRepresentable {
     /// The board in the side pane (its close button closes the pane).
     var isSide = false
     var onSidebar: (() -> Void)?
+    /// Today or the Calendar for Side by side's second pane (SideBySide.swift).
+    var makeScreen: ((SideScreen, @escaping () -> Void) -> UIViewController)?
 
     func makeUIViewController(context: Context) -> BoardSplitController {
         let vc = BoardController(root: root, path: target.path, focus: target.focus)
@@ -25,6 +27,7 @@ struct BoardHost: UIViewControllerRepresentable {
         let split = BoardSplitController(board: vc, root: root)
         split.store = store
         split.onSaved = onSaved
+        split.makeScreen = makeScreen
         return split
     }
 
