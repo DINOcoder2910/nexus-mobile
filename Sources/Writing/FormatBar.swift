@@ -148,7 +148,7 @@ final class FormatBar: UIInputView {
             button("textformat", "Font", menu: deferred { [weak self] in self?.fontItems() ?? [] }),
             button("textformat.size", "Size", menu: deferred { [weak self] in self?.sizeItems() ?? [] }),
             button("paintpalette", "Colour", menu: colourMenu()),
-            button("square.fill.on.square", "Background", menu: deferred { [weak self] in self?.fillItems() ?? [] }),
+            button("square.fill.on.square", "Block background", menu: deferred("Block background") { [weak self] in self?.fillItems() ?? [] }),
             divider(),
             button("globe", "Spanish", menu: deferred { [weak self] in
                 guard let s = self?.session, let b = s.board else { return [] }
@@ -173,8 +173,8 @@ final class FormatBar: UIInputView {
         stack.addArrangedSubview(done)
     }
 
-    private func deferred(_ items: @escaping () -> [UIMenuElement]) -> UIMenu {
-        UIMenu(children: [UIDeferredMenuElement.uncached { done in done(items()) }])
+    private func deferred(_ title: String = "", _ items: @escaping () -> [UIMenuElement]) -> UIMenu {
+        UIMenu(title: title, children: [UIDeferredMenuElement.uncached { done in done(items()) }])
     }
 
     /// Show where the caret is: its style, and the block's word count.
