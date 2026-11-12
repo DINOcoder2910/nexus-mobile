@@ -865,7 +865,7 @@ extension BoardController {
 
     /// Pick a board, a task or a note to link `from` to.
     func pickTarget(from: JSONValue) {
-        let boards = Notebook.list(root).flatMap { nb in nb.boards + nb.sections.flatMap(\.boards) }.filter { $0.path != path }
+        let boards = Notebook.list(root).flatMap { nb in nb.allBoards.map(\.board) }.filter { $0.path != path }
         let tasks: [NexusTask] = (store?.snapshot.tasks.values.map { $0 } ?? (links.tasks ?? DataFolder.load(root).tasks).values.map { $0 })
             .filter { $0.hasId && !$0.done }.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
         let picker = LinkTargetPicker(boards: boards.map { .init(id: $0.path, title: $0.name, detail: String($0.path.dropFirst(BoardFormat.notebooks.count + 1))) },
@@ -928,7 +928,7 @@ extension BoardController {
     /// Every board's links, read from the tiles (this board as it is now).
     func linkIndex() -> [(String, [BoardItem])] {
         var out: [(String, [BoardItem])] = [(path, linkItems)]
-        let boards = Notebook.list(root).flatMap { nb in nb.boards + nb.sections.flatMap(\.boards) }
+        let boards = Notebook.list(root).flatMap { nb in nb.allBoards.map(\.board) }
         let fm = FileManager.default
         for b in boards where b.path != path {
             let tiles = root.appendingPathComponent(b.path).appendingPathComponent("tiles")
