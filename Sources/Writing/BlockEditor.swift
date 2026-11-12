@@ -1,4 +1,5 @@
 import UIKit
+import WebKit
 import NexusCore
 
 /// The text view a block is typed in: TextKit 1 with MDLayoutManager, so marks hide as they do on the board. It keeps an undo of
@@ -696,7 +697,9 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
     /// Scroll the board so the caret isn't under the keyboard or off the screen.
     func keepCaretVisible() {
         if let r = rich {
-            guard !fullscreen, let b = board, let c = r.state.caret, r.web.window != nil else { return }
+            guard let c = r.state.caret, r.web.window != nil, c.minY.isFinite else { return }
+            if fullscreen { scrollPage(r.web, toShow: c); return }
+            guard let b = board else { return }
             scrollBoard(b, toShow: r.web.convert(c, to: b.view))
             return
         }
@@ -706,6 +709,22 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
         }
         guard let b = board, let end = textView.selectedTextRange?.end, textView.window != nil else { return }
         scrollBoard(b, toShow: textView.convert(textView.caretRect(for: end), to: b.view))
+    }
+
+    /// The Writing view's page: scroll it so `caret` (page points, not scrolled) is clear of the keyboard and its bar, and of the top.
+    private func scrollPage(_ web: WKWebView, toShow caret: CGRect) {
+        let sv = web.scrollView
+        let o = sv.contentOffset
+        let kb = keyboard == .zero ? CGRect.null : web.convert(keyboard, from: nil)
+        let bottom = kb.isNull ? web.bounds.height : min(web.bounds.height, kb.minY)
+        let margin: CGFloat = 48
+        let y = caret.minY - o.y, end = caret.maxY - o.y
+        var dy: CGFloat = 0
+        if end > bottom - margin { dy = end - (bottom - margin) }
+        if y + dy < 16 { dy = y - 16 }
+        guard abs(dy) > 1 else { return }
+        let maxY = max(0, sv.contentSize.height - web.bounds.height + (kb.isNull ? 0 : web.bounds.height - bottom))
+        sv.setContentOffset(CGPoint(x: o.x, y: min(max(0, o.y + dy), maxY)), animated: false)
     }
 
     /// Scroll the board so `caret` (in the board view) is clear of the keyboard and the board's bar.

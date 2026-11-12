@@ -65,6 +65,10 @@ final class RichTextTests: XCTestCase {
         web.tap()
         app.typeText("# Why chemistry\n")
         app.typeText("Bonds are **strong** and _fast_ to form: H2O and CO2 .\n")
+        app.typeText("A second paragraph, long enough to wrap onto another line when the block is as wide as the board allows it to be.\n")
+        app.typeText("## Lists\n")
+        app.typeText("- bullet one\nbullet two\n\n")
+        app.typeText("1. first\nsecond\n\n")
         app.typeText("[ ] revise R3.2 redox\n")
         app.typeText("read the handout\n\n")
         app.typeText("> A quote from the textbook\n")
@@ -78,6 +82,14 @@ final class RichTextTests: XCTestCase {
         app.typeText(" and back.")
         sleep(1)
         step("typed on the board")
+        // closed: drawn by the board itself; it should sit where the editor had it
+        app.buttons["Done"].firstMatch.tap()
+        sleep(2)
+        step("closed on the board")
+        app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.18)).tap()
+        XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: 10), "the block didn't open again")
+        sleep(2)
+        step("reopened on the board")
     }
 
     func writingView() {
