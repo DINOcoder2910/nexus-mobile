@@ -71,20 +71,37 @@ final class MDLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
         guard let storage = textStorage else { return }
         let chars = characterRange(forGlyphRange: glyphsToShow, actualGlyphRange: nil)
         storage.enumerateAttribute(BlockStyler.mathKey, in: chars, options: []) { value, range, _ in
-            guard let box = value as? BlockStyler.MathBox else { return }
-            let g = glyphIndexForCharacter(at: range.location)
-            guard g < numberOfGlyphs else { return }
-            let frag = lineFragmentRect(forGlyphAt: g, effectiveRange: nil)
-            let at = location(forGlyphAt: g)
-            let font = (storage.attribute(.font, at: range.location, effectiveRange: nil) as? UIFont) ?? UIFont.systemFont(ofSize: 16)
-            let baseline = frag.minY + at.y
-            let r = box.block
-                ? CGRect(x: origin.x + frag.minX + max(0, (frag.width - box.size.width) / 2), y: origin.y + baseline - box.size.height - font.descender,
-                         width: box.size.width, height: box.size.height)
-                : CGRect(x: origin.x + frag.minX + at.x, y: origin.y + baseline - font.xHeight / 2 - box.size.height / 2,
-                         width: box.size.width, height: box.size.height)
-            box.image.draw(in: r)
+            guard let box = value as? BlockStyler.MathBox, let r = mathRect(box, at: range.location) else { return }
+            box.image.draw(in: r.offsetBy(dx: origin.x, dy: origin.y))
         }
+    }
+
+    /// Where a formula's picture is drawn (container coordinates).
+    private func mathRect(_ box: BlockStyler.MathBox, at charIndex: Int) -> CGRect? {
+        guard let storage = textStorage else { return nil }
+        let g = glyphIndexForCharacter(at: charIndex)
+        guard g < numberOfGlyphs else { return nil }
+        let frag = lineFragmentRect(forGlyphAt: g, effectiveRange: nil)
+        let at = location(forGlyphAt: g)
+        let font = (storage.attribute(.font, at: charIndex, effectiveRange: nil) as? UIFont) ?? UIFont.systemFont(ofSize: 16)
+        let baseline = frag.minY + at.y
+        return box.block
+            ? CGRect(x: frag.minX + max(0, (frag.width - box.size.width) / 2), y: baseline - box.size.height - font.descender,
+                     width: box.size.width, height: box.size.height)
+            : CGRect(x: frag.minX + at.x, y: baseline - font.xHeight / 2 - box.size.height / 2,
+                     width: box.size.width, height: box.size.height)
+    }
+
+    /// The bottom of the lowest formula picture (container coordinates), or 0. A tall formula on the last line reaches below the used
+    /// rect (the room under it is line spacing, which the last line doesn't get), so a block measured by the used rect alone cut its
+    /// bottom half off.
+    func mathBottom() -> CGFloat {
+        guard let storage = textStorage, storage.length > 0 else { return 0 }
+        var bottom: CGFloat = 0
+        storage.enumerateAttribute(BlockStyler.mathKey, in: NSRange(location: 0, length: storage.length), options: []) { value, range, _ in
+            if let box = value as? BlockStyler.MathBox, let r = mathRect(box, at: range.location) { bottom = max(bottom, r.maxY) }
+        }
+        return bottom
     }
 
     // MARK: drawing what marks stand for
@@ -238,7 +255,7 @@ final class BlockTextLayout {
         outer = max(outer, minWidth * scale)
         container.size = CGSize(width: max(1, outer - 2 * padding.x * scale), height: 10_000_000)
         manager.ensureLayout(for: container)
-        var height = ceil(manager.usedRect(for: container).height)
+        var height = ceil(max(manager.usedRect(for: container).height, manager.mathBottom()))
         if storage.length == 0 { height = ceil(look.size * 1.5 * scale) }
 
         self.storage = storage
