@@ -30,6 +30,8 @@ targets:
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
         NSLocalNetworkUsageDescription: Nexus syncs your notes with your home hub.
+        # the commit this build was made from (the cloud build sets NEXUS_BUILD): told to the hub, so the laptop can say when the iPad is behind
+        NexusBuild: $(NEXUS_BUILD)
         UISupportedInterfaceOrientations~ipad:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationPortraitUpsideDown
@@ -50,6 +52,7 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
         MARKETING_VERSION: "0.2"
         CURRENT_PROJECT_VERSION: "1"
+        NEXUS_BUILD: dev
         SWIFT_VERSION: "5.0"
         CODE_SIGNING_ALLOWED: "NO"
         CODE_SIGNING_REQUIRED: "NO"
