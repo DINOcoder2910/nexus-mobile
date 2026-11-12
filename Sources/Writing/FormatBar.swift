@@ -59,6 +59,13 @@ final class FormatBar: UIInputView {
         return b
     }
 
+    /// Link: the selection or the word at the caret, else it asks for the address (⌘K keeps typing `[]()`).
+    private func linkButton() -> UIButton {
+        let b = button("link", "Link")
+        b.addAction(UIAction { [weak self] _ in self?.session?.linkFromBar() }, for: .touchUpInside)
+        return b
+    }
+
     private func divider() -> UIView {
         let v = UIView()
         v.backgroundColor = UIColor.separator
@@ -119,7 +126,7 @@ final class FormatBar: UIInputView {
             button("list.bullet", "Bulleted list", action: "bullets"),
             button("list.number", "Numbered list", action: "numbers"),
             button("checklist", "Checklist", action: "checklist"),
-            button("link", "Link", action: "link"),
+            linkButton(),
             divider(),
             button("textformat", "Font", menu: deferred { [weak self] in self?.fontItems() ?? [] }),
             button("textformat.size", "Size", menu: deferred { [weak self] in self?.sizeItems() ?? [] }),

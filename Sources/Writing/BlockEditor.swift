@@ -476,6 +476,32 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
         }
     }
 
+    /// The bar's Link button (⌘K stays `perform("link")`): links the selection, or the word at the caret; with neither, asks for
+    /// the address and types `[address](address)` only on OK, so a tap never leaves a stray `[]()`.
+    func linkFromBar() {
+        if board?.blockLocked(id) == true { board?.tellLocked(id); return }
+        let sel = textView.selectedRange
+        if let e = MarkdownEdit.linkWords(text, sel) { apply(e); return }
+        let a = UIAlertController(title: "Link", message: "The address to link to.", preferredStyle: .alert)
+        a.addTextField { f in
+            f.placeholder = "https://"
+            f.keyboardType = .URL
+            f.autocapitalizationType = .none
+            f.autocorrectionType = .no
+            f.clearButtonMode = .whileEditing
+        }
+        a.addAction(UIAlertAction(title: "Cancel", style: .cancel) { [weak self] _ in self?.textView.becomeFirstResponder() })
+        a.addAction(UIAlertAction(title: "OK", style: .default) { [weak self, weak a] _ in
+            guard let self else { return }
+            self.textView.becomeFirstResponder()
+            let t = self.text
+            let len = (t as NSString).length
+            let at = NSRange(location: min(sel.location, len), length: 0)
+            if let e = MarkdownEdit.linkAddress(t, at, a?.textFields?.first?.text ?? "") { self.apply(e) }
+        })
+        board?.presentOver(a)
+    }
+
     /// Types `s` at the caret (the accent row, ¿ and ¡).
     func insert(_ s: String) {
         if board?.blockLocked(id) == true { board?.tellLocked(id); return }
