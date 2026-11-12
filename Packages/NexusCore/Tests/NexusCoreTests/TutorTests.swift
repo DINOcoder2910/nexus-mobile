@@ -479,6 +479,66 @@ final class TutorTests: XCTestCase {
         XCTAssertTrue(TutorPrompt.iPadTurn(words: "", view: TutorBox(0, 0, 10, 10)).contains("said nothing you could hear"))
     }
 
+    // MARK: the laptop's bar: your turn, check, hints, practice, selection, cutting in (nexus 0ee42d4)
+
+    func testYourTurnStep() {
+        let s = step(#"{"type":"yourturn","ask":"Write the next line: divide both sides by 2."}"#)!
+        XCTAssertEqual(s.type, "yourturn")
+        XCTAssertEqual(s.ask, "Write the next line: divide both sides by 2.")
+        XCTAssertEqual(step(#"{"type":"yourturn"}"#)!.ask, "Your turn: write the next step.", "no ask: the laptop's default")
+        XCTAssertTrue(TutorSteps.prompt.contains(#"{"type":"yourturn","ask":"Write the next line: divide both sides by 2."}  (you stop here and they write it on the board; end your reply with it)"#))
+        XCTAssertEqual(TutorSteps.summarize([s, step(#"{"type":"math","id":"e1","tex":"x"}"#)!]), "e1 math \"x\"", "a yourturn is not on the board's summary")
+        let r = TutorReader.read("Now you.\n<step>{\"type\":\"yourturn\",\"ask\":\"Your turn: balance the oxygens.\"}</step>")
+        XCTAssertEqual(r.steps.map(\.type), ["yourturn"])
+    }
+
+    func testTheBarsWaysOfAsking() {
+        let sys = TutorPrompt.system(name: "Sam"), ipad = TutorPrompt.iPadSystem(name: "Sam")
+        for k in ["<check>", "<hints>", "<practice>", "<selection>", "<interrupted>", "yourturn", "Letting them do it:"] {
+            XCTAssertTrue(sys.contains(k), k); XCTAssertTrue(ipad.contains(k), k)
+        }
+        XCTAssertTrue(sys.contains("the picture of that part is attached"), "the laptop's words")
+        XCTAssertTrue(ipad.contains("its box is given (in this turn's coordinates)"), "the iPad gives the box")
+
+        let cut = TutorPrompt.iPadTurn(words: "wait, why?", asking: .init(interrupted: "Manganese gains five electrons."))
+        XCTAssertTrue(cut.hasPrefix("<interrupted>They cut your last answer off. They had heard up to: \"Manganese gains five electrons.\"</interrupted>"), cut)
+        XCTAssertTrue(cut.hasSuffix("They said: wait, why?"))
+        XCTAssertTrue(TutorPrompt.iPadTurn(words: "x", asking: .init(interrupted: "")).contains("They had heard none of it."))
+
+        let check = TutorPrompt.iPadTurn(words: "", view: TutorBox(0, 0, 10, 10), asking: .init(check: "Write the next line."))
+        XCTAssertTrue(check.contains("<check>The picture attached is their board now, with what they wrote. Your last turn asked: \"Write the next line.\". Check it.</check>"), check)
+        XCTAssertTrue(check.hasSuffix("They asked you to check their work."))
+        XCTAssertTrue(TutorPrompt.iPadTurn(words: "", asking: .init(practice: true)).hasSuffix("They asked for a practice problem."))
+        XCTAssertTrue(TutorPrompt.iPadTurn(words: "", asking: .init(practice: true)).contains("<practice>Give them one practice problem like this one.</practice>"))
+        XCTAssertTrue(TutorPrompt.iPadTurn(words: "x", asking: .init(hints: true)).contains("<hints>Hints only: the one next hint, never the answer.</hints>"))
+        let sel = TutorPrompt.iPadTurn(words: "and this?", asking: .init(selection: TutorBox(10.4, 20, 100, 40)))
+        XCTAssertTrue(sel.contains("<selection>They selected or circled the part of the board at [10, 20, 100, 40]: \"this\" and \"here\" mean it.</selection>"), sel)
+        let none = TutorPrompt.iPadTurn(words: "x")
+        for k in ["<interrupted>", "<check>", "<hints>", "<practice>", "<selection>"] { XCTAssertFalse(none.contains(k), k) }
+    }
+
+    func testTranscriptAndReplayFrom() {
+        let a = "First line.\n<step>{\"type\":\"math\",\"id\":\"e\",\"tex\":\"x\"}</step>\nSecond line.\n<step>{\"type\":\"box\",\"target\":\"e\"}</step>"
+        let file = JSONValue.object([("format", .string("nexus-tutor/1")), ("created", .string("2026-11-12T10:00:00Z")), ("title", .string("")), ("sessionId", .null),
+                                     ("turns", .array([.object([("at", .string("2026-11-12T10:00:00Z")), ("you", .string("q1")), ("reply", .string(a)), ("mode", .string("api"))]),
+                                                       .object([("at", .string("2026-11-12T10:01:00Z")), ("you", .string("thanks")), ("reply", .string("Just words. (stopped)")), ("mode", .string("api"))]),
+                                                       .object([("at", .string("2026-11-12T10:02:00Z")), ("you", .string("q3")), ("reply", .string(a)), ("mode", .string("api"))])]))])
+        let s = TutorSession.parse(file.indented()).session
+        let t = s.transcript()
+        XCTAssertEqual(t.map { $0.q }, ["q1", "thanks", "q3"])
+        XCTAssertEqual(t[0].lines, ["First line.", "Second line."])
+        XCTAssertEqual(t[1].lines, ["Just words."], "a stopped answer's mark is left out")
+        let r = s.replayFrom(turn: 2, n: 1)!
+        XCTAssertEqual(r.turns.count, 2, "the turn that draws nothing is left out")
+        XCTAssertEqual(r.start.turn, 1)
+        XCTAssertEqual(r.start.event, 2, "the voice starts at its second sentence")
+        let words = s.replayFrom(turn: 1, n: 0)!
+        XCTAssertEqual(words.turns.count, 3, "a line of a turn that draws nothing still replays it")
+        XCTAssertEqual(words.start.turn, 1)
+        XCTAssertEqual(words.start.event, 0)
+        XCTAssertNil(s.replayFrom(turn: 9, n: 0))
+    }
+
     func testWhereATurnGoes() {
         let v = TutorBox(0, 0, 1000, 800)
         XCTAssertEqual(TutorPrompt.frame(visible: v, content: []), [40, 40], "an empty view: near its top-left")

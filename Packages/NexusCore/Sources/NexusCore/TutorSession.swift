@@ -135,6 +135,36 @@ public struct TutorSession: Equatable {
         }
     }
 
+    /// Replay from a line of the transcript (the laptop's `replay(path, { from })`): the turns to play (as `replayTurns`, and that turn
+    /// even when it draws nothing) and where the voice starts: the index of that turn in the list and of its n-th sentence among its
+    /// events (everything before is drawn at once, without the voice). nil when there is no such turn.
+    public func replayFrom(turn: Int, n: Int) -> (turns: [[TutorEvent]], start: (turn: Int, event: Int))? {
+        var out: [[TutorEvent]] = []
+        var start: (turn: Int, event: Int)?
+        for (i, t) in turns.enumerated() {
+            let r = TutorReader.read(reply(t))
+            guard !r.steps.isEmpty || i == turn else { continue }
+            let events = r.events.filter { e in if case .step(let s) = e { return s.on != "screen" }; return true }
+            if i == turn {
+                var said = 0, at = events.count
+                for (k, e) in events.enumerated() { if case .say = e { if said == max(0, n) { at = k; break }; said += 1 } }
+                start = (out.count, at)
+            }
+            out.append(events)
+        }
+        guard let start else { return nil }
+        return (out, start)
+    }
+
+    /// The transcript: each turn's question and the sentences of its answer.
+    public func transcript() -> [(q: String, lines: [String])] {
+        turns.map { t in
+            let reply = reply(t).replacingOccurrences(of: #" \(stopped\)$"#, with: "", options: .regularExpression)
+            let lines = TutorReader.read(reply).events.compactMap { e -> String? in if case .say(let s, _) = e { return s }; return nil }
+            return (you(t), lines)
+        }
+    }
+
     /// API mode: the earlier turns as messages (role, text), the newest `max`; the first is the user's.
     public func history(max: Int = TutorSession.historyTurns) -> [(role: String, text: String)] {
         turns.suffix(max).flatMap { t -> [(role: String, text: String)] in
@@ -204,6 +234,14 @@ public enum TutorPrompt {
             "- Any symbol or formula is maths, even in a label, a title or a sentence of text (\"y = e^{x}\", \"$\\mathrm{NH_3}$\", \"$2\\pi$\"). Graphs: x and y ranges that frame the interesting part, key points marked with their coordinates, the curve labelled with its equation, asymptotes and lines of symmetry as dashed grey lines. Draw a graph once and add curves to it with \"in\"; a curve you call dashed has \"dash\": true.",
             "- For small talk or a one-line answer, draw nothing. Follow-up turns tell you what is already on the board: point at it by its id instead of drawing it again.",
             "",
+            "Letting them do it:",
+            "- When the next step of a worked problem is one they can do themselves (a step like ones you just showed), stop before it: say what to do in one sentence and end your reply with a yourturn step. At most one per reply, always the last thing. They write it on the board and press Check my work.",
+            "- <check>: they wrote on the board and want it checked; the board picture is attached. Read their writing, say what is right, then the one most important fix, pointing at their working. If it is right, say so and go on with the next step (or another yourturn).",
+            "- <hints>: hints only. Never give the answer or do the step for them: give the one next hint (a question, the idea or formula to use, where to look) and draw only that, then a yourturn step. Each \"next hint\" goes one step further.",
+            "- <practice>: write one new problem like the one on the board (other numbers, same idea), say it and write it boxed, then a yourturn step. Do not solve it.",
+            "- <selection>: they selected or circled part of the board and the picture of that part is attached: \"this\" and \"here\" in their question mean it.",
+            "- <interrupted>: they cut you off. Answer what they said now, briefly, then go on from where you stopped only if it still helps.",
+            "",
             stepsGuide.trimmingCharacters(in: .whitespacesAndNewlines),
             "",
             viewGuide,
@@ -223,6 +261,36 @@ public enum TutorPrompt {
         ([lead(name, how: "The student is writing on a board on their iPad. They hold the tutor button and ask out loud (or type), and you answer out loud: everything you write outside a tag is spoken by a voice, sentence by sentence, as you write it.")]
             + body(TutorSteps.iPadPrompt, boardGuide)).joined(separator: "\n")
             .replacingOccurrences(of: "If the screenshot has nothing", with: "If the picture of their board has nothing")
+            .replacingOccurrences(of: "and the picture of that part is attached", with: "and its box is given (in this turn's coordinates)")
+    }
+
+    /// The tutor strip's ways of asking (the laptop's bar, prompt.js turnText), as tags at the top of an iPad turn. interrupted: what
+    /// they had heard of the answer they cut off (nil: not cut off); check: what the last turn asked them to write (Check my work);
+    /// selection: the box of what they selected or circled, in the turn's coordinates.
+    public struct Asking: Equatable {
+        public var interrupted: String?
+        public var hints = false
+        public var check: String?
+        public var practice = false
+        public var selection: TutorBox?
+        public init(interrupted: String? = nil, hints: Bool = false, check: String? = nil, practice: Bool = false, selection: TutorBox? = nil) {
+            self.interrupted = interrupted; self.hints = hints; self.check = check; self.practice = practice; self.selection = selection
+        }
+    }
+
+    static func askingParts(_ a: Asking) -> (before: [String], after: [String]) {
+        var before: [String] = [], after: [String] = []
+        if let said = a.interrupted {
+            before.append("<interrupted>They cut your last answer off." + (said.isEmpty ? " They had heard none of it." : " They had heard up to: \"" + String(said.suffix(600)) + "\"") + "</interrupted>")
+        }
+        if let ask = a.check {
+            after.append("<check>The picture attached is their board now, with what they wrote. Your last turn asked: \"" + String((ask.isEmpty ? "the next step" : ask).prefix(200)) + "\". Check it.</check>")
+        } else if let s = a.selection {
+            after.append("<selection>They selected or circled the part of the board at " + boxText(s) + ": \"this\" and \"here\" mean it.</selection>")
+        }
+        if a.hints { after.append("<hints>Hints only: the one next hint, never the answer.</hints>") }
+        if a.practice { after.append("<practice>Give them one practice problem like this one.</practice>") }
+        return (before, after)
     }
 
     /// One thing read on the board: handwriting (Vision) or a typed block, with its box in the turn's coordinates.
@@ -235,9 +303,11 @@ public enum TutorPrompt {
     static func boxText(_ b: TutorBox) -> String { "[" + [b.x, b.y, b.w, b.h].map { String(Int(TutorSteps.jsRound($0))) }.joined(separator: ", ") + "]" }
 
     /// The text of one iPad turn. view: the part of the board on screen, in the turn's coordinates, when its picture goes with the turn.
-    public static func iPadTurn(words: String, board: String = "", view: TutorBox? = nil, handwriting: [Seen] = [], typed: [Seen] = [], recap: String = "") -> String {
+    public static func iPadTurn(words: String, board: String = "", view: TutorBox? = nil, handwriting: [Seen] = [], typed: [Seen] = [], recap: String = "", asking: Asking = Asking()) -> String {
         var parts: [String] = []
         if !recap.isEmpty { parts.append(recap) }
+        let tags = askingParts(asking)
+        parts += tags.before
         if !board.isEmpty { parts.append("<board>\nAlready on the board (yours, from earlier turns):\n" + String(board.prefix(4000)) + "\n</board>") }
         if let v = view {
             parts.append("<view>The picture is their board from x \(Int(TutorSteps.jsRound(v.x))) to \(Int(TutorSteps.jsRound(v.maxX))) and y \(Int(TutorSteps.jsRound(v.y))) to \(Int(TutorSteps.jsRound(v.maxY))) in this turn's coordinates.</view>")
@@ -251,8 +321,9 @@ public enum TutorPrompt {
         } else {
             parts.append("<view>No picture of the board this turn.</view>")
         }
+        parts += tags.after
         let w = words.trimmingCharacters(in: .whitespacesAndNewlines)
-        parts.append(!w.isEmpty ? "They said: " + w : view != nil ? "They held the button but said nothing you could hear. Say briefly what you see on their board that you could help with." : "They said nothing.")
+        parts.append(!w.isEmpty ? "They said: " + w : asking.check != nil ? "They asked you to check their work." : asking.practice ? "They asked for a practice problem." : view != nil ? "They held the button but said nothing you could hear. Say briefly what you see on their board that you could help with." : "They said nothing.")
         return parts.joined(separator: "\n\n")
     }
 
