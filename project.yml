@@ -11,6 +11,14 @@ schemes:
     build:
       targets:
         NexusMobile: all
+  NexusMobileUITests:
+    build:
+      targets:
+        NexusMobile: all
+        NexusMobileUITests: [test]
+    test:
+      targets:
+        - NexusMobileUITests
 targets:
   NexusMobile:
     type: application
@@ -75,3 +83,18 @@ targets:
         CODE_SIGNING_ALLOWED: "NO"
         CODE_SIGNING_REQUIRED: "NO"
         CODE_SIGN_IDENTITY: ""
+
+  # Drives the app in the simulator (the cloud check for freezes the unit tests can't see); not part of the iPad build.
+  NexusMobileUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - UITests
+    dependencies:
+      - target: NexusMobile
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: "YES"
+        PRODUCT_BUNDLE_IDENTIFIER: app.nexus.mobile.uitests
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
