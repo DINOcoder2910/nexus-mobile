@@ -1,0 +1,42 @@
+/* The rich-text block editor page on the iPad (tools/richtext/editor.js): the laptop's rich block look (nexus renderer/board.css .bd-text.rt),
+   sized and coloured by the app (window.rich.setLook sets the variables and #look's rules from the block's look, BlockLook.swift). */
+html, body { margin: 0; padding: 0; background: transparent; -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
+html:not(.full), html:not(.full) body { overflow: hidden; }
+body { color: var(--ink); font-family: var(--family); font-size: var(--size); line-height: 1.5; }
+#ed { padding: var(--pad); box-sizing: border-box; min-height: 1em; }
+html.full #ed { max-width: 100%; min-height: 100vh; }
+#ed .ProseMirror { outline: none; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; caret-color: var(--accent); -webkit-user-select: text; user-select: text; }
+#ed .ProseMirror-selectednode { outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent); }
+#ed p, #ed h1, #ed h2, #ed h3, #ed h4, #ed blockquote { font: inherit; }
+#ed .rt-p:empty::after, #ed .rt-p > br:only-child { content: ''; display: inline-block; min-height: 1em; }
+#ed .rt-quote { border-left: 3px solid var(--rule); padding-left: .8em; color: var(--muted); }
+#ed .rt-li { position: relative; padding-left: calc(var(--list) + var(--rt-level, 0) * var(--list)); }
+#ed .rt-li.rt-lv1 { --rt-level: 1; } #ed .rt-li.rt-lv2 { --rt-level: 2; } #ed .rt-li.rt-lv3 { --rt-level: 3; } #ed .rt-li.rt-lv4 { --rt-level: 4; }
+#ed .rt-li.rt-lv5 { --rt-level: 5; } #ed .rt-li.rt-lv6 { --rt-level: 6; } #ed .rt-li.rt-lv7 { --rt-level: 7; } #ed .rt-li.rt-lv8 { --rt-level: 8; }
+#ed .rt-bullet::before { content: '•'; position: absolute; left: calc(var(--rt-level, 0) * var(--list) + .35em); }
+#ed .rt-bullet.rt-lv1::before, #ed .rt-bullet.rt-lv4::before, #ed .rt-bullet.rt-lv7::before { content: '◦'; }
+#ed .rt-bullet.rt-lv2::before, #ed .rt-bullet.rt-lv5::before, #ed .rt-bullet.rt-lv8::before { content: '▪'; }
+#ed .rt-number::before { content: attr(data-n); position: absolute; left: calc(var(--rt-level, 0) * var(--list)); min-width: 1.2em; text-align: right; font-variant-numeric: tabular-nums; }
+#ed .rt-box { position: absolute; left: calc(var(--rt-level, 0) * var(--list) + .05em); top: .28em; width: .95em; height: .95em; box-sizing: border-box; border: 1.5px solid var(--muted); border-radius: .22em; cursor: pointer; }
+#ed .rt-box.on { background: var(--accent); border-color: var(--accent); }
+#ed .rt-box.on::after { content: ''; position: absolute; left: .27em; top: .08em; width: .26em; height: .52em; border: solid #fff; border-width: 0 .14em .14em 0; transform: rotate(45deg); }
+#ed .rt-check.rt-done { color: var(--muted); text-decoration: line-through; }
+#ed .rt-p:not(.rt-li) { padding-left: calc(var(--rt-indent, 0) * var(--list)); }
+#ed .rt-hr { border: none; border-top: 1px solid var(--rule); margin: .5em 0; }
+#ed .rt-code { font-family: ui-monospace, Menlo, monospace; background: var(--code-back); border-radius: 6px; padding: .5em .7em; white-space: pre-wrap; }
+#ed code { font-family: ui-monospace, Menlo, monospace; font-size: .9em; background: var(--code-back); border-radius: 4px; padding: 0 .2em; }
+#ed .rt-math { text-align: center; margin: .3em 0; }
+#ed a { color: var(--accent); }
+#ed mark { color: inherit; border-radius: 2px; }
+#ed mark[data-c] { background: #ffe14d; }
+html.dark #ed mark { color: #111; }
+#ed ins { color: #188038; text-decoration: underline; text-decoration-color: rgba(24, 128, 56, .5); background: rgba(24, 128, 56, .08); }
+#ed del { color: #d93025; text-decoration: line-through; background: rgba(217, 48, 37, .06); }
+#ed .rt-comment, #ed .rt-marked { background: rgba(175, 82, 222, .16); border-radius: 2px; }
+#ed .rt-chip { display: inline-block; padding: 0 .4em; border-radius: .6em; background: var(--code-back); font-size: .9em; }
+#ed .rt-unknown, #ed .rt-ink, #ed .rt-embed, #ed .rt-toc { padding: 4px 8px; border-radius: 4px; background: var(--code-back); color: var(--muted); font-size: .85em; }
+#ed .rt-ink::after { content: 'Handwriting (shown on the board)'; }
+#ed .rt-table { border-collapse: collapse; margin: .4em 0; } #ed .rt-table td { border: 1px solid var(--rule); padding: .2em .5em; vertical-align: top; }
+#ed .rt-callout { padding: .5em .8em; border-radius: 6px; background: var(--code-back); margin: .4em 0; }
+#ed .rt-columns { display: flex; gap: 1em; } #ed .rt-column { flex: 1; }
+html.full .rt-locked { opacity: .85; }

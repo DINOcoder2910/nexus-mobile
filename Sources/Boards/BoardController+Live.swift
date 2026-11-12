@@ -75,12 +75,14 @@ extension BoardController {
         let changed = Set(now.keys).union(stamps.keys).filter { now[$0] != stamps[$0] }
         guard !changed.isEmpty, changed.allSatisfy({ $0.hasPrefix("text/") }) else { return false }
         var any = false
-        for rel in changed {
+        // copies first, then .jsonl files: the other device writes both, and its .jsonl then says the words its copy already brought
+        for rel in changed.sorted(by: { ($0.hasSuffix(".jsonl") ? 1 : 0, $0) < ($1.hasSuffix(".jsonl") ? 1 : 0, $1) }) {
             if let c = LiveBoard.textConflict(rel) { foldConflict(rel, c); any = true; continue }
+            if rel.hasSuffix(".jsonl"), !rel.contains("~") { if takeOutsideDoc(rel) { any = true }; continue }
             guard rel.hasSuffix(".md"), !rel.contains("~") else { continue } // another draft's words: nothing shown changes
             let id = String(rel.dropFirst(5).dropLast(3))
             guard content.items.contains(where: { $0.id == id && $0.type == "text" }) else { continue }
-            let md = (try? String(contentsOf: boardURL.appendingPathComponent(rel), encoding: .utf8)) ?? ""
+            let md = RichWords.body((try? String(contentsOf: boardURL.appendingPathComponent(rel), encoding: .utf8)) ?? "")
             let base = content.textsOnDisk[id]
             content.textsOnDisk[id] = md
             if let took = takeRemoteInOpenBlock(id: id, base: base, theirs: md) {
@@ -92,6 +94,31 @@ extension BoardController {
         }
         stamps = now
         if any { rebuildItems(); paintPresence() }
+        return true
+    }
+
+    /// A block's .jsonl written elsewhere (the hub's Google Docs bridge writes only that file; the laptop writes it beside the copy): it
+    /// becomes the file this iPad's next save follows (ids, the Google link), and its words, when they differ, come in as the copy's do; the
+    /// copy is then written again with the next save, as the laptop does (nexus app/board.js B.outside). -> whether a block's words changed.
+    func takeOutsideDoc(_ rel: String) -> Bool {
+        let id = String(rel.dropFirst(5).dropLast(6))
+        guard content.items.contains(where: { $0.id == id && $0.type == "text" }),
+              let jsonl = try? String(contentsOf: boardURL.appendingPathComponent(rel), encoding: .utf8),
+              jsonl != content.docsOnDisk[id], let words = RichWords.shared.words(jsonl) else { return false }
+        let base = content.docWords[id] ?? content.textsOnDisk[id]
+        content.docsOnDisk[id] = jsonl
+        content.docWords[id] = words
+        content.docsStale.remove(id)
+        let open = writing.map { $0.id == id && $0.key == id } ?? false
+        let mine = open ? (writing?.text ?? "") : (content.texts[id] ?? "")
+        if words == mine { return false }
+        if let took = takeRemoteInOpenBlock(id: id, base: base, theirs: words) {
+            if !took { keepAsDraft(id: id, words: words) }
+            changed() // (the copy follows the .jsonl's words)
+            return false
+        }
+        content.texts[id] = LiveBoard.mergeBlock(base: base, mine: mine, theirs: words) ?? words
+        changed()
         return true
     }
 
@@ -126,8 +153,11 @@ extension BoardController {
             if let at = f.date(from: c.date + " " + c.time), Date().timeIntervalSince(at) < 60 { return }
         }
         let url = boardURL.appendingPathComponent(rel)
-        guard let words = try? String(contentsOf: url, encoding: .utf8) else { return }
-        if words != content.texts[c.id] {
+        guard let file = try? String(contentsOf: url, encoding: .utf8) else { return }
+        // a rich block's conflict copy is a .jsonl: its words as the block holds them
+        guard let words = c.ext == ".jsonl" ? RichWords.shared.words(file) : RichWords.body(file) else { return }
+        let drafts = content.items[k].json["drafts"]?.array?.compactMap { $0["id"]?.string } ?? []
+        if words != content.texts[c.id], !drafts.contains(where: { content.texts[c.id + "~" + $0] == words }) {
             let d = LiveBoard.clashDraft(content.items[k], name: LiveBoard.clashName(c.device, c.time))
             do { try FolderAccess.write(boardURL.appendingPathComponent(d.file), words) } catch { return }
             content.items[k] = d.item
