@@ -152,7 +152,6 @@ struct RootView: View {
     @State private var compactColumn = NavigationSplitViewColumn.detail
     /// This window, for the asks that only one window should answer.
     @State private var windowId = UUID()
-<<<<<<< HEAD
     /// The iPhone's tab bar: the tab, and each tab's stack.
     @State private var tab: PhoneTab = .today
     @State private var todayPath: [Screen] = []
@@ -160,8 +159,6 @@ struct RootView: View {
     @State private var inboxPath: [Screen] = []
     @State private var notebooksPath: [Screen] = []
     @State private var morePath: [Screen] = []
-=======
->>>>>>> origin/claude/project-thread-9ho84i
 
     var body: some View {
         @Bindable var store = store
@@ -248,70 +245,6 @@ struct RootView: View {
             }
         }
         .overlay(alignment: .bottom) { UndoBar().animation(.snappy, value: store.toast) }
-    }
-
-    /// A reminder tapped or Siri's add sheet: the window in front answers.
-    private func answerRouter() {
-        guard router.front == windowId || router.front == nil else { return }
-        if let id = router.openTask {
-            router.openTask = nil
-            if store.task(id) != nil { store.openTaskId = id }
-        }
-<<<<<<< HEAD
-        if router.addSheet {
-            router.addSheet = false
-            store.capture = .init(workstream: nil, parent: nil, plan: nil)
-=======
-        .sheet(isPresented: Binding(get: { store.openTaskId != nil }, set: { if !$0 { store.openTaskId = nil } })) {
-            if let id = store.openTaskId { TaskDetailView(taskId: id).id(id) }
-        }
-        .sheet(item: $store.capture) { start in CaptureSheet(start: start) }
-        .onChange(of: store.openBoard?.id) { _, now in
-            withAnimation { columns = now == nil ? .all : .detailOnly }
-        }
-        .onChange(of: screen) { _, _ in store.openBoard = nil }
-        .alert("Couldn't do that", isPresented: Binding(get: { store.problem != nil }, set: { if !$0 { store.problem = nil } })) {
-            Button("OK", role: .cancel) {}
-        } message: { Text(store.problem ?? "") }
-        .onChange(of: phase) { _, now in
-            if now == .active {
-                router.front = windowId
-                store.reloadIfChanged()
-                answerRouter()
-            }
-        }
-        // a Spotlight result: a task, a workstream or a board
-        .onContinueUserActivity(CSSearchableItemActionType) { activity in
-            guard let hit = SpotlightIndex.target(activity) else { return }
-            let value = hit.value
-            switch hit.kind {
-            case "task": if store.task(value) != nil { store.openTaskId = value }
-            case "ws": screen = .workstream(value)
-            case "board": store.openBoard = .init(path: value)
-            default: break
-            }
-        }
-        // the reminders follow the calendars too (the files: AppServices.start)
-        .onChange(of: calendar.version) { _, _ in reminders.reschedule() }
-        .onChange(of: router.openTask) { _, _ in answerRouter() }
-        .onChange(of: router.addSheet) { _, _ in answerRouter() }
-        .task {
-            AppServices.start()
-            if router.front == nil { router.front = windowId }
-            if case .board(let path)? = start { store.openBoard = .init(path: path) }
-            answerRouter()
-            InkBoardMove.runIfNeeded(store)
-            // Another writer (sync, the Files app) can change the folder at any time: look every few seconds while open,
-            // and tell the other stores (and sync) what changed.
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(3))
-                if phase == .active, store.reloadIfChanged() {
-                    NotificationCenter.default.post(name: NexusStore.readAgain, object: store)
-                    sync.wake()
-                }
-            }
->>>>>>> origin/claude/project-thread-9ho84i
-        }
     }
 
     /// A reminder tapped or Siri's add sheet: the window in front answers.
