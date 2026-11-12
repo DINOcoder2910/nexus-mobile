@@ -39,10 +39,15 @@ final class PdfZoomTests: XCTestCase {
         let insert = app.buttons["Insert"].firstMatch
         XCTAssertTrue(insert.waitForExistence(timeout: 30), "the PDF board didn't open")
         sleep(3)
+        // the sidebar floats over the board in landscape: put it away, as when you work on a board
+        if app.staticTexts["Planner"].firstMatch.isHittable {
+            let side = app.buttons["Sidebar"].firstMatch
+            if side.exists { side.tap(); sleep(2) }
+        }
         shot("zoom-1 at \(zoom())%")
 
         var tries = 0
-        while zoom() < 450 && tries < 6 { board().pinch(withScale: 2.5, velocity: 3); sleep(1); tries += 1 }
+        while zoom() < 480 && tries < 8 { board().pinch(withScale: 2.5, velocity: 3); sleep(1); tries += 1 }
         sleep(4)
         shot("zoom-2 deep at \(zoom())%")
         XCTAssertGreaterThanOrEqual(zoom(), 300, "couldn't zoom in")
@@ -51,9 +56,12 @@ final class PdfZoomTests: XCTestCase {
         sleep(4)
         shot("zoom-3 deep, moved, at \(zoom())%")
 
-        tries = 0
-        while zoom() > 130 && tries < 6 { board().pinch(withScale: 0.4, velocity: -3); sleep(1); tries += 1 }
+        // back out with the zoom pill's 100% (a pinch out from the test doesn't take on the simulator)
+        app.buttons[zoomLabel()].firstMatch.tap()
+        let hundred = app.buttons["100%"].firstMatch
+        if hundred.waitForExistence(timeout: 5) { hundred.tap() } else { app.collectionViews.buttons["100%"].firstMatch.tap() }
         sleep(4)
+        XCTAssertLessThanOrEqual(zoom(), 110, "didn't zoom back out")
         shot("zoom-4 back out at \(zoom())%")
     }
 }
