@@ -43,6 +43,14 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
 
         hold.delegate = self
         canvas.addGestureRecognizer(hold)
+
+        // takes an empty tap with the Select tool from PencilKit's callout (BoardHoldMenu.swift); does nothing itself
+        let quiet = UITapGestureRecognizer()
+        quiet.name = "quietTap"
+        quiet.allowedTouchTypes = BoardController.anyTouch
+        quiet.cancelsTouchesInView = false
+        quiet.delegate = self
+        canvas.addGestureRecognizer(quiet)
         quietCanvasMenus()
     }
 
@@ -52,7 +60,28 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
     }
 
     func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
-        g === hold || other === hold
+        if g === hold || other === hold { return true }
+        // the quiet tap goes along with the board's own gestures (it only keeps PencilKit's taps from showing their callout)
+        if g.name == "quietTap" { return !isCanvasMenuGesture(other) }
+        if other.name == "quietTap" { return !isCanvasMenuGesture(g) }
+        return false
+    }
+
+    /// PencilKit's own taps wait for the Text tool's tap, and for the quiet tap with the Select tool, so its "Select All / Insert
+    /// Space" callout never takes those taps.
+    func gestureRecognizer(_ g: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
+        let t = BoardTools.shared.tool
+        switch g.name {
+        case "textTap": return t == .text && isCanvasMenuGesture(other)
+        case "quietTap": return t == .lasso && other is UITapGestureRecognizer && isCanvasMenuGesture(other)
+        default: return false
+        }
+    }
+
+    func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        // PencilKit adds some of its taps lazily: turn any new one off before it can see a Text-tool tap
+        if g.name == "textTap", BoardTools.shared.tool == .text { quietCanvasMenus() }
+        return true
     }
 
     func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
@@ -85,6 +114,12 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
         if recordingTap(p) { return }
         if links.mode { linkTapped(p); return }
         guard let it = hitItem(p, pdf: false) else { selected = nil; return }
+        tapItem(it, at: p)
+    }
+
+    /// A tap on an item (a finger's, or the Text tool's on anything but a block): open a comment, peek under tape, tick a checkbox,
+    /// type in a picked block, use a picked tool card, or else pick it.
+    func tapItem(_ it: BoardItem, at p: CGPoint) {
         if it.type == "mark" { selected = nil; openMark(it.id); return }
         if it.type == "tape", selected != it.id { togglePeek(it.id); return }
         if it.type == "text", !readOnly {

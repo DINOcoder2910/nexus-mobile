@@ -103,13 +103,15 @@ extension BoardController {
 }
 
 /// A board's gestures (two- and three-finger taps, the Pencil's double-tap and squeeze) and its tool switches (eraser and back, the
-/// last tool), for the actions Settings › Shortcuts puts on them. While both Pencil gestures are left to iPadOS, PencilKit does what
-/// Settings › Apple Pencil says; once one of them has a Nexus action, this board takes the Pencil's gestures and does iPadOS's choice
-/// itself for the other.
+/// last tool), for the actions Settings › Shortcuts puts on them. A two-finger double tap always shows everything on the board (the
+/// zoom pill's "Show everything"); the two-finger tap waits for it to fail. While both Pencil gestures are left to iPadOS, PencilKit
+/// does what Settings › Apple Pencil says; once one of them has a Nexus action, this board takes the Pencil's gestures and does
+/// iPadOS's choice itself for the other. The board's quietCanvasMenus (BoardHoldMenu.swift) leaves these taps on.
 final class BoardGestures: NSObject, UIGestureRecognizerDelegate, UIPencilInteractionDelegate {
     weak var board: BoardController?
     let twoFingers = UITapGestureRecognizer()
     let threeFingers = UITapGestureRecognizer()
+    let twoFingersTwice = UITapGestureRecognizer()
     let pencil = UIPencilInteraction()
     private var observer: NSObjectProtocol?
     private var turnedOff: [UIPencilInteraction] = []
@@ -117,7 +119,8 @@ final class BoardGestures: NSObject, UIGestureRecognizerDelegate, UIPencilIntera
     init(board: BoardController) {
         self.board = board
         super.init()
-        for (g, n) in [(twoFingers, 2), (threeFingers, 3)] {
+        twoFingersTwice.numberOfTapsRequired = 2
+        for (g, n) in [(twoFingers, 2), (threeFingers, 3), (twoFingersTwice, 2)] {
             g.numberOfTouchesRequired = n
             g.allowedTouchTypes = BoardController.direct
             g.cancelsTouchesInView = false
@@ -125,6 +128,7 @@ final class BoardGestures: NSObject, UIGestureRecognizerDelegate, UIPencilIntera
             g.addTarget(self, action: #selector(tapped(_:)))
             board.canvas.addGestureRecognizer(g)
         }
+        twoFingers.require(toFail: twoFingersTwice)
         pencil.delegate = self
         board.canvas.addInteraction(pencil)
         observer = NotificationCenter.default.addObserver(forName: ShortcutCenter.changed, object: nil, queue: .main) { [weak self] _ in self?.refresh() }
@@ -137,6 +141,10 @@ final class BoardGestures: NSObject, UIGestureRecognizerDelegate, UIPencilIntera
 
     @objc private func tapped(_ g: UITapGestureRecognizer) {
         guard g.state == .ended else { return }
+        if g === twoFingersTwice {
+            if let b = board, b.presentedViewController == nil { b.showEverything() }
+            return
+        }
         run(g === twoFingers ? ShortcutRegistry.twoFingerTap : ShortcutRegistry.threeFingerTap)
     }
 
