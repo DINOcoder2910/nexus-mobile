@@ -3,8 +3,16 @@ import NexusCore
 
 /// The one place the screens read the data folder from and send edits to. Every edit is a line-level patch of one task file
 /// (NexusCore's TaskEditor); after it the folder is read again, so what the screens show is always what the files say.
+///
+/// Each iPad window has its own store (so a task panel, the add sheet and Undo belong to the window they are in), and one more,
+/// `AppServices.store`, serves sync, reminders, Spotlight and Siri. They keep each other current through two notices: `wrote`
+/// (this store changed the folder: the others read it again, sync sends it) and `readAgain` (the folder changed underneath).
 @Observable
 final class NexusStore {
+    static let wrote = Notification.Name("NexusStore.wrote")
+    static let readAgain = Notification.Name("NexusStore.readAgain")
+    static let folderChanged = Notification.Name("NexusStore.folderChanged")
+
     private(set) var snapshot: Snapshot
     private(set) var today: String
     private(set) var folder: URL
@@ -21,6 +29,9 @@ final class NexusStore {
     var capture: CaptureStart?
     /// Called after the app wrote to the data folder (sync sends it soon after).
     @ObservationIgnored var onWrite: (() -> Void)?
+    /// Called after every read of the folder (the shared store: reminders and Spotlight follow it).
+    @ObservationIgnored var onReload: (() -> Void)?
+    @ObservationIgnored private var observers: [NSObjectProtocol] = []
     /// The board open over everything (full screen), and where to look first.
     var openBoard: BoardTarget?
     /// Goes up when a notebook, section or board was made, renamed or removed, so the lists read the folder again.
@@ -59,8 +70,32 @@ final class NexusStore {
         today = Days.today()
         snapshot = DataFolder.load(url)
         fingerprint = DataFolder.fingerprint(url)
-        ShortcutCenter.shared.onWrite = { [weak self] in self?.onWrite?() }
+        ShortcutCenter.shared.onWrite = { NotificationCenter.default.post(name: NexusStore.wrote, object: nil) }
         loadShortcuts()
+        let nc = NotificationCenter.default
+        observers.append(nc.addObserver(forName: Self.wrote, object: nil, queue: .main) { [weak self] n in
+            guard let self, (n.object as AnyObject?) !== self else { return }
+            if (n.userInfo?["list"] as? Bool) == true { notebooksVersion += 1 }
+            reloadIfChanged()
+        })
+        observers.append(nc.addObserver(forName: Self.readAgain, object: nil, queue: .main) { [weak self] n in
+            guard let self, (n.object as AnyObject?) !== self else { return }
+            reloadIfChanged()
+        })
+        observers.append(nc.addObserver(forName: Self.folderChanged, object: nil, queue: .main) { [weak self] n in
+            guard let self, (n.object as AnyObject?) !== self else { return }
+            let (url, picked) = FolderAccess.current()
+            folder = url; pickedFolder = picked
+            reload()
+        })
+    }
+
+    deinit { observers.forEach { NotificationCenter.default.removeObserver($0) } }
+
+    /// This store changed the folder: tell sync (through `onWrite` or the notice) and the other windows.
+    private func wrote(listChanged: Bool = false) {
+        onWrite?()
+        NotificationCenter.default.post(name: Self.wrote, object: self, userInfo: listChanged ? ["list": true] : nil)
     }
 
     /// Both devices' shortcuts files, read with the folder (Settings › Shortcuts, the keys the app runs).
@@ -80,6 +115,7 @@ final class NexusStore {
         snapshot = DataFolder.load(folder)
         fingerprint = DataFolder.fingerprint(folder)
         loadShortcuts()
+        onReload?()
     }
 
     /// Cheap check for another writer; reloads only when something changed. True when the files changed.
@@ -95,6 +131,7 @@ final class NexusStore {
         do { try FolderAccess.pick(url) } catch { problem = "Couldn't keep access to that folder: \(error.localizedDescription)"; return }
         folder = url; pickedFolder = true
         reload()
+        NotificationCenter.default.post(name: Self.folderChanged, object: self)
     }
 
     func useDefaultFolder() {
@@ -102,18 +139,19 @@ final class NexusStore {
         let (url, picked) = FolderAccess.current()
         folder = url; pickedFolder = picked
         reload()
+        NotificationCenter.default.post(name: Self.folderChanged, object: self)
     }
 
     /// A board (or a notebook) was written: let sync send it.
     func boardsChanged(listChanged: Bool = false) {
         if listChanged { notebooksVersion += 1 }
-        onWrite?()
+        wrote(listChanged: listChanged)
     }
 
     func makeSample() {
         do { try SampleFolder.make(at: folder, today: today) } catch { problem = error.localizedDescription }
         reload()
-        onWrite?()
+        wrote()
     }
 
     // MARK: lookups for the screens
@@ -135,7 +173,7 @@ final class NexusStore {
         do {
             let c = try make(editor, snapshot)
             reload()
-            onWrite?()
+            wrote()
             toast = Toast(message: c.message, change: c, offerParent: c.offerParent)
         } catch {
             problem = "\(error)"
@@ -186,7 +224,7 @@ final class NexusStore {
                 }
             }
             reload()
-            onWrite?()
+            wrote()
             toast = Toast(message: c.message, change: c)
             return id
         } catch {
@@ -204,7 +242,7 @@ final class NexusStore {
         do {
             try FolderAccess.write(url, text)
             reload()
-            onWrite?()
+            wrote()
             toast = Toast(message: message, change: Change(file: rel, before: before, after: text, message: message))
         } catch {
             problem = "Couldn't save \(rel): \(error.localizedDescription)"
@@ -215,7 +253,7 @@ final class NexusStore {
         guard let c = toast?.change else { return }
         do { try editor.undo(c); toast = Toast(message: "Undone") } catch { problem = "\(error)" }
         reload()
-        onWrite?()
+        wrote()
     }
 
     func tickOfferedParent() {

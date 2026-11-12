@@ -79,6 +79,7 @@ struct Sidebar: View {
                 Button { store.capture = .init(workstream: nil, parent: nil, plan: nil) } label: { Label("New task", systemImage: "square.and.pencil") }
                     .disabled(!s.isDataFolder)
             }
+            ToolbarItem(placement: .topBarLeading) { NewWindowButton() }
         }
         .refreshable { store.reload() }
     }

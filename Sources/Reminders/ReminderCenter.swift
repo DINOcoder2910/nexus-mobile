@@ -20,8 +20,6 @@ final class ReminderCenter {
         }
     }
     private(set) var allowed: UNAuthorizationStatus = .notDetermined
-    /// The task a tapped notice is about; the shell opens it.
-    var tappedTask: String?
 
     @ObservationIgnored weak var store: NexusStore?
     @ObservationIgnored weak var calendar: CalendarStore?
@@ -34,7 +32,8 @@ final class ReminderCenter {
         } else {
             settings = ReminderSettings()
         }
-        delegate.onTap = { [weak self] id in self?.tappedTask = id }
+        // a tapped notice opens its task in the window in front
+        delegate.onTap = { id in WindowRouter.shared.openTask = id }
         UNUserNotificationCenter.current().delegate = delegate
     }
 

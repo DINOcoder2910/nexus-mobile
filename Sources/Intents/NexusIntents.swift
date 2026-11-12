@@ -16,9 +16,9 @@ struct AddToNexusIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
+        AppServices.start()
         let store = AppServices.store
         let sync = AppServices.sync
-        sync.attach(store)
         store.reloadIfChanged()
         let added = QuickAdd.add(text, store: store)
         guard let added else {
@@ -38,7 +38,7 @@ struct OpenAddSheetIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        AppServices.store.capture = .init(workstream: nil, parent: nil, plan: nil)
+        WindowRouter.shared.addSheet = true
         return .result()
     }
 }

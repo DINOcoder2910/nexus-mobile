@@ -4,113 +4,31 @@ import NexusCore
 
 @main
 struct NexusMobileApp: App {
-    // one of each for the whole app (every window shares them), also reached by Siri and Shortcuts (AppServices)
-    @State private var store = AppServices.store
+    // shared by every window, also reached by Siri and Shortcuts (AppServices); each window has its own NexusStore (WindowRoot)
     @State private var sync = AppServices.sync
     @State private var calendar = AppServices.calendar
     @State private var reminders = AppServices.reminders
+    @State private var router = WindowRouter.shared
+    /// The app as a whole (all its windows): sync runs while any window is in front.
+    @Environment(\.scenePhase) private var phase
 
     var body: some Scene {
-        WindowGroup {
-            RootView()
-                .environment(store)
+        // one kind of window, opened plain or on a board ("Open in a new window"); on the iPad there can be several
+        WindowGroup(for: WindowStart.self) { $start in
+            WindowRoot(start: start)
                 .environment(sync)
                 .environment(calendar)
                 .environment(reminders)
+                .environment(router)
                 .tint(Theme.accent)
         }
-        // iOS wakes the app now and then: sync once, read the folder, and give iOS the reminders again
-        .backgroundTask(.appRefresh(ReminderCenter.refreshId)) { await refreshInBackground() }
-    }
-
-    @MainActor
-    private func refreshInBackground() async {
-        ReminderCenter.scheduleRefresh()
-        await sync.backgroundCycle(store)
-        store.reloadIfChanged()
-        if reminders.store == nil { reminders.attach(store, calendar) }
-        reminders.reschedule()
-    }
-}
-
-/// The app's services, made once. The windows get them through the environment; an App Intent (Siri, Shortcuts, the Action
-/// button) runs in the same process and reaches them here, so what it adds shows at once and is synced.
-@MainActor
-enum AppServices {
-    static let store = NexusStore()
-    static let sync = SyncService()
-    static let calendar = CalendarStore()
-    static let reminders = ReminderCenter()
-}
-
-/// Where the sidebar can take you.
-enum Screen: Hashable {
-    case today, planner, calendar, tasks, someday, inbox, workstream(String), boards, boardSearch, settings
-    /// A notebook's page (its path in the data folder, "notebooks/Chem").
-    case notebook(String)
-}
-
-/// The shell: the sidebar on the left (where you go), the screen on the right, and the task panel, add sheet and undo bar over both.
-struct RootView: View {
-    @Environment(NexusStore.self) private var store
-    @Environment(SyncService.self) private var sync
-    @Environment(CalendarStore.self) private var calendar
-    @Environment(ReminderCenter.self) private var reminders
-    @Environment(\.scenePhase) private var phase
-    @State private var screen: Screen? = .today
-    @State private var columns = NavigationSplitViewVisibility.all
-    /// On the iPhone the sidebar and the screen are one stack: it opens on the screen (Today), with the sidebar one step back.
-    @State private var compactColumn = NavigationSplitViewColumn.detail
-
-    var body: some View {
-        @Bindable var store = store
-        NavigationSplitView(columnVisibility: $columns, preferredCompactColumn: $compactColumn) {
-            Sidebar(selection: $screen)
-                .navigationSplitViewColumnWidth(min: 240, ideal: 280, max: 340)
-        } detail: {
-            // an open board takes the detail column, beside the sidebar (its bar shows and hides the sidebar)
-            if let target = store.openBoard {
-                BoardPanes(main: target, columns: $columns).id(target.id)
-            } else {
-                NavigationStack {
-                    detail
-                }
-                .id(screen)
-            }
-        }
-        .overlay(alignment: .bottom) { UndoBar().animation(.snappy, value: store.toast) }
-        .background {
-            AppShortcutKeys(enabled: store.openTaskId == nil && store.capture == nil && store.openBoard == nil,
-                            canRun: canRunShortcut, perform: runShortcut)
-        }
-        .sheet(isPresented: Binding(get: { store.openTaskId != nil }, set: { if !$0 { store.openTaskId = nil } })) {
-            if let id = store.openTaskId { TaskDetailView(taskId: id).id(id) }
-        }
-        .sheet(item: $store.capture) { start in CaptureSheet(start: start) }
-        .onChange(of: store.openBoard?.id) { _, now in
-            withAnimation { columns = now == nil ? .all : .detailOnly }
-        }
-        .onChange(of: screen) { _, _ in store.openBoard = nil }
-        .alert("Couldn't do that", isPresented: Binding(get: { store.problem != nil }, set: { if !$0 { store.problem = nil } })) {
-            Button("OK", role: .cancel) {}
-        } message: { Text(store.problem ?? "") }
         .onChange(of: phase) { _, now in
-            switch now {
-            case .active:
+            if now == .active {
+                router.front = windowId
                 store.reloadIfChanged()
-                calendar.refreshStatus()
-                sync.becameActive()
-                Task { await reminders.refreshStatus() }
-            case .background:
-                sync.enteredBackground()
-                ReminderCenter.scheduleRefresh()
-            default:
-                break
+                answerRouter()
             }
         }
-        .onChange(of: store.folder) { _, _ in sync.restart() }
-        // the reminders follow the files and the calendars
-        .onChange(of: store.snapshot.loadedAt) { _, _ in reminders.reschedule(); SpotlightIndex.update(store) }
         // a Spotlight result: a task, a workstream or a board
         .onContinueUserActivity(CSSearchableItemActionType) { activity in
             guard let hit = SpotlightIndex.target(activity) else { return }
@@ -123,22 +41,36 @@ struct RootView: View {
             }
         }
         .onChange(of: calendar.version) { _, _ in reminders.reschedule() }
-        .onChange(of: reminders.tappedTask) { _, id in
-            guard let id else { return }
-            reminders.tappedTask = nil
-            if store.task(id) != nil { store.openTaskId = id }
-        }
+        .onChange(of: router.openTask) { _, _ in answerRouter() }
+        .onChange(of: router.addSheet) { _, _ in answerRouter() }
         .task {
-            sync.attach(store)
-            reminders.attach(store, calendar)
-            SpotlightIndex.update(store)
+            AppServices.start()
+            if router.front == nil { router.front = windowId }
+            if case .board(let path)? = start { store.openBoard = .init(path: path) }
+            answerRouter()
             InkBoardMove.runIfNeeded(store)
             // Another writer (sync, the Files app) can change the folder at any time: look every few seconds while open,
-            // and let sync send what changed.
+            // and tell the other stores (and so sync) what changed.
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(3))
-                if phase == .active, store.reloadIfChanged() { sync.wake() }
+                if phase == .active, store.reloadIfChanged() {
+                    NotificationCenter.default.post(name: NexusStore.readAgain, object: store)
+                    sync.wake()
+                }
             }
+        }
+    }
+
+    /// A reminder tapped or Siri's add sheet: the window in front answers.
+    private func answerRouter() {
+        guard router.front == windowId || router.front == nil else { return }
+        if let id = router.openTask {
+            router.openTask = nil
+            if store.task(id) != nil { store.openTaskId = id }
+        }
+        if router.addSheet {
+            router.addSheet = false
+            store.capture = .init(workstream: nil, parent: nil, plan: nil)
         }
     }
 
