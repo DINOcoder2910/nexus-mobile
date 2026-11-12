@@ -152,24 +152,17 @@ struct RootView: View {
     @State private var compactColumn = NavigationSplitViewColumn.detail
     /// This window, for the asks that only one window should answer.
     @State private var windowId = UUID()
+    /// The iPhone's tab bar: the tab, and each tab's stack.
+    @State private var tab: PhoneTab = .today
+    @State private var todayPath: [Screen] = []
+    @State private var calendarPath: [Screen] = []
+    @State private var inboxPath: [Screen] = []
+    @State private var notebooksPath: [Screen] = []
+    @State private var morePath: [Screen] = []
 
     var body: some View {
         @Bindable var store = store
-        NavigationSplitView(columnVisibility: $columns, preferredCompactColumn: $compactColumn) {
-            Sidebar(selection: $screen)
-                .navigationSplitViewColumnWidth(min: 240, ideal: 280, max: 340)
-        } detail: {
-            // an open board takes the detail column, beside the sidebar (its bar shows and hides the sidebar)
-            if let target = store.openBoard {
-                BoardPanes(main: target, columns: $columns).id(target.id)
-            } else {
-                NavigationStack {
-                    detail
-                }
-                .id(screen)
-            }
-        }
-        .overlay(alignment: .bottom) { UndoBar().animation(.snappy, value: store.toast) }
+        shell
         .background {
             AppShortcutKeys(enabled: store.openTaskId == nil && store.capture == nil && store.openBoard == nil,
                             canRun: canRunShortcut, perform: runShortcut)
@@ -181,7 +174,12 @@ struct RootView: View {
         .onChange(of: store.openBoard?.id) { _, now in
             withAnimation { columns = now == nil ? .all : .detailOnly }
         }
-        .onChange(of: screen) { _, _ in store.openBoard = nil }
+        .onChange(of: screen) { _, now in
+            guard let now else { return }
+            store.openBoard = nil
+            // the iPhone has no selection: the screen goes to its tab, and the ask is cleared so the same one works again
+            if Device.isPhone { showOnPhone(now); screen = nil }
+        }
         .alert("Couldn't do that", isPresented: Binding(get: { store.problem != nil }, set: { if !$0 { store.problem = nil } })) {
             Button("OK", role: .cancel) {}
         } message: { Text(store.problem ?? "") }
@@ -223,6 +221,30 @@ struct RootView: View {
                 }
             }
         }
+    }
+
+    /// The iPad: the sidebar and the screen. The iPhone: a tab bar (Today, Calendar, Inbox, Notebooks, More).
+    @ViewBuilder
+    private var shell: some View {
+        if Device.isPhone { phoneTabs } else { split }
+    }
+
+    private var split: some View {
+        NavigationSplitView(columnVisibility: $columns, preferredCompactColumn: $compactColumn) {
+            Sidebar(selection: $screen)
+                .navigationSplitViewColumnWidth(min: 240, ideal: 280, max: 340)
+        } detail: {
+            // an open board takes the detail column, beside the sidebar (its bar shows and hides the sidebar)
+            if let target = store.openBoard {
+                BoardPanes(main: target, columns: $columns).id(target.id)
+            } else {
+                NavigationStack {
+                    detail
+                }
+                .id(screen)
+            }
+        }
+        .overlay(alignment: .bottom) { UndoBar().animation(.snappy, value: store.toast) }
     }
 
     /// A reminder tapped or Siri's add sheet: the window in front answers.
@@ -275,10 +297,16 @@ struct RootView: View {
 
     @ViewBuilder
     private var detail: some View {
-        if !store.snapshot.isDataFolder, screen != .boards, screen != .settings, screen != .calendar {
+        screenView(screen ?? .today, go: { screen = $0 })
+    }
+
+    /// One screen. `go` is where a link inside it goes (the split view's selection, or a push on the iPhone's tab).
+    @ViewBuilder
+    private func screenView(_ s: Screen, go: @escaping (Screen) -> Void) -> some View {
+        if !store.snapshot.isDataFolder, s != .boards, s != .settings, s != .calendar {
             FolderSetupView()
         } else {
-            switch screen ?? .today {
+            switch s {
             case .today: TodayView()
             case .planner: PlannerView()
             case .calendar: CalendarView()
@@ -288,10 +316,89 @@ struct RootView: View {
             case .workstream(let id): WorkstreamView(workstreamId: id)
             case .boards: BoardsView()
             case .boardSearch: BoardSearchView()
-            case .notebook(let path): NotebookPage(path: path, go: { screen = $0 })
+            case .notebook(let path): NotebookPage(path: path, go: go)
             case .settings: SettingsView()
             case .study: StudyHome()
             }
+        }
+    }
+
+    // MARK: the iPhone: a tab bar
+
+    enum PhoneTab: Hashable { case today, calendar, inbox, notebooks, more }
+
+    private var phoneTabs: some View {
+        TabView(selection: $tab) {
+            phoneStack(.today, $todayPath) { screenView(.today, go: { todayPath.append($0) }) }
+                .tabItem { Label("Today", systemImage: "sun.max") }
+                .tag(PhoneTab.today)
+            phoneStack(.calendar, $calendarPath) { screenView(.calendar, go: { calendarPath.append($0) }) }
+                .tabItem { Label("Calendar", systemImage: "calendar") }
+                .tag(PhoneTab.calendar)
+            phoneStack(.inbox, $inboxPath) { screenView(.inbox, go: { inboxPath.append($0) }) }
+                .tabItem { Label("Inbox", systemImage: "tray") }
+                .badge(store.snapshot.isDataFolder ? store.planning.openCount(nil) : 0)
+                .tag(PhoneTab.inbox)
+            phoneStack(.notebooks, $notebooksPath) {
+                Sidebar(selection: .constant(nil), pushes: true, notebooksOnly: true, title: "Notebooks")
+            }
+            .tabItem { Label("Notebooks", systemImage: "book.closed") }
+            .tag(PhoneTab.notebooks)
+            // More is every screen, the ones in the tab bar too (the sidebar as a list)
+            phoneStack(.more, $morePath) {
+                Sidebar(selection: .constant(nil), pushes: true, title: "More")
+            }
+            .tabItem { Label("More", systemImage: "ellipsis.circle") }
+            .tag(PhoneTab.more)
+        }
+        // a board takes the whole phone; its sidebar button (and Close) go back to the tabs
+        .fullScreenCover(item: Binding(get: { store.openBoard }, set: { store.openBoard = $0 })) { target in
+            BoardPanes(main: target, columns: Binding(get: { .detailOnly }, set: { if $0 != .detailOnly { store.openBoard = nil } }))
+        }
+    }
+
+    /// A tab's stack: its screens push onto it, with the undo bar and the floating + over it (above the tab bar).
+    private func phoneStack<Root: View>(_ which: PhoneTab, _ path: Binding<[Screen]>, @ViewBuilder _ root: () -> Root) -> some View {
+        let content = root()
+        return NavigationStack(path: path) {
+            content.navigationDestination(for: Screen.self) { s in
+                screenView(s, go: { path.wrappedValue.append($0) })
+            }
+        }
+        .overlay(alignment: .bottomTrailing) {
+            // the Calendar has its own + (a new event) in its bottom bar
+            if which != .calendar && store.snapshot.isDataFolder && store.snapshot.readOnlyReason == nil {
+                Button { addFrom(which, path.wrappedValue.last) } label: {
+                    Image(systemName: "plus")
+                        .font(.title2.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 56, height: 56)
+                        .background(Theme.accent, in: Circle())
+                        .shadow(color: .black.opacity(0.2), radius: 8, y: 3)
+                }
+                .accessibilityLabel("Add a task")
+                .padding(.trailing, 18)
+                .padding(.bottom, store.toast == nil ? 18 : 84)
+                .animation(.snappy, value: store.toast == nil)
+            }
+        }
+        .overlay(alignment: .bottom) { UndoBar().animation(.snappy, value: store.toast) }
+    }
+
+    /// The floating +: into the workstream on screen, planned today on Today, else the Inbox.
+    private func addFrom(_ which: PhoneTab, _ top: Screen?) {
+        if case .workstream(let w)? = top { store.capture = .init(workstream: w, parent: nil, plan: nil); return }
+        store.capture = .init(workstream: nil, parent: nil, plan: which == .today && top == nil ? store.today : nil)
+    }
+
+    /// A screen asked for from elsewhere (a Spotlight result, a key): the tab that has it, or pushed on More.
+    private func showOnPhone(_ s: Screen) {
+        switch s {
+        case .today: tab = .today; todayPath = []
+        case .calendar: tab = .calendar; calendarPath = []
+        case .inbox: tab = .inbox; inboxPath = []
+        case .notebook, .boardSearch, .boards: tab = .notebooks; notebooksPath = [s]
+        default: tab = .more; morePath = [s]
         }
     }
 }
