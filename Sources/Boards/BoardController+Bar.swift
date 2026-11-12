@@ -244,7 +244,7 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
     }
 
     /// Buttons other parts of the app put in the top row, before the board menu.
-    func extraBarButtons() -> [UIButton] { [] }
+    func extraBarButtons() -> [UIButton] { boardExtraButtons() }
 
     var pageLabel: String { currentPage.isEmpty ? "" : currentPage }
 

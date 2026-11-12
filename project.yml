@@ -15,7 +15,11 @@ targets:
   NexusMobile:
     type: application
     platform: iOS
-    sources: [Sources]
+    sources:
+      - Sources
+      # the laptop's maths and chemistry renderers (tools/render/build.mjs), kept as a folder so render.html finds its fonts
+      - path: Resources/Render
+        type: folder
     dependencies:
       - package: NexusCore
     info:
@@ -34,6 +38,11 @@ targets:
         NexusBuild: $(NEXUS_BUILD)
         NSCameraUsageDescription: Nexus scans pages into a new board.
         NSPhotoLibraryUsageDescription: Nexus puts a photo on a new board.
+        NSMicrophoneUsageDescription: Nexus listens while you hold the tutor button, and records a class when you ask it to.
+        NSSpeechRecognitionUsageDescription: Nexus turns what you ask the tutor into words, on the iPad.
+        # a class keeps recording when the screen locks or you switch apps
+        UIBackgroundModes:
+          - audio
         UISupportedInterfaceOrientations~ipad:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationPortraitUpsideDown

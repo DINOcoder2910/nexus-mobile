@@ -60,7 +60,7 @@ extension BoardController {
         case "board.zoomOut": zoomShortcut(by: 0.8)
         case "board.zoomReset": zoomShortcut(by: nil)
         case "board.contents":
-            if let item = navigationItem.rightBarButtonItems?.first(where: { $0.action == #selector(showContents(_:)) }) { showContents(item) }
+            showContents(from: bar.pagePill)
         case "board.fingers", "gesture.fingers":
             BoardTools.shared.fingersDraw.toggle()
             toolChanged()

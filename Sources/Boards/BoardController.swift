@@ -187,6 +187,8 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         super.viewWillDisappear(animated)
         if presentedViewController == nil { endWriting() }
         rememberPlace()
+        tutorBoardClosing()
+        recordingBoardClosing()
         saveNow()
         poll?.invalidate()
         boardClosing()
@@ -416,6 +418,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         let n = canvas.drawing.strokes.count
         if n == strokeCount + 1 { strokeLanded() }
         strokeCount = canvas.drawing.strokes.count
+        recordingDrawingChanged()
         if selected != nil { selected = nil }
         growIfNeeded()
         updateContentSize()
@@ -440,6 +443,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         guard dirty, !readOnly else { return }
         let taken = Set(content.items.map(\.id))
         content.strokes = ledger.strokes(canvas.drawing, offset: offset, taken: taken)
+        recordingSaved()
         do {
             // what the laptop wrote since this board was read is merged in first, never written over (BoardController+Live)
             let merged = try reconcileBeforeSave()
