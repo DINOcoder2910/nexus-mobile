@@ -61,7 +61,7 @@ final class NexusStore {
 
     var planning: Planning { Planning(snapshot, today: today) }
     var editor: TaskEditor { TaskEditor(root: folder, read: FolderAccess.read, write: FolderAccess.write) }
-    var folderName: String { pickedFolder ? folder.lastPathComponent : "On My iPad › Nexus › nexus-data" }
+    var folderName: String { pickedFolder ? folder.lastPathComponent : Device.defaultFolder }
 
     // MARK: reading
 

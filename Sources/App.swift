@@ -5,12 +5,14 @@ import NexusCore
 struct NexusMobileApp: App {
     @State private var store = NexusStore()
     @State private var sync = SyncService()
+    @State private var calendar = CalendarStore()
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environment(store)
                 .environment(sync)
+                .environment(calendar)
                 .tint(Theme.accent)
         }
     }
@@ -18,22 +20,25 @@ struct NexusMobileApp: App {
 
 /// Where the sidebar can take you.
 enum Screen: Hashable {
-    case today, planner, tasks, someday, inbox, workstream(String), boards, boardSearch, settings
+    case today, planner, calendar, tasks, someday, inbox, workstream(String), boards, boardSearch, settings
 }
 
 /// The shell: the sidebar on the left (where you go), the screen on the right, and the task panel, add sheet and undo bar over both.
 struct RootView: View {
     @Environment(NexusStore.self) private var store
     @Environment(SyncService.self) private var sync
+    @Environment(CalendarStore.self) private var calendar
     @Environment(\.scenePhase) private var phase
     @State private var screen: Screen? = .today
     @State private var columns = NavigationSplitViewVisibility.all
     /// Beside the open board (side by side).
     @State private var side: SidePane?
+    /// On the iPhone the sidebar and the screen are one stack: it opens on the screen (Today), with the sidebar one step back.
+    @State private var compactColumn = NavigationSplitViewColumn.detail
 
     var body: some View {
         @Bindable var store = store
-        NavigationSplitView(columnVisibility: $columns) {
+        NavigationSplitView(columnVisibility: $columns, preferredCompactColumn: $compactColumn) {
             Sidebar(selection: $screen)
                 .navigationSplitViewColumnWidth(min: 240, ideal: 280, max: 340)
         } detail: {
@@ -64,6 +69,7 @@ struct RootView: View {
             switch now {
             case .active:
                 store.reloadIfChanged()
+                calendar.refreshStatus()
                 sync.becameActive()
             case .background:
                 sync.enteredBackground()
@@ -86,12 +92,13 @@ struct RootView: View {
 
     @ViewBuilder
     private var detail: some View {
-        if !store.snapshot.isDataFolder, screen != .boards, screen != .settings {
+        if !store.snapshot.isDataFolder, screen != .boards, screen != .settings, screen != .calendar {
             FolderSetupView()
         } else {
             switch screen ?? .today {
             case .today: TodayView()
             case .planner: PlannerView()
+            case .calendar: CalendarView()
             case .tasks: TasksView(lens: .all)
             case .someday: TasksView(lens: .someday)
             case .inbox: WorkstreamView(workstreamId: nil)

@@ -1,12 +1,15 @@
 # Nexus mobile
 
-The iPad (and later iPhone) side of [Nexus](https://github.com/DINOcoder2910), a personal, file-based workspace. Only the app's code lives here; notes never do.
+The iPad and iPhone side of [Nexus](https://github.com/DINOcoder2910), a personal, file-based workspace. Only the app's code lives here; notes never do.
 
 ## What it does now
 
-- **The planner side of Nexus**, on the same data folder as the laptop: a sidebar with Today, Planner, Tasks, the workstreams by group, Inbox and Someday.
+One app for the iPad and the iPhone. On the iPhone the sidebar is the first screen of a stack (it opens on Today, with the sidebar one step back), the Planner's days are stacked instead of side by side, and a board draws with the finger (there is no Pencil).
+
+- **The planner side of Nexus**, on the same data folder as the laptop: a sidebar with Today, Planner, Calendar, Tasks, the workstreams by group, Inbox and Someday.
   - **Today**: the plan (times first), repeats that fall today, deadlines that need you, what slipped (with Today and Move all to today), tomorrow, and the key dates ahead.
   - **Planner**: 3 days or a week, slipped tasks on top, the task bank below; drag a task onto a day.
+  - **Calendar**: the device's own calendars through EventKit (whatever accounts are added in iOS Settings: Google, the school's Microsoft 365, iCloud, subscribed ICS links) with the tasks planned at a time and the deadlines. Day, 3 days, Week (iPad), Month and List; tap an event for the system's event sheet (edit, delete), double-tap an empty time for a new event, drag a task's block to plan it at another time. Today and the Planner show the day's events too. Nothing of it goes into the data folder (the laptop keeps its calendar sync in its own profile too, `docs/areas.md` "Calendar").
   - **Tasks**: the laptop's lenses (All, Deadlines, Waiting on, No date, Slipped, Done, Someday) and search.
   - **A workstream's page**: its task tree, Someday and Done, its notes.md and its files.
   - **The task panel**: title, ★, deadline, planned days and times, estimate, subtasks, Someday; waiting, repeats, tags and the note are shown.

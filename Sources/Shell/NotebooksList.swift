@@ -185,7 +185,7 @@ extension View {
                 Button("Delete", role: .destructive) { if let b = actions.removing { actions.delete(b, store) } }
                 Button("Cancel", role: .cancel) { actions.removing = nil }
             } message: {
-                Text("Its ink, typed text and images are deleted from this iPad. PDF printouts beside it stay.")
+                Text("Its ink, typed text and images are deleted from this \(Device.name). PDF printouts beside it stay.")
             }
             .alert("Couldn't do that", isPresented: Binding(get: { actions.problem != nil }, set: { if !$0 { actions.problem = nil } })) {
                 Button("OK", role: .cancel) {}

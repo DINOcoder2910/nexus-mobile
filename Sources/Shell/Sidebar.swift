@@ -14,7 +14,8 @@ struct Sidebar: View {
         List(selection: $selection) {
             Section {
                 row(.today, "Today", "sun.max", count: p.planned(on: store.today).count)
-                row(.planner, "Planner", "calendar", count: nil)
+                row(.planner, "Planner", "rectangle.split.3x1", count: nil)
+                row(.calendar, "Calendar", "calendar", count: nil)
                 row(.tasks, "Tasks", "checklist", count: nil)
             }
 

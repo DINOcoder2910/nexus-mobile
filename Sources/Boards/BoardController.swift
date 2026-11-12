@@ -116,7 +116,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         canvas.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         canvas.backgroundColor = .clear
         canvas.isOpaque = false
-        canvas.drawingPolicy = .pencilOnly
+        canvas.drawingPolicy = Device.isPhone ? .anyInput : .pencilOnly // an iPhone has no Pencil: the finger draws (two fingers scroll)
         canvas.minimumZoomScale = 0.2
         canvas.maximumZoomScale = 5
         canvas.bouncesZoom = false // a bounce moved the canvas without telling us, so the items and PDF slid off the ink

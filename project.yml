@@ -35,10 +35,19 @@ targets:
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
+        # the iPhone: upright and both landscapes (not upside down, as Apple's own apps)
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        # the Calendar reads the device's own calendars (Google, school, iCloud) through EventKit; the event sheets may show invitees
+        NSCalendarsFullAccessUsageDescription: Nexus shows your calendars beside your planned tasks, and lets you add and edit events.
+        NSContactsUsageDescription: Nexus shows who is invited to an event.
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.nexus.mobile
-        TARGETED_DEVICE_FAMILY: "2"
+        # 1 = iPhone, 2 = iPad: one app for both
+        TARGETED_DEVICE_FAMILY: "1,2"
         MARKETING_VERSION: "0.2"
         CURRENT_PROJECT_VERSION: "1"
         SWIFT_VERSION: "5.0"
