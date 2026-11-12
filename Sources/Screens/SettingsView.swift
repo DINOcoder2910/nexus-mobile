@@ -53,6 +53,8 @@ struct SettingsView: View {
 
             CalendarSettings()
 
+            ReminderSettingsView()
+
             ClaudeSettings()
 
             TutorSettings()

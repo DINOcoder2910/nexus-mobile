@@ -2,7 +2,7 @@ import SwiftUI
 import NexusCore
 
 /// The task panel: everything about one task, editable in place and saved at once (Undo on the bar for each change).
-/// Fields the iPad can't edit yet (waiting, repeat, tags, note) are shown as they are in the file.
+/// Waiting on, repeats, tags and the note are written as the laptop writes them (NexusCore TaskFields).
 struct TaskDetailView: View {
     @Environment(NexusStore.self) private var store
     @Environment(\.dismiss) private var dismiss
@@ -15,6 +15,12 @@ struct TaskDetailView: View {
     @State private var withTime = false
     @State private var showDayPicker = false
     @FocusState private var titleFocused: Bool
+    @State private var waitingText = ""
+    @State private var tagsText = ""
+    @State private var noteText = ""
+    @FocusState private var focus: Field?
+
+    private enum Field { case waiting, tags, note }
 
     var body: some View {
         NavigationStack {
@@ -23,10 +29,12 @@ struct TaskDetailView: View {
                     .navigationTitle(store.workstreamName(t))
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
-                        ToolbarItem(placement: .confirmationAction) { Button("Done") { commitTitle(t); dismiss() } }
+                        ToolbarItem(placement: .confirmationAction) { Button("Done") { commitTitle(t); commitFields(t); dismiss() } }
                     }
-                    .onAppear { title = t.title }
+                    .onAppear { title = t.title; fill(t) }
                     .onChange(of: t.title) { _, new in if !titleFocused { title = new } }
+                    .onChange(of: store.snapshot.loadedAt) { _, _ in if focus == nil, let now = store.task(taskId) { fill(now) } }
+                    .onChange(of: focus) { old, _ in if let old, let now = store.task(taskId) { commit(old, now) } }
             } else {
                 EmptyNote(title: "This task is gone", detail: "It was removed or moved since.", icon: "questionmark.circle")
                     .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Close") { dismiss() } } }
@@ -155,14 +163,28 @@ struct TaskDetailView: View {
                 if let pr = p.progress(t) { Text("Subtasks · \(pr.done)/\(pr.total)") } else { Text("Subtasks") }
             }
 
-            let extras = facts(t)
-            if !extras.isEmpty {
-                Section("More") {
-                    ForEach(extras.indices, id: \.self) { i in LabeledContent(extras[i].0, value: extras[i].1) }
-                }
-            }
-            if let note = t.note, !note.isEmpty {
-                Section("Note") { Text(note).font(.callout).textSelection(.enabled) }
+            waitingSection(t, editable: editable)
+            repeatSection(t, editable: editable)
+
+            Section {
+                TextField("Tags, e.g. #summative #lab", text: $tagsText)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .focused($focus, equals: .tags)
+                    .submitLabel(.done)
+                    .onSubmit { commit(.tags, t) }
+                    .disabled(!editable)
+            } header: { Text("Tags") }
+
+            Section {
+                TextEditor(text: $noteText)
+                    .frame(minHeight: 90)
+                    .focused($focus, equals: .note)
+                    .disabled(!editable)
+            } header: { Text("Note") } footer: { Text("Saved when you leave the note or press Done.") }
+
+            if let e = t.email {
+                Section { LabeledContent("Email", value: e.hasPrefix("gmail/") ? "Gmail message" : e.hasPrefix("outlook/") ? "Outlook message" : e) }
             }
 
             Section {
@@ -178,13 +200,100 @@ struct TaskDetailView: View {
         }
     }
 
-    private func facts(_ t: NexusTask) -> [(String, String)] {
-        var out: [(String, String)] = []
-        if let w = t.waitingOn { out.append(("Waiting on", w + (t.waitingSince.map { " since \(Days.label($0))" } ?? ""))) }
-        if let r = t.every { out.append(("Repeats", r.text)) }
-        if !t.tags.isEmpty { out.append(("Tags", t.tags.map { "#" + $0 }.joined(separator: " "))) }
-        if let e = t.email { out.append(("Email", e.hasPrefix("gmail/") ? "Gmail message" : e.hasPrefix("outlook/") ? "Outlook message" : e)) }
-        return out
+    // MARK: waiting, repeats, tags, note
+
+    @ViewBuilder
+    private func waitingSection(_ t: NexusTask, editable: Bool) -> some View {
+        Section {
+            TextField("Waiting on someone? Their name", text: $waitingText)
+                .focused($focus, equals: .waiting)
+                .submitLabel(.done)
+                .onSubmit { commit(.waiting, t) }
+                .disabled(!editable)
+            if t.waitingOn != nil {
+                if let since = t.waitingSince {
+                    DatePicker(selection: Binding(get: { Days.date(since) ?? Date() },
+                                                  set: { store.setWaiting(t, on: t.waitingOn, since: Days.iso($0)) }),
+                               displayedComponents: .date) {
+                        Text("Since (\(Days.between(since, store.today)) days)")
+                    }
+                    .disabled(!editable)
+                }
+                if editable { Button("Not waiting any more") { waitingText = ""; store.setWaiting(t, on: nil, since: nil) } }
+            }
+        } header: { Text("Waiting on") }
+    }
+
+    @ViewBuilder
+    private func repeatSection(_ t: NexusTask, editable: Bool) -> some View {
+        Section {
+            HStack {
+                Text(t.every?.text ?? (t.everyRaw.map { "As written: \($0)" } ?? "Doesn't repeat"))
+                    .foregroundStyle(t.every == nil ? .secondary : .primary)
+                Spacer()
+                if editable {
+                    Menu("Change") {
+                        Button("Every day") { store.setRepeat(t, NexusCore.Repeat(freq: "day", until: t.every?.until)) }
+                        Button("Every weekday") { store.setRepeat(t, NexusCore.Repeat(freq: "weekdays", until: t.every?.until)) }
+                        Menu("Every week on…") {
+                            ForEach(Self.weekdays, id: \.self) { d in
+                                Button(Self.dayName(d)) { store.setRepeat(t, NexusCore.Repeat(freq: "week", on: [d], until: t.every?.until)) }
+                            }
+                        }
+                        if t.every != nil || t.everyRaw != nil {
+                            Button("Doesn't repeat", role: .destructive) { store.setRepeat(t, nil) }
+                        }
+                    }
+                }
+            }
+            if let r = t.every {
+                Toggle("Until a day", isOn: Binding(get: { r.until != nil }, set: { on in
+                    store.setRepeat(t, NexusCore.Repeat(freq: r.freq, on: r.on, until: on ? Days.add(store.today, 28) : nil))
+                }))
+                .disabled(!editable)
+                if let u = r.until {
+                    DatePicker("Last day", selection: Binding(get: { Days.date(u) ?? Date() },
+                                                               set: { store.setRepeat(t, NexusCore.Repeat(freq: r.freq, on: r.on, until: Days.iso($0))) }),
+                               displayedComponents: .date)
+                        .disabled(!editable)
+                }
+            }
+        } header: { Text("Repeats") }
+    }
+
+    private static let weekdays = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+    private static func dayName(_ d: String) -> String {
+        ["mon": "Monday", "tue": "Tuesday", "wed": "Wednesday", "thu": "Thursday", "fri": "Friday", "sat": "Saturday", "sun": "Sunday"][d] ?? d
+    }
+
+    /// The text fields from the file (when the task changed and nothing is being typed).
+    private func fill(_ t: NexusTask) {
+        waitingText = t.waitingOn ?? ""
+        tagsText = t.tags.map { "#" + $0 }.joined(separator: " ")
+        noteText = (t.note ?? "").trimmingCharacters(in: .newlines)
+    }
+
+    /// Saves one text field if it changed.
+    private func commit(_ f: Field, _ t: NexusTask) {
+        guard store.canEdit(t) else { return }
+        switch f {
+        case .waiting:
+            let w = waitingText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if w != (t.waitingOn ?? "") { store.setWaiting(t, on: w, since: t.waitingSince ?? store.today) }
+        case .tags:
+            let tags = tagsText.split(whereSeparator: { $0 == " " || $0 == "," }).map(String.init)
+            let clean = tags.map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "#")) }.filter { !$0.isEmpty }
+            if clean != t.tags { store.setTags(t, clean) }
+        case .note:
+            let n = noteText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if n != (t.note ?? "").trimmingCharacters(in: .whitespacesAndNewlines) { store.setNote(t, n) }
+        }
+    }
+
+    private func commitFields(_ t: NexusTask) {
+        for f in [Field.waiting, .tags, .note] {
+            if let now = store.task(taskId) { commit(f, now) } else { commit(f, t) }
+        }
     }
 
     private func commitTitle(_ t: NexusTask) {

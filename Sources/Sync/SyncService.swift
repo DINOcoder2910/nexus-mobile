@@ -71,6 +71,14 @@ final class SyncService {
         enabled = d.bool(forKey: Keys.enabled)
         token = Keychain.get(Keys.token) ?? ""
         lastSynced = d.object(forKey: Keys.last) as? Date
+        // any window's store (or the shortcuts) wrote to the folder: send it soon
+        NotificationCenter.default.addObserver(forName: NexusStore.wrote, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.wake() }
+        }
+        // another folder was picked in a window: start again on it (once the shared store has moved to it too)
+        NotificationCenter.default.addObserver(forName: NexusStore.folderChanged, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.restart() }
+        }
     }
 
     var isSetUp: Bool { HTTPSyncTransport.hubURL(hubAddress) != nil && !cleanToken.isEmpty }
@@ -189,6 +197,21 @@ final class SyncService {
         }
     }
 
+    /// iOS woke the app in the background: one cycle, so reminders see what changed on the laptop.
+    /// (The client takes one cycle at a time, so this waits for the loop's own if one is running.)
+    func backgroundCycle(_ shared: NexusStore) async {
+        if store == nil { attach(shared) } // launched straight into the background: no window attached it yet
+        guard enabled, let client else { return }
+        if case .synced(let r)? = try? await client.cycle() {
+            lastSynced = Date()
+            UserDefaults.standard.set(lastSynced, forKey: Keys.last)
+            if !r.pulled.isEmpty {
+                store?.reload()
+                NotificationCenter.default.post(name: NexusStore.readAgain, object: store)
+            }
+        }
+    }
+
     private enum Next {
         case longPoll
         case after(Double)
@@ -242,6 +265,7 @@ final class SyncService {
                 UserDefaults.standard.set(now, forKey: Keys.last)
                 if !r.pulled.isEmpty {
                     store?.reload()
+                    NotificationCenter.default.post(name: NexusStore.readAgain, object: store) // the windows read it too
                     NotificationCenter.default.post(name: LivePresence.pulled, object: r.pulled) // an open board reads them now
                 }
                 return .longPoll
@@ -292,6 +316,7 @@ final class SyncService {
                 movedAside = moved?.lastPathComponent
                 status = .connecting
                 store?.reload()
+                NotificationCenter.default.post(name: NexusStore.readAgain, object: store)
                 wake()
             } catch {
                 status = .problem(Self.words(error))
@@ -333,7 +358,7 @@ final class SyncService {
             defer { working = false }
             do {
                 let back = try await client.bringBackDeleted()
-                if !back.isEmpty { store?.reload() }
+                if !back.isEmpty { store?.reload(); NotificationCenter.default.post(name: NexusStore.readAgain, object: store) }
                 status = .connecting
                 wake()
             } catch {

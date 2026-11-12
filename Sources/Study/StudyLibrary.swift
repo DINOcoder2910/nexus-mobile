@@ -90,7 +90,7 @@ final class StudyLibrary {
             }
             guard !folded.isEmpty, save(store, i) else { continue }
             for p in folded { try? FileManager.default.removeItem(at: root.appendingPathComponent(p)) }
-            store.onWrite?()
+            store.didWrite()
         }
     }
 
@@ -119,7 +119,7 @@ final class StudyLibrary {
     func keep(_ store: NexusStore, workstream: String, deck: String, dir: StudyDeck.Direction, card: String, state: SRSCard?) {
         guard let i = studies.firstIndex(where: { $0.id == workstream }) else { return }
         studies[i].book[deck, dir, card] = state
-        if save(store, i) { store.onWrite?() }
+        if save(store, i) { store.didWrite() }
     }
 
     /// Writes one workstream's review file, merged with the file on disk.

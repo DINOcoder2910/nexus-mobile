@@ -3,8 +3,16 @@ import NexusCore
 
 /// The one place the screens read the data folder from and send edits to. Every edit is a line-level patch of one task file
 /// (NexusCore's TaskEditor); after it the folder is read again, so what the screens show is always what the files say.
+///
+/// Each iPad window has its own store (so a task panel, the add sheet and Undo belong to the window they are in), and one more,
+/// `AppServices.store`, serves sync, reminders, Spotlight and Siri. They keep each other current through two notices: `wrote`
+/// (this store changed the folder: the others read it again, sync sends it) and `readAgain` (the folder changed underneath).
 @Observable
 final class NexusStore {
+    static let wrote = Notification.Name("NexusStore.wrote")
+    static let readAgain = Notification.Name("NexusStore.readAgain")
+    static let folderChanged = Notification.Name("NexusStore.folderChanged")
+
     private(set) var snapshot: Snapshot
     private(set) var today: String
     private(set) var folder: URL
@@ -21,6 +29,9 @@ final class NexusStore {
     var capture: CaptureStart?
     /// Called after the app wrote to the data folder (sync sends it soon after).
     @ObservationIgnored var onWrite: (() -> Void)?
+    /// Called after every read of the folder (the shared store: reminders and Spotlight follow it).
+    @ObservationIgnored var onReload: (() -> Void)?
+    @ObservationIgnored private var observers: [NSObjectProtocol] = []
     /// The board open over everything (full screen), and where to look first.
     var openBoard: BoardTarget?
     /// Goes up when a notebook, section or board was made, renamed or removed, so the lists read the folder again.
@@ -59,8 +70,33 @@ final class NexusStore {
         today = Days.today()
         snapshot = DataFolder.load(url)
         fingerprint = DataFolder.fingerprint(url)
-        ShortcutCenter.shared.onWrite = { [weak self] in self?.onWrite?() }
+        ShortcutCenter.shared.onWrite = { NotificationCenter.default.post(name: NexusStore.wrote, object: nil) }
         loadShortcuts()
+        let nc = NotificationCenter.default
+        observers.append(nc.addObserver(forName: Self.wrote, object: nil, queue: .main) { [weak self] n in
+            guard let self, (n.object as AnyObject?) !== self else { return }
+            if (n.userInfo?["list"] as? Bool) == true { notebooksVersion += 1 }
+            reloadIfChanged()
+        })
+        observers.append(nc.addObserver(forName: Self.readAgain, object: nil, queue: .main) { [weak self] n in
+            guard let self, (n.object as AnyObject?) !== self else { return }
+            reloadIfChanged()
+        })
+        observers.append(nc.addObserver(forName: Self.folderChanged, object: nil, queue: .main) { [weak self] n in
+            guard let self, (n.object as AnyObject?) !== self else { return }
+            let (url, picked) = FolderAccess.current()
+            folder = url; pickedFolder = picked
+            reload()
+        })
+    }
+
+    deinit { observers.forEach { NotificationCenter.default.removeObserver($0) } }
+
+    /// This store changed the folder: tell sync (through `onWrite` or the notice) and the other windows. Code that writes to
+    /// the folder itself (study grades, boards) calls this after.
+    func didWrite(listChanged: Bool = false) {
+        onWrite?()
+        NotificationCenter.default.post(name: Self.wrote, object: self, userInfo: listChanged ? ["list": true] : nil)
     }
 
     /// Both devices' shortcuts files, read with the folder (Settings › Shortcuts, the keys the app runs).
@@ -80,6 +116,7 @@ final class NexusStore {
         snapshot = DataFolder.load(folder)
         fingerprint = DataFolder.fingerprint(folder)
         loadShortcuts()
+        onReload?()
     }
 
     /// Cheap check for another writer; reloads only when something changed. True when the files changed.
@@ -95,6 +132,7 @@ final class NexusStore {
         do { try FolderAccess.pick(url) } catch { problem = "Couldn't keep access to that folder: \(error.localizedDescription)"; return }
         folder = url; pickedFolder = true
         reload()
+        NotificationCenter.default.post(name: Self.folderChanged, object: self)
     }
 
     func useDefaultFolder() {
@@ -102,18 +140,19 @@ final class NexusStore {
         let (url, picked) = FolderAccess.current()
         folder = url; pickedFolder = picked
         reload()
+        NotificationCenter.default.post(name: Self.folderChanged, object: self)
     }
 
     /// A board (or a notebook) was written: let sync send it.
     func boardsChanged(listChanged: Bool = false) {
         if listChanged { notebooksVersion += 1 }
-        onWrite?()
+        didWrite(listChanged: listChanged)
     }
 
     func makeSample() {
         do { try SampleFolder.make(at: folder, today: today) } catch { problem = error.localizedDescription }
         reload()
-        onWrite?()
+        didWrite()
     }
 
     // MARK: lookups for the screens
@@ -135,7 +174,7 @@ final class NexusStore {
         do {
             let c = try make(editor, snapshot)
             reload()
-            onWrite?()
+            didWrite()
             toast = Toast(message: c.message, change: c, offerParent: c.offerParent)
         } catch {
             problem = "\(error)"
@@ -158,15 +197,35 @@ final class NexusStore {
     func setSomeday(_ t: NexusTask, _ on: Bool) { perform { try $0.setSomeday(t, on, in: $1) } }
     func setTitle(_ t: NexusTask, _ title: String) { perform { try $0.setTitle(t, title, in: $1) } }
     func setEstimate(_ t: NexusTask, _ est: String?) { perform { try $0.setEstimate(t, est, in: $1) } }
+    func setWaiting(_ t: NexusTask, on who: String?, since: String?) { perform { try $0.setWaiting(t, on: who, since: since, in: $1) } }
+    func setRepeat(_ t: NexusTask, _ r: NexusCore.Repeat?) { perform { try $0.setRepeat(t, r, in: $1) } }
+    func setTags(_ t: NexusTask, _ tags: [String]) { perform { try $0.setTags(t, tags, in: $1) } }
+    func setNote(_ t: NexusTask, _ note: String?) { perform { try $0.setNote(t, note, in: $1) } }
 
-    /// Adds a task to a workstream (nil = the Inbox) or under `parent`. Returns its id.
+    /// Adds a task to a workstream (nil = the Inbox) or under `parent`. Returns its id. `extras` (a typed repeat, waiting on, #tags)
+    /// are written straight after, in the same Undo.
     @discardableResult
-    func add(title: String, workstream: String?, parent: NexusTask? = nil, due: String? = nil, plan: [PlanEntry] = [], key: Bool = false, est: String? = nil) -> String? {
+    func add(title: String, workstream: String?, parent: NexusTask? = nil, due: String? = nil, plan: [PlanEntry] = [], key: Bool = false, est: String? = nil,
+             extras: CaptureFacts? = nil) -> String? {
         let file = parent?.file ?? self.workstream(workstream)?.tasksFile ?? "inbox.yaml"
         do {
-            let (c, id) = try editor.add(title: title, to: file, parent: parent, due: due, plan: plan, key: key, est: est, in: snapshot, today: today)
+            var (c, id) = try editor.add(title: title, to: file, parent: parent, due: due, plan: plan, key: key, est: est, in: snapshot, today: today)
+            if let x = extras, x.every != nil || x.waiting != nil || !x.tags.isEmpty {
+                let s = DataFolder.load(folder)
+                if let t = s.tasks[id] {
+                    do {
+                        if let r = x.every {
+                            c.after = try editor.setRepeat(t, NexusCore.Repeat(freq: r.freq, on: r.on.map { [$0] } ?? []), in: s).after
+                        }
+                        if let w = x.waiting { c.after = try editor.setWaiting(t, on: w.on, since: w.since, in: s).after }
+                        if !x.tags.isEmpty { c.after = try editor.setTags(t, x.tags, in: s).after }
+                    } catch {
+                        problem = "Added, but couldn't write all of it: \(error)"
+                    }
+                }
+            }
             reload()
-            onWrite?()
+            didWrite()
             toast = Toast(message: c.message, change: c)
             return id
         } catch {
@@ -175,11 +234,27 @@ final class NexusStore {
         }
     }
 
+    /// Writes a whole text file of the data folder (a workstream's notes.md), with Undo on the bar.
+    func writeText(_ rel: String, _ text: String, message: String) {
+        guard snapshot.readOnlyReason == nil else { problem = snapshot.readOnlyReason; return }
+        let url = folder.appendingPathComponent(rel)
+        let before = (try? FolderAccess.read(url)) ?? ""
+        guard text != before else { return }
+        do {
+            try FolderAccess.write(url, text)
+            reload()
+            didWrite()
+            toast = Toast(message: message, change: Change(file: rel, before: before, after: text, message: message))
+        } catch {
+            problem = "Couldn't save \(rel): \(error.localizedDescription)"
+        }
+    }
+
     func undo() {
         guard let c = toast?.change else { return }
         do { try editor.undo(c); toast = Toast(message: "Undone") } catch { problem = "\(error)" }
         reload()
-        onWrite?()
+        didWrite()
     }
 
     func tickOfferedParent() {
