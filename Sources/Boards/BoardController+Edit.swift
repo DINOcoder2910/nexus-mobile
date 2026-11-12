@@ -5,8 +5,9 @@ import PhotosUI
 import UniformTypeIdentifiers
 import NexusCore
 
-/// Fingers on the board (with the Pencil drawing): tap an item to pick it, tap a picked text block to edit it, tap a checkbox to
-/// tick it, drag a picked item to move it, drag its corner to resize it, press and hold to pick a PDF printout. The + menu puts
+/// Fingers on the board (with the Pencil drawing): tap an item to pick it (a tap on empty board does nothing but put the pick down),
+/// tap a picked text block to edit it, tap a checkbox to tick it, drag a picked item to move it, drag its corner to resize it, touch
+/// and hold anything (a PDF printout or ink too) for its menu. The + menu puts
 /// typed text, images, PDF printouts and shapes on the board. Item changes join the Pencil's undo.
 extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDelegate {
     struct Drag {
@@ -42,6 +43,7 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
 
         hold.delegate = self
         canvas.addGestureRecognizer(hold)
+        quietCanvasMenus()
     }
 
     func boardPoint(_ g: UIGestureRecognizer) -> CGPoint {
@@ -76,6 +78,7 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
     }
 
     @objc func tapped(_ g: UITapGestureRecognizer) {
+        quietCanvasMenus()
         // a tap away from the block being typed in closes it
         if writing != nil { endWriting(); return }
         let p = boardPoint(g)
@@ -101,11 +104,8 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
     }
 
     @objc func longPressed(_ g: UILongPressGestureRecognizer) {
-        guard g.state == .began else { return }
-        if let it = hitItem(boardPoint(g), pdf: true) {
-            selected = it.id
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        }
+        guard g.state == .began, writing == nil, !links.mode else { return }
+        showHoldMenu(g) // BoardHoldMenu.swift
     }
 
     @objc func panned(_ g: UIPanGestureRecognizer) {

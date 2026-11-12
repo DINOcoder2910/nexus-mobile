@@ -43,6 +43,12 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
         canvas.addGestureRecognizer(space)
         canvas.panGestureRecognizer.require(toFail: space)
 
+        let spaceTap = UITapGestureRecognizer(target: self, action: #selector(spaceTapped(_:)))
+        spaceTap.name = "spaceTap"
+        spaceTap.allowedTouchTypes = BoardController.anyTouch
+        spaceTap.delegate = self
+        canvas.addGestureRecognizer(spaceTap)
+
         navigationController?.setNavigationBarHidden(true, animated: false)
         bar.refresh()
     }
@@ -67,7 +73,8 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
         switch g.name {
         case "textTap": return t == .text && !readOnly
         case "spacePan": return t == .space && !readOnly
-        case "tap": return t == .text && !readOnly ? false : nil
+        case "spaceTap": return t == .space && !readOnly && BoardTools.shared.spaceTap != .nothing
+        case "tap": return (t == .text || t == .space) && !readOnly ? false : nil
         case "itemPan": return t == .space ? false : nil
         default: return nil
         }
@@ -100,6 +107,7 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
         } else {
             canvas.drawingGestureRecognizer.isEnabled = false
         }
+        quietCanvasMenus()
     }
 
     /// Touch and hold a colour to change it.

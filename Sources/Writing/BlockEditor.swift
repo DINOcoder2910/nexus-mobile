@@ -161,6 +161,13 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
         let sel = textView.selectedRange
         let result = BlockStyler.style(storage, look: look, scale: scale, selection: sel)
         manager.quoteStep = result.quoteStep
+        if fullscreen, let b = board {
+            // the writing view shows the words each open comment is on, like the board does
+            let n = storage.length
+            for r in b.markedRanges(id) where r.location >= 0 && NSMaxRange(r) <= n && r.length > 0 {
+                storage.addAttribute(.backgroundColor, value: UIColor.systemPurple.withAlphaComponent(0.16), range: r)
+            }
+        }
         var typing = textView.typingAttributes
         typing[BlockStyler.hiddenKey] = nil
         typing[BlockStyler.glyphKey] = nil

@@ -93,6 +93,9 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     var themeWatch: (any UITraitChangeRegistration)?
     var colorEdit: (BoardTool, Int)?
     var spaceStart: CGFloat?
+    /// The drag in progress: sideways or down, and the column (or row) it moves when only that moves.
+    var spaceSideways = false
+    var spaceBandRange: ClosedRange<CGFloat>?
     let spaceGuide = UIView(), spaceBand = CAShapeLayer(), spaceLine = CAShapeLayer(), spaceLabel = UILabel()
     var lastZoomLabel = 0
     var lastBarKey = ""
