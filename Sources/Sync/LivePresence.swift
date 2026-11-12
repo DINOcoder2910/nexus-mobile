@@ -21,7 +21,7 @@ final class LivePresence {
     private(set) var lastOther: String?
 
     /// The build of this app (from Info.plist `NexusBuild`, set by the cloud build to the commit), for the hub and Settings.
-    static var build: String {
+    nonisolated static var build: String {
         let b = (Bundle.main.infoDictionary?["NexusBuild"] as? String) ?? ""
         return b.isEmpty || b.hasPrefix("$(") ? "dev" : b
     }

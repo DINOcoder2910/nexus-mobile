@@ -115,6 +115,7 @@ final class BoardSplitController: UIViewController {
 
     /// A PDF from the Files app, read where it is (nothing is copied into the data folder).
     func pickPDFFromFiles() {
+        HangWatch.note("side by side: PDF picker asked")
         let pick = PdfFilesPick { [weak self] url in
             self?.filesPick = nil
             guard let url else { return }

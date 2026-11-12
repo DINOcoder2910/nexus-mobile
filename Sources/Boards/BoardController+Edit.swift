@@ -355,6 +355,7 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
     }
 
     func pickPdf() {
+        HangWatch.note("board: PDF printout picker asked")
         let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.pdf], asCopy: true)
         picker.delegate = self
         picker.allowsMultipleSelection = false
@@ -363,6 +364,7 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
 
     /// A PDF printout goes beside the board (as on the laptop), and its pages down the board from the insert point.
     func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        HangWatch.note("board: PDF picked")
         guard let url = urls.first else { return }
         let access = url.startAccessingSecurityScopedResource()
         defer { if access { url.stopAccessingSecurityScopedResource() } }
@@ -372,6 +374,7 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
 
     /// A PDF (picked, or a scanned handout) saved beside the board under a free name, its pages down the board from the insert point.
     func addPdfPrintout(data: Data, named want: String, label: String) {
+        HangWatch.note("board: adding a PDF printout, \(data.count / 1024) KB")
         let dir = boardURL.deletingLastPathComponent()
         let taken = Set((try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? [])
         let name = BoardFormat.freeName(want, taken: taken, suffix: ".pdf")
