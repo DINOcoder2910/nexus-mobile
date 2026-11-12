@@ -110,8 +110,8 @@ public enum BlockDrafts {
         while ids.contains("d\(n)") { n += 1 }
         let new = "d\(n)"
         var clean = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        var k = drafts.count + 1
-        while clean.isEmpty { if !names.contains("Draft \(k)") { clean = "Draft \(k)" }; k += 1 }
+        var nameAt = drafts.count + 1
+        while clean.isEmpty { if !names.contains("Draft \(nameAt)") { clean = "Draft \(nameAt)" }; nameAt += 1 }
         drafts.append(BlockDraft(id: new, name: clean, made: iso(now), from: source))
         if lockOld, let i = drafts.firstIndex(where: { $0.id == source }) { drafts[i].locked = true }
         // the current draft's words move to their own file; the new one is current
