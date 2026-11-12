@@ -266,6 +266,9 @@ final class ToolPanelController: UIViewController, UITableViewDataSource, UITabl
     private(set) var openSrc: String?
     /// The card this panel is using, when it was opened from the board.
     private(set) var cardId: String?
+    /// Widened to about 70% of the board (the header's expand button; the board places the panel, `toggleToolPanelWide`).
+    var wide = false { didSet { showWide() } }
+    private let wideButton = UIButton(type: .system)
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -282,9 +285,13 @@ final class ToolPanelController: UIViewController, UITableViewDataSource, UITabl
         close.setImage(UIImage(systemName: "xmark"), for: .normal)
         close.accessibilityLabel = "Close Tools"
         close.addAction(UIAction { [weak self] _ in self?.board?.closeToolPanel() }, for: .touchUpInside)
+        wideButton.addAction(UIAction { [weak self] _ in self?.board?.toggleToolPanelWide() }, for: .touchUpInside)
+        showWide()
         header.addSubview(titleLabel)
+        header.addSubview(wideButton)
         header.addSubview(close)
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        wideButton.translatesAutoresizingMaskIntoConstraints = false
         close.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             titleLabel.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 16),
@@ -292,6 +299,9 @@ final class ToolPanelController: UIViewController, UITableViewDataSource, UITabl
             close.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -12),
             close.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             close.widthAnchor.constraint(equalToConstant: 36), close.heightAnchor.constraint(equalToConstant: 36),
+            wideButton.trailingAnchor.constraint(equalTo: close.leadingAnchor, constant: -4),
+            wideButton.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+            wideButton.widthAnchor.constraint(equalToConstant: 36), wideButton.heightAnchor.constraint(equalToConstant: 36),
         ])
 
         table.dataSource = self
@@ -332,6 +342,23 @@ final class ToolPanelController: UIViewController, UITableViewDataSource, UITabl
         toolBar.frame = CGRect(x: 0, y: 48, width: w, height: 44)
         frameView.frame = CGRect(x: 0, y: 92, width: w, height: max(0, view.bounds.height - 92))
         page?.web.frame = frameView.bounds
+    }
+
+    override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
+        super.viewWillTransition(to: size, with: coordinator)
+        // turned or resized: the board's new width sets the panel's
+        coordinator.animate(alongsideTransition: nil) { [weak self] _ in
+            guard let self, self.board?.toolPanel === self else { return }
+            UIView.animate(withDuration: 0.2) { self.board?.placeToolPanel() }
+        }
+    }
+
+    /// The expand button for the panel's width: widen, or back to the usual width.
+    private func showWide() {
+        let name = wide ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right"
+        wideButton.setImage(UIImage(systemName: name), for: .normal)
+        wideButton.accessibilityLabel = wide ? "Make Tools narrower" : "Make Tools wider"
+        wideButton.toolTip = wideButton.accessibilityLabel
     }
 
     // MARK: the list

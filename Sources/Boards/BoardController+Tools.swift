@@ -9,9 +9,27 @@ extension BoardController {
         if toolPanel == nil { openToolPanel() } else { closeToolPanel() }
     }
 
+    /// Where the panel sits: on the right, under the bar; widened (its header's expand button), about 70% of the board.
     var toolPanelFrame: CGRect {
-        let w = min(520, max(320, view.bounds.width * 0.45))
-        return CGRect(x: view.bounds.width - w, y: topInset, width: w, height: view.bounds.height - topInset)
+        let W = view.bounds.width
+        let w = toolPanel?.wide == true ? max(320, (W * 0.7).rounded()) : min(520, max(320, W * 0.45))
+        return CGRect(x: W - w, y: topInset, width: w, height: view.bounds.height - topInset)
+    }
+
+    /// Puts the open panel where `toolPanelFrame` says (after a turn or a resize, or when it is widened). A wide panel keeps its share
+    /// of the width as the board resizes (flexible width); a narrow one keeps its width.
+    func placeToolPanel() {
+        guard let p = toolPanel else { return }
+        p.view.autoresizingMask = p.wide ? [.flexibleLeftMargin, .flexibleWidth, .flexibleHeight] : [.flexibleLeftMargin, .flexibleHeight]
+        p.view.frame = toolPanelFrame
+        p.view.layoutIfNeeded()
+    }
+
+    /// The panel's expand button: about 70% of the board's width, or back to its usual width.
+    func toggleToolPanelWide() {
+        guard let p = toolPanel else { return }
+        p.wide.toggle()
+        UIView.animate(withDuration: 0.25) { self.placeToolPanel() }
     }
 
     /// Shows the panel at its list, or with `src` open in it (bound to `card` when given).
