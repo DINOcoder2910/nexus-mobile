@@ -199,6 +199,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        RichEditor.prewarm() // the rich-text editor's page loads while the board is looked at, so a block opens at once
         navigationController?.setNavigationBarHidden(true, animated: false)
         watchSystemStyle()
         applyTheme()

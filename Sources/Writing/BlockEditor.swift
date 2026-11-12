@@ -8,10 +8,13 @@ final class BlockTextView: UITextView {
     override var undoManager: UndoManager? { ownUndo }
     weak var session: WritingSession?
 
-    override var keyCommands: [UIKeyCommand]? {
+    override var keyCommands: [UIKeyCommand]? { BlockTextView.blockKeys(#selector(nexusKey(_:))) }
+
+    /// The block's keys (the plain editor's and the rich one's, RichWebView): each sends its action name to the session.
+    static func blockKeys(_ selector: Selector) -> [UIKeyCommand] {
         var out: [UIKeyCommand] = []
         func key(_ input: String, _ mods: UIKeyModifierFlags, _ action: String, _ title: String) {
-            let k = UIKeyCommand(title: title, image: nil, action: #selector(nexusKey(_:)), input: input, modifierFlags: mods, propertyList: action)
+            let k = UIKeyCommand(title: title, image: nil, action: selector, input: input, modifierFlags: mods, propertyList: action)
             k.wantsPriorityOverSystemBehavior = true
             out.append(k)
         }
@@ -99,6 +102,16 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
     /// The block's drafts as tabs above it (only when it has drafts).
     lazy var tabs = DraftTabs(session: self)
 
+    /// The rich-text editor (RichEditor, the laptop's editor in a web view) when it is on: the page holds the words, `richText` is their
+    /// markdown as last heard from it, `richSel` the selection in that markdown. Nil: the plain text view.
+    private(set) var rich: RichEditor?
+    private var richText = ""
+    private var richSel = NSRange(location: 0, length: 0)
+    /// The Writing view's margins round the words (the page's padding with the rich editor).
+    var pageInsets: UIEdgeInsets?
+    /// The view the words are typed in: the page, or the plain text view.
+    var editorView: UIView { rich?.web ?? textView }
+
     /// In the Writing view: the text view scrolls on its own and is not placed over the board.
     let fullscreen: Bool
     /// The board's ink when typing started (Push things below may move it).
@@ -139,6 +152,17 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
         textView.inputAccessoryView = bar
         textView.text = startText
         applyPractice()
+        // the laptop's rich-text editor, unless switched off in Settings or the block is in practice mode (which needs the keyboard's checks off)
+        if RichEditor.isOn, !Practice.isOn(item) {
+            let r = RichEditor.take(for: self)
+            rich = r
+            richText = startText
+            richSel = NSRange(location: (startText as NSString).length, length: 0)
+            r.web.accessory = bar
+            r.web.layer.anchorPoint = fullscreen ? CGPoint(x: 0.5, y: 0.5) : .zero
+            r.web.scrollView.isScrollEnabled = fullscreen
+            r.web.translatesAutoresizingMaskIntoConstraints = true
+        }
 
         let tick = UITapGestureRecognizer(target: self, action: #selector(tappedInside(_:)))
         tick.delegate = self
@@ -150,13 +174,37 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
 
     deinit { NotificationCenter.default.removeObserver(self) }
 
-    var text: String { textView.text ?? "" }
+    var text: String { rich != nil ? richText : (textView.text ?? "") }
+
+    /// The selection, in the words' markdown.
+    var selectedRange: NSRange {
+        get { rich != nil ? richSel : textView.selectedRange }
+        set {
+            if let r = rich { richSel = newValue; r.select(newValue) } else { textView.selectedRange = newValue }
+        }
+    }
+
+    /// The keyboard to the words (the caret where it was).
+    func focus() {
+        if let r = rich { r.focus() } else { textView.becomeFirstResponder() }
+    }
+
+    func unfocus() {
+        if let r = rich { r.blur() } else { textView.resignFirstResponder() }
+    }
     var item: BoardItem? { board?.content.items.first { $0.id == id } }
 
     // MARK: drawing and placing
 
     /// Style the words for the selection at the current scale.
     func restyle() {
+        if let r = rich {
+            r.setLook(richLook())
+            r.setOpts(chem: look.chem && !practicing, review: look.review, locked: board?.blockLocked(id) ?? false)
+            if fullscreen, let b = board { r.setMarked(b.markedRanges(id)) }
+            bar.refresh()
+            return
+        }
         guard textView.markedTextRange == nil else { return }
         let sel = textView.selectedRange
         let result = BlockStyler.style(storage, look: look, scale: scale, selection: sel)
@@ -192,6 +240,7 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
     /// Put the text view over the block (screen space), scaled from its styling scale to the board's zoom.
     func place() {
         guard !fullscreen, let b = board, let it = item else { return }
+        if let r = rich { placeRich(r, b, it); return }
         let z = b.canvas.zoomScale
         let box = TextBlockRender.box(it)
         let s = scale
@@ -227,6 +276,11 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
     func lookChanged() {
         guard let it = item else { return }
         look = BlockLook(it)
+        if rich != nil, Practice.isOn(it), let b = board, !fullscreen {
+            // practice needs the keyboard's checks off: the block opens again in the plain editor
+            DispatchQueue.main.async { [weak b] in b?.endWriting(); b?.beginWriting(it) }
+            return
+        }
         if Practice.isOn(it) != (practiceTimer != nil) { applyPractice() }
         restyle()
         measure()
@@ -270,7 +324,7 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
     var suggestions: [Suggestion] { Review.suggestions(text) }
 
     func acceptHere(_ accept: Bool) {
-        guard let s = Review.at(text, textView.selectedRange) else {
+        guard let s = Review.at(text, selectedRange) else {
             board?.tell("Put the caret in a suggestion first.", brief: true)
             return
         }
@@ -280,16 +334,16 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
     func reviewAll(_ accept: Bool) {
         let t = Review.all(text, accept: accept)
         guard t != text else { return }
-        apply(MDEdit(t, NSRange(location: min(textView.selectedRange.location, (t as NSString).length), length: 0)))
+        apply(MDEdit(t, NSRange(location: min(selectedRange.location, (t as NSString).length), length: 0)))
     }
 
     /// Selects the next suggestion after the caret (from the top again at the end).
     func nextSuggestion() {
         let all = suggestions
         guard !all.isEmpty else { board?.tell("No suggestions in this block.", brief: true); return }
-        let caret = NSMaxRange(textView.selectedRange)
+        let caret = NSMaxRange(selectedRange)
         let s = all.first { $0.range.location >= caret } ?? all[0]
-        textView.selectedRange = s.range
+        selectedRange = s.range
         restyle()
         keepCaretVisible()
     }
@@ -313,6 +367,13 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
 
     /// The words changed: style them, size the block, hand them to the board (saved shortly).
     func edited() {
+        if rich != nil {
+            measure()
+            place()
+            board?.typed(id, key: key, text)
+            bar.refresh()
+            return
+        }
         restyle()
         measure()
         place()
@@ -328,6 +389,16 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
         let words = b.content.texts[key] ?? ""
         startText = words
         before = (b.content.items, b.content.texts)
+        if rich != nil {
+            richText = words
+            richSel = NSRange(location: (words as NSString).length, length: 0)
+            if let it = item { look = BlockLook(it) }
+            openRich(caret: "end")
+            measure()
+            place()
+            tabs.refresh()
+            return
+        }
         if text != words {
             applying = true
             textView.text = words
@@ -347,12 +418,21 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
         let m = NSMutableString(string: text)
         m.replaceCharacters(in: c.range, with: c.with)
         let delta = (c.with as NSString).length - c.range.length
-        let sel = textView.selectedRange
+        let sel = selectedRange
         apply(MDEdit(m as String, NSRange(location: max(0, sel.location + delta), length: sel.length)))
     }
 
     /// Make an edit through the text view, so it is one step of the block's undo.
     func apply(_ e: MDEdit) {
+        if let r = rich {
+            let len = (e.text as NSString).length
+            let loc = min(e.selection.location, len)
+            richText = e.text
+            richSel = NSRange(location: loc, length: min(e.selection.length, len - loc))
+            r.setMd(e.text, selection: richSel)
+            edited()
+            return
+        }
         let old = text as NSString
         let new = e.text as NSString
         var p = 0
@@ -378,13 +458,19 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
     // MARK: the edit menu (Comment)
 
     func textView(_ textView: UITextView, editMenuForTextIn range: NSRange, suggestedActions: [UIMenuElement]) -> UIMenu? {
+        guard let extra = menuRows(range) else { return nil }
+        return UIMenu(children: suggestedActions + [UIMenu(options: .displayInline, children: extra)])
+    }
+
+    /// The edit menu's own rows for the words at `range` (markdown): Comment, Read aloud, Make a flashcard, Add a Nexus task.
+    func menuRows(_ range: NSRange) -> [UIMenuElement]? {
         guard let b = board else { return nil }
         let id = self.id
         var extra: [UIMenuElement] = [
             UIAction(title: "Comment", image: UIImage(systemName: "text.bubble")) { [weak b] _ in b?.addComment(on: id, range: range) },
         ]
-        if range.length > 0 {
-            let said = BlockFacts.plainText((textView.text as NSString).substring(with: range))
+        if range.length > 0, NSMaxRange(range) <= (text as NSString).length {
+            let said = BlockFacts.plainText((text as NSString).substring(with: range))
             extra.append(UIAction(title: "Read aloud", image: UIImage(systemName: "speaker.wave.2")) { [weak b] _ in
                 b?.showReadBar()
                 ReadAloud.shared.read(said)
@@ -398,7 +484,7 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
                 b?.addNexusTask(from: id, range: range)
             })
         }
-        return UIMenu(children: suggestedActions + [UIMenu(options: .displayInline, children: extra)])
+        return extra
     }
 
     // MARK: words from the other device
@@ -409,6 +495,15 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
     /// these words and makes the laptop's a draft (LiveBoard.clashDraft).
     @discardableResult
     func takeRemote(base: String?, theirs: String) -> Bool {
+        if let r = rich {
+            let mine = richText
+            guard let merged = LiveBoard.mergeBlock(base: base, mine: mine, theirs: theirs) else { return false }
+            guard merged != mine else { return true }
+            richText = merged
+            r.remote(merged)
+            edited()
+            return true
+        }
         let mine = text
         guard let merged = LiveBoard.mergeBlock(base: base, mine: mine, theirs: theirs) else { return false }
         guard merged != mine else { return true }
@@ -445,6 +540,7 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
     // MARK: the bar's and the keys' actions
 
     func perform(_ action: String) {
+        if let r = rich, performRich(action, r) { return }
         let t = text
         let sel = textView.selectedRange
         switch action {
@@ -480,6 +576,7 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
     /// the address and types `[address](address)` only on OK, so a tap never leaves a stray `[]()`.
     func linkFromBar() {
         if board?.blockLocked(id) == true { board?.tellLocked(id); return }
+        if let r = rich { linkRich(r); return }
         let sel = textView.selectedRange
         if let e = MarkdownEdit.linkWords(text, sel) { apply(e); return }
         let a = UIAlertController(title: "Link", message: "The address to link to.", preferredStyle: .alert)
@@ -505,6 +602,7 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
     /// Types `s` at the caret (the accent row, ¿ and ¡).
     func insert(_ s: String) {
         if board?.blockLocked(id) == true { board?.tellLocked(id); return }
+        if let r = rich { r.cmd("insert", s); return } // (Review mode in the page makes it a suggestion)
         let sel = textView.selectedRange
         if look.review { apply(Review.type(text, range: sel, with: s)); return }
         apply(MDEdit((text as NSString).replacingCharacters(in: sel, with: s), NSRange(location: sel.location + (s as NSString).length, length: 0)))
@@ -549,10 +647,22 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
         practiceTimer = nil
     }
 
-    func setStyle(_ style: BlockStyle) { apply(MarkdownEdit.setStyle(text, textView.selectedRange, style)) }
-    func highlight(_ color: String) { apply(MarkdownEdit.highlight(text, textView.selectedRange, color: color)) }
-    func textColor(_ color: String) { apply(MarkdownEdit.textColor(text, textView.selectedRange, color: color)) }
-    var currentStyle: BlockStyle { MarkdownEdit.style(text, at: textView.selectedRange.location) }
+    func setStyle(_ style: BlockStyle) {
+        if let r = rich { r.cmd("style", style.rawValue); return }
+        apply(MarkdownEdit.setStyle(text, textView.selectedRange, style))
+    }
+    func highlight(_ color: String) {
+        if let r = rich { r.cmd("highlight", color); return }
+        apply(MarkdownEdit.highlight(text, textView.selectedRange, color: color))
+    }
+    func textColor(_ color: String) {
+        if let r = rich { r.cmd("color", color.isEmpty || color == "default" ? nil : color); return }
+        apply(MarkdownEdit.textColor(text, textView.selectedRange, color: color))
+    }
+    var currentStyle: BlockStyle {
+        if let r = rich { return BlockStyle(rawValue: r.state.style) ?? .body }
+        return MarkdownEdit.style(text, at: textView.selectedRange.location)
+    }
 
     // MARK: ticking a checkbox while typing
 
@@ -585,12 +695,21 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
 
     /// Scroll the board so the caret isn't under the keyboard or off the screen.
     func keepCaretVisible() {
+        if let r = rich {
+            guard !fullscreen, let b = board, let c = r.state.caret, r.web.window != nil else { return }
+            scrollBoard(b, toShow: r.web.convert(c, to: b.view))
+            return
+        }
         if fullscreen {
             if let end = textView.selectedTextRange?.end { textView.scrollRectToVisible(textView.caretRect(for: end).insetBy(dx: 0, dy: -40), animated: false) }
             return
         }
         guard let b = board, let end = textView.selectedTextRange?.end, textView.window != nil else { return }
-        let caret = textView.convert(textView.caretRect(for: end), to: b.view)
+        scrollBoard(b, toShow: textView.convert(textView.caretRect(for: end), to: b.view))
+    }
+
+    /// Scroll the board so `caret` (in the board view) is clear of the keyboard and the board's bar.
+    private func scrollBoard(_ b: BoardController, toShow caret: CGRect) {
         guard caret.minY.isFinite, caret.height > 0 else { return }
         let kb = b.view.convert(keyboard, from: nil)
         let bottom = keyboard == .zero ? b.view.bounds.maxY : min(b.view.bounds.maxY, kb.minY)
@@ -604,5 +723,121 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
         var o = b.canvas.contentOffset
         o.y = max(0, o.y + dy)
         b.canvas.setContentOffset(o, animated: false)
+    }
+}
+
+// MARK: the rich-text editor (RichEditor)
+
+extension WritingSession {
+    /// The block's look for the page: at the board's zoom inside the block's box, or as the Writing view's page.
+    func richLook() -> [String: Any] {
+        RichEditor.look(look, scale: scale, traits: editorView.traitCollection, box: fullscreen ? nil : item.map(TextBlockRender.box),
+                        page: fullscreen ? (pageInsets ?? UIEdgeInsets(top: 56, left: 64, bottom: 280, right: 64)) : nil)
+    }
+
+    /// The words into the page (again): caret "start" | "end" | "all", a range (RichEditor.caret), or a point in the page (["x", "y"]).
+    func openRich(caret: Any) {
+        guard let r = rich, let b = board else { return }
+        r.open(md: richText, jsonl: key == id ? b.content.docsOnDisk[id] : nil, look: richLook(), caret: caret,
+               chem: look.chem && !practicing, review: look.review, locked: b.blockLocked(id), lang: item?.string("lang"),
+               marked: fullscreen ? b.markedRanges(id) : [])
+    }
+
+    /// The page's words changed (typing, a command, undo in the page).
+    func richChanged(_ md: String) {
+        guard md != richText else { return }
+        richText = md
+        board?.tellTyping(id)
+        edited()
+    }
+
+    func richStateChanged() {
+        guard let r = rich else { return }
+        richSel = r.state.selection
+        bar.refresh()
+        keepCaretVisible()
+    }
+
+    /// The words' height in the page changed: the web view follows it on the board.
+    func richSized() { place() }
+
+    /// The page loaded again (its process had ended): the open words go back in, the caret at the end.
+    func richReloaded() {
+        guard rich != nil else { return }
+        openRich(caret: RichEditor.caret(richSel))
+    }
+
+    /// The session is over: the page goes back to the pool.
+    func releaseRich() {
+        rich?.release()
+        rich = nil
+    }
+
+    /// The web view over the block (screen space): sized at the styling scale, scaled to the board's zoom, as the plain text view is.
+    func placeRich(_ r: RichEditor, _ b: BoardController, _ it: BoardItem) {
+        let z = b.canvas.zoomScale
+        let s = scale
+        // a block without its own width is as wide as its words: a little room so the page's font never wraps a line the board didn't
+        let slack: CGFloat = TextBlockRender.width(it) == nil ? 6 * s : 0
+        let size = CGSize(width: ceil(displaySize.width * s + slack), height: ceil(max(displaySize.height * s, r.contentHeight)))
+        let web = r.web
+        if web.bounds.size != size { web.bounds = CGRect(origin: .zero, size: size) }
+        web.layer.position = b.viewPoint(board: CGPoint(x: it.x, y: it.y))
+        let k = z / s
+        web.transform = abs(k - 1) < 0.0005 ? .identity : CGAffineTransform(scaleX: k, y: k)
+        tabs.place(over: web.frame)
+        if let fill = look.fill {
+            web.backgroundColor = fill
+            web.layer.cornerRadius = 4 * s
+            web.layer.masksToBounds = true
+        } else {
+            web.backgroundColor = .clear
+            web.layer.cornerRadius = 0
+        }
+    }
+
+    /// The bar's and the keys' actions in the page; false for the ones the app does itself (Done, the Writing view, find).
+    func performRich(_ action: String, _ r: RichEditor) -> Bool {
+        switch action {
+        case "done", "writing", "find": return false
+        case "link": linkFromBar(); return true
+        default: break
+        }
+        if board?.blockLocked(id) == true { board?.tellLocked(id); return true }
+        if action.hasPrefix("dead:") { r.cmd("dead", String(action.dropFirst(5))); return true }
+        if action.hasPrefix("insert:") { r.cmd("insert", String(action.dropFirst(7))); return true }
+        r.cmd(action)
+        return true
+    }
+
+    /// The bar's Link button and ⌘K: the address of the link at the caret to change (empty takes it off), or a new one for the
+    /// selection; with no selection the address is typed as its own link, only on OK.
+    func linkRich(_ r: RichEditor) {
+        let sel = selectedRange
+        let current = r.state.link
+        let a = UIAlertController(title: current == nil ? "Link" : "Edit link", message: "The address to link to.", preferredStyle: .alert)
+        a.addTextField { f in
+            f.placeholder = "https://"
+            f.text = current
+            f.keyboardType = .URL
+            f.autocapitalizationType = .none
+            f.autocorrectionType = .no
+            f.clearButtonMode = .whileEditing
+        }
+        a.addAction(UIAlertAction(title: "Cancel", style: .cancel) { [weak self] _ in self?.focus() })
+        if current != nil {
+            a.addAction(UIAlertAction(title: "Remove link", style: .destructive) { [weak self] _ in
+                self?.focus()
+                r.cmd("link", nil)
+            })
+        }
+        a.addAction(UIAlertAction(title: "OK", style: .default) { [weak self, weak a] _ in
+            guard let self else { return }
+            self.focus()
+            let href = (a?.textFields?.first?.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if href.isEmpty { if current != nil { r.cmd("link", nil) }; return }
+            if sel.length > 0 || current != nil { r.cmd("link", href) } else { r.cmd("insertLink", ["text": href, "href": href]) }
+        })
+        board?.presentOver(a)
     }
 }

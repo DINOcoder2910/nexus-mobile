@@ -49,6 +49,8 @@ struct SettingsView: View {
                 Text("Every key and gesture that does something in Nexus, on the iPad and on the laptop, and changing them.")
             }
 
+            NotesSettings()
+
             SyncSettings()
 
             CalendarSettings()
@@ -110,6 +112,20 @@ struct FolderSetupView: View {
         .navigationTitle("Nexus")
         .fileImporter(isPresented: $picking, allowedContentTypes: [.folder]) { result in
             if case .success(let url) = result { store.useFolder(url) }
+        }
+    }
+}
+
+/// Settings › Notes: which editor a board's typed blocks open in (the laptop's Settings › Notes "Rich-text editor").
+struct NotesSettings: View {
+    @AppStorage(RichEditor.settingKey) private var rich = true
+
+    var body: some View {
+        Section {
+            Toggle("Rich-text editor", isOn: $rich)
+        } header: { Text("Notes") } footer: {
+            Text(rich ? "Blocks open in the laptop's editor: formatting shows as you type, and each block keeps the same file as on the laptop and in Google Docs."
+                 : "Blocks open in the iPad's earlier editor. The files stay the same either way.")
         }
     }
 }

@@ -146,6 +146,14 @@ const keys = new Plugin({
       if (mod && !e.shiftKey && !e.altKey && STYLES[e.key]) { e.preventDefault(); return R.setStyle(STYLES[e.key])(v.state, v.dispatch); }
       return false;
     },
+    handleDOMEvents: {
+      // the system's own Bold / Italic / Underline (the edit menu's Format, ⌘B when the app doesn't take it): the doc's marks, not the page's
+      beforeinput(v, e) {
+        const mark = { formatBold: 'b', formatItalic: 'i', formatUnderline: 'u', formatStrikeThrough: 's' }[e.inputType];
+        if (!mark) return false;
+        e.preventDefault(); R.toggleMark(mark)(v.state, v.dispatch); return true;
+      },
+    },
   },
 });
 
@@ -284,10 +292,18 @@ window.rich = {
       case 'outdent': return run(R.indent(-1));
       case 'align': return run(R.setAlign(arg || 'left'));
       case 'link': return run(R.setLink(arg || null));
+      case 'dead': dead = ACCENT_KEYS[arg] ? arg : null; view.focus(); return true; // a native accent key (the app's key list took it first)
       case 'undo': return run(undo);
       case 'redo': return run(redo);
       case 'divider': { view.dispatch(view.state.tr.replaceSelectionWith(schema.nodes.divider.create()).scrollIntoView()); view.focus(); return true; }
       case 'insert': { if (!arg) return false; view.dispatch(view.state.tr.insertText(String(arg)).scrollIntoView()); view.focus(); return true; }
+      // a link typed in: arg { text, href } at the caret (the bar's Link with nothing selected)
+      case 'insertLink': {
+        if (!arg || !arg.href) return false;
+        const t = String(arg.text || arg.href), { from } = view.state.selection;
+        const tr = view.state.tr.insertText(t); tr.addMark(from, from + t.length, schema.marks.link.create({ href: String(arg.href) })).removeStoredMark(schema.marks.link);
+        view.dispatch(tr.scrollIntoView()); view.focus(); return true;
+      }
       case 'selectAll': { view.dispatch(view.state.tr.setSelection(new AllSelection(view.state.doc))); view.focus(); return true; }
       default: return false;
     }

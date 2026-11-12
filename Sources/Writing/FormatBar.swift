@@ -320,7 +320,7 @@ final class FormatBar: UIInputView {
                 b?.setBlockField(id, "chip", .bool(true))
             })
         }
-        let sel = s.textView.selectedRange
+        let sel = s.selectedRange
         let shown = b.marksShown
         out.append(UIAction(title: "Add a Nexus task", image: UIImage(systemName: "checkmark.circle.badge.plus")) { [weak b] _ in b?.addNexusTask(from: id, range: sel) })
         out.append(UIMenu(title: "Comments", image: UIImage(systemName: "text.bubble"), children: [
