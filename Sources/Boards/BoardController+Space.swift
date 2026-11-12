@@ -2,9 +2,11 @@ import UIKit
 import PencilKit
 import NexusCore
 
-/// Moving what is on the board up or down to make or close space: Make room and Push things below (typing) and the Insert space
-/// tool. On a PDF page, Insert space opens the page up at the line by default (board.json `space`, docs/data-format.md "Space in a
-/// PDF"); the tool row's other choice moves the whole page down instead. Dragging up takes empty space away again.
+/// Moving what is on the board to make or close space: Make room and Push things below (typing) and the Insert space tool. On a
+/// PDF page, Insert space opens the page up at the line by default (board.json `space`, docs/data-format.md "Space in a PDF"); the
+/// tool row's other choice keeps pages whole and puts the room between them. The tool's options (NexusCore InsertSpace, the
+/// approved redesign's table): everything past the line or only this column, down or following the drag (sideways makes room to
+/// the right), whole lines of the paper or free, closing that stops at content or not, what a tap adds, and what comes after.
 extension BoardController {
     /// Moves every stroke and item whose top is at or below `line` down by `by` (strokes keep their ids). One undo step when named.
     func shift(below line: CGFloat, by: CGFloat, except id: String, name: String?) {
@@ -22,25 +24,57 @@ extension BoardController {
     /// The moving itself, on `content` (strokes must be in step with the canvas first). True when anything moved.
     @discardableResult
     func moveBelow(_ line: CGFloat, by: CGFloat, except: Set<String>) -> Bool {
+        moveAfter(line, by: by, except: except, sideways: false, band: nil)
+    }
+
+    /// Moves everything that starts at or past `line` (down, or right when `sideways`) by `by`, only within `band` when given.
+    @discardableResult
+    func moveAfter(_ line: CGFloat, by: CGFloat, except: Set<String>, sideways: Bool, band: ClosedRange<CGFloat>?) -> Bool {
+        let band = band.map { Double($0.lowerBound)...Double($0.upperBound) }
+        let axis = sideways ? 0 : 1
         var moved = false
         for i in content.strokes.indices {
             let s = content.strokes[i]
-            let top = s.points.map { $0.count >= 2 ? $0[1] : .infinity }.min() ?? .infinity
-            guard Double(line) <= top else { continue }
+            guard let b = strokeBox(s), InsertSpace.moves(b, line: Double(line), sideways: sideways, band: band) else { continue }
             content.strokes[i].points = s.points.map { p in
                 var q = p
-                if q.count >= 2 { q[1] = InkConvert.r2(q[1] + Double(by)) }
+                if q.count >= 2 { q[axis] = InkConvert.r2(q[axis] + Double(by)) }
                 return q
             }
             moved = true
         }
         for i in content.items.indices where !except.contains(content.items[i].id) {
             let it = content.items[i]
-            guard box(of: it).minY >= line else { continue }
-            content.items[i] = it.with("y", .number((it.y + Double(by)).rounded()))
+            guard InsertSpace.moves(spaceBox(box(of: it)), line: Double(line), sideways: sideways, band: band) else { continue }
+            content.items[i] = sideways ? it.with("x", .number((it.x + Double(by)).rounded()))
+                                        : it.with("y", .number((it.y + Double(by)).rounded()))
             moved = true
         }
         return moved
+    }
+
+    func strokeBox(_ s: BoardStroke) -> InsertSpace.Box? {
+        let pts = s.points.filter { $0.count >= 2 }
+        guard let first = pts.first else { return nil }
+        var b = InsertSpace.Box(minX: first[0], minY: first[1], maxX: first[0], maxY: first[1])
+        for p in pts {
+            b.minX = min(b.minX, p[0]); b.maxX = max(b.maxX, p[0])
+            b.minY = min(b.minY, p[1]); b.maxY = max(b.maxY, p[1])
+        }
+        return b
+    }
+
+    func spaceBox(_ r: CGRect) -> InsertSpace.Box {
+        InsertSpace.Box(minX: Double(r.minX), minY: Double(r.minY), maxX: Double(r.maxX), maxY: Double(r.maxY))
+    }
+
+    /// For "Only this column": the column (or row, sideways) the touch at `p` is in, from what is on the board; nil when empty.
+    func spaceColumn(at p: CGPoint, line: CGFloat, sideways: Bool) -> ClosedRange<CGFloat>? {
+        syncStrokes()
+        var boxes = content.strokes.compactMap(strokeBox)
+        boxes += content.items.filter { !BoardLinks.isLink($0) }.map { spaceBox(box(of: $0)) }
+        guard let r = InsertSpace.band(seed: Double(sideways ? p.y : p.x), line: Double(line), boxes: boxes, sideways: sideways) else { return nil }
+        return CGFloat(r.lowerBound)...CGFloat(r.upperBound)
     }
 
     // MARK: PDF pages
@@ -53,10 +87,12 @@ extension BoardController {
         let above: BoardFiles.PdfSegment?
     }
 
-    func pdfSpot(_ y: CGFloat) -> PdfSpot? {
+    /// The printout under `y` (only one that overlaps `band`, when one is given).
+    func pdfSpot(_ y: CGFloat, band: ClosedRange<CGFloat>? = nil) -> PdfSpot? {
         for (id, p) in pdfs.sorted(by: { $0.key < $1.key }) {
             let b = p.box
             guard y > b.minY, y < b.maxY else { continue }
+            if let band, b.maxX < band.lowerBound || b.minX > band.upperBound { continue }
             if let s = p.segments.first(where: { CGFloat($0.y) <= y && y < CGFloat($0.y + $0.h) }) {
                 return PdfSpot(id: id, printout: p, inside: s, above: nil)
             }
@@ -87,8 +123,9 @@ extension BoardController {
 
     // MARK: Insert space
 
-    /// Room for `by` at `line` (board units): everything below moves down; a PDF page under the line opens up there.
-    func insertSpace(at line: CGFloat, by: CGFloat) {
+    /// Room for `by` at `line` (board units): everything past it moves down (or right, `sideways`), only within `band` when given.
+    /// Going down, a PDF page under the line opens up there (or, kept whole, the room goes above the page).
+    func insertSpace(at line: CGFloat, by: CGFloat, sideways: Bool = false, band: ClosedRange<CGFloat>? = nil) {
         guard !readOnly, by >= 1 else { return }
         syncStrokes()
         let beforeStrokes = content.strokes
@@ -96,7 +133,7 @@ extension BoardController {
         var line = line
         var except = Set<String>()
         var opened = false
-        if let spot = pdfSpot(line), let i = content.items.firstIndex(where: { $0.id == spot.id }) {
+        if !sideways, let spot = pdfSpot(line, band: band), let i = content.items.firstIndex(where: { $0.id == spot.id }) {
             let it = content.items[i]
             var place: (page: Int, at: Double)?
             if let s = spot.inside {
@@ -119,7 +156,8 @@ extension BoardController {
                 opened = true
             }
         }
-        moveBelow(line, by: by, except: except)
+        let moved = moveAfter(line, by: by, except: except, sideways: sideways, band: band)
+        guard moved || opened else { toast(band == nil ? "Nothing past the line to move" : "Nothing in this column to move"); return }
         redrawStrokes()
         registerBoardUndo(strokes: beforeStrokes, items: beforeItems, "Insert space")
         rebuildItems()
@@ -129,17 +167,18 @@ extension BoardController {
         changed()
     }
 
-    /// Takes away up to `want` of empty space just above `line`: everything below moves up. Only empty space goes (nothing is
-    /// pushed over anything), and on a PDF only room that was opened in it.
-    func removeSpace(at line: CGFloat, want: CGFloat) {
+    /// Takes away up to `want` of space just before `line`: everything past it moves back. Stopping at content (the default), only
+    /// empty space goes and nothing is pushed over anything; on a PDF only room that was opened in it goes either way.
+    func removeSpace(at line: CGFloat, want: CGFloat, sideways: Bool = false, band: ClosedRange<CGFloat>? = nil) {
         guard !readOnly, want >= 1 else { return }
         syncStrokes()
         let beforeStrokes = content.strokes
         let beforeItems = (content.items, content.texts)
+        let stop = BoardTools.shared.spaceClosing == .stopAtContent
         var except = Set<String>()
         var can = want
         var pdfPlace: (index: Int, page: Int, at: Double)?
-        let spot = pdfSpot(line)
+        let spot = sideways ? nil : pdfSpot(line, band: band)
         if let spot {
             guard spot.inside == nil, let a = spot.above, let i = content.items.firstIndex(where: { $0.id == spot.id }) else {
                 toast("That's on a PDF page: there's no empty space to take away")
@@ -151,27 +190,32 @@ extension BoardController {
             except.insert(spot.id)
             pdfPlace = (i, a.page + 1, a.bottom)
         }
-        // the lowest thing above the line
-        var bottom = -CGFloat.infinity
-        for s in content.strokes {
-            let ys = s.points.compactMap { $0.count >= 2 ? CGFloat($0[1]) : nil }
-            guard let top = ys.min(), top < line, let low = ys.max() else { continue }
-            bottom = max(bottom, low)
+        if stop {
+            // the last thing before the line (in the band, when there is one)
+            let dband = band.map { Double($0.lowerBound)...Double($0.upperBound) }
+            func inBand(_ b: InsertSpace.Box) -> Bool {
+                guard let dband else { return true }
+                let (lo, hi) = sideways ? (b.minY, b.maxY) : (b.minX, b.maxX)
+                return hi >= dband.lowerBound && lo <= dband.upperBound
+            }
+            var end = -CGFloat.infinity
+            var boxes = content.strokes.compactMap(strokeBox)
+            boxes += content.items.filter { !except.contains($0.id) && !BoardLinks.isLink($0) }.map { spaceBox(box(of: $0)) }
+            for b in boxes where inBand(b) {
+                let (start, stopAt) = sideways ? (b.minX, b.maxX) : (b.minY, b.maxY)
+                if CGFloat(start) < line { end = max(end, CGFloat(stopAt)) }
+            }
+            if let spot {
+                for s in spot.printout.segments where CGFloat(s.y) < line { end = max(end, CGFloat(s.y + s.h)) }
+            }
+            if end > -CGFloat.infinity { can = min(can, line - end - 2) }
         }
-        for it in content.items where !except.contains(it.id) && !BoardLinks.isLink(it) {
-            let b = box(of: it)
-            if b.minY < line { bottom = max(bottom, b.maxY) }
-        }
-        if let spot {
-            for s in spot.printout.segments where CGFloat(s.y) < line { bottom = max(bottom, CGFloat(s.y + s.h)) }
-        }
-        if bottom > -CGFloat.infinity { can = min(can, line - bottom - 2) }
         can = can.rounded(.down)
-        guard can >= 1 else { toast("No empty space above to take away"); return }
+        guard can >= 1 else { toast("No empty space before the line to take away"); return }
         if let p = pdfPlace {
             content.items[p.index] = withSpace(content.items[p.index], page: p.page, at: p.at, gap: -Double(can))
         }
-        moveBelow(line, by: -can, except: except)
+        moveAfter(line, by: -can, except: except, sideways: sideways, band: band)
         redrawStrokes()
         registerBoardUndo(strokes: beforeStrokes, items: beforeItems, "Remove space")
         rebuildItems()
@@ -181,45 +225,91 @@ extension BoardController {
 
     // MARK: the tool
 
-    /// Drag down (Pencil or a finger) to add space at the line where you start, up to take it away. Snaps to the paper's lines.
+    /// Drag down (Pencil or a finger) to add space at the line where you start, up to take it away; sideways too when the option
+    /// lets it. The line and the amount snap to the paper unless Size is Free.
     @objc func spacePanned(_ g: UIPanGestureRecognizer) {
         let z = canvas.zoomScale
+        let tools = BoardTools.shared
         switch g.state {
         case .began:
             let t = g.translation(in: canvas)
             let now = boardPoint(g)
-            var y = now.y - t.y / z
-            if paper.kind != .plain { y = CGFloat(paper.snap(Double(y))) }
-            spaceStart = y
-            showSpaceGuide(from: y, by: t.y / z)
+            let start = CGPoint(x: now.x - t.x / z, y: now.y - t.y / z)
+            let side = InsertSpace.sideways(dx: Double(t.x), dy: Double(t.y), direction: tools.spaceDirection)
+            let at = CGFloat(InsertSpace.line(Double(side ? start.x : start.y), paper: paper, size: tools.spaceSize, sideways: side))
+            spaceSideways = side
+            spaceStart = at
+            spaceBandRange = tools.spaceMoves == .column ? spaceColumn(at: start, line: at, sideways: side) : nil
+            if tools.spaceMoves == .column, spaceBandRange == nil {
+                spaceStart = nil
+                toast("Nothing in this column to move")
+                return
+            }
+            showSpaceGuide(from: at, by: spaceAmount(side ? t.x / z : t.y / z))
         case .changed:
-            guard let y = spaceStart else { return }
-            showSpaceGuide(from: y, by: g.translation(in: canvas).y / z)
+            guard let at = spaceStart else { return }
+            let t = g.translation(in: canvas)
+            showSpaceGuide(from: at, by: spaceAmount(spaceSideways ? t.x / z : t.y / z))
         case .ended:
-            guard let y = spaceStart else { return }
+            guard let at = spaceStart else { return }
             spaceStart = nil
             hideSpaceGuide()
-            let by = (g.translation(in: canvas).y / z).rounded()
-            if by >= 4 { insertSpace(at: y, by: by) } else if by <= -4 { removeSpace(at: y, want: -by) }
+            let t = g.translation(in: canvas)
+            let by = spaceAmount(spaceSideways ? t.x / z : t.y / z)
+            if by >= 4 { insertSpace(at: at, by: by, sideways: spaceSideways, band: spaceBandRange) }
+            else if by <= -4 { removeSpace(at: at, want: -by, sideways: spaceSideways, band: spaceBandRange) }
+            else { return }
+            spaceUsed()
         default:
             spaceStart = nil
             hideSpaceGuide()
         }
     }
 
+    /// A drag's length as the room it makes (whole lines or squares when snapping).
+    func spaceAmount(_ raw: CGFloat) -> CGFloat {
+        CGFloat(InsertSpace.amount(Double(raw), paper: paper, size: BoardTools.shared.spaceSize, sideways: spaceSideways))
+    }
+
+    /// A tap without dragging: the set amount of room at that line (half a screen by default).
+    @objc func spaceTapped(_ g: UITapGestureRecognizer) {
+        let tools = BoardTools.shared
+        let by = CGFloat(InsertSpace.tapAmount(tools.spaceTap, screen: Double(visibleBoard.height), paper: paper, size: tools.spaceSize))
+        guard by >= 1 else { return }
+        let p = boardPoint(g)
+        let at = CGFloat(InsertSpace.line(Double(p.y), paper: paper, size: tools.spaceSize))
+        var band: ClosedRange<CGFloat>?
+        if tools.spaceMoves == .column {
+            guard let b = spaceColumn(at: p, line: at, sideways: false) else { toast("Nothing in this column to move"); return }
+            band = b
+        }
+        insertSpace(at: at, by: by, band: band)
+        spaceUsed()
+    }
+
+    /// After one use: back to the pen you had (the default), or stay on Insert space.
+    func spaceUsed() {
+        let tools = BoardTools.shared
+        guard tools.spaceAfter == .pen, tools.tool == .space else { return }
+        let back = tools.previousTool.inks && tools.previousTool != .shapes ? tools.previousTool : .pen
+        selectTool(back)
+    }
+
     func setUpSpaceGuide() {
         spaceGuide.isUserInteractionEnabled = false
         spaceGuide.frame = view.bounds
         spaceGuide.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        spaceBand.fillColor = UIColor.systemBlue.withAlphaComponent(0.1).cgColor
-        spaceLine.strokeColor = UIColor.systemBlue.cgColor
+        let green = UIColor(red: 0.13, green: 0.6, blue: 0.33, alpha: 1)
+        spaceBand.fillColor = green.withAlphaComponent(0.1).cgColor
+        spaceLine.strokeColor = green.cgColor
         spaceLine.lineWidth = 1.5
         spaceLine.lineDashPattern = [6, 4]
+        spaceLine.fillColor = UIColor.clear.cgColor
         spaceGuide.layer.addSublayer(spaceBand)
         spaceGuide.layer.addSublayer(spaceLine)
         spaceLabel.font = .systemFont(ofSize: 13, weight: .semibold)
         spaceLabel.textColor = .white
-        spaceLabel.backgroundColor = .systemBlue
+        spaceLabel.backgroundColor = green
         spaceLabel.layer.cornerRadius = 6
         spaceLabel.clipsToBounds = true
         spaceLabel.textAlignment = .center
@@ -228,23 +318,47 @@ extension BoardController {
         view.addSubview(spaceGuide)
     }
 
-    func showSpaceGuide(from y: CGFloat, by: CGFloat) {
-        let z = canvas.zoomScale
-        let sy = (y + offset.y) * z - canvas.contentOffset.y
-        let ey = sy + by * z
-        let w = view.bounds.width
-        spaceBand.path = UIBezierPath(rect: CGRect(x: 0, y: min(sy, ey), width: w, height: abs(ey - sy))).cgPath
+    /// The line where the room goes, the band it opens (or closes), and what will happen, on screen while dragging. With only this
+    /// column moving, the line and band span just the column.
+    func showSpaceGuide(from at: CGFloat, by: CGFloat) {
+        let z = canvas.zoomScale, o = canvas.contentOffset
+        let side = spaceSideways
+        let toScreenX = { (x: CGFloat) in (x + self.offset.x) * z - o.x }
+        let toScreenY = { (y: CGFloat) in (y + self.offset.y) * z - o.y }
+        let s0 = side ? toScreenX(at) : toScreenY(at), s1 = s0 + by * z
+        // across the drag: the whole screen, or the column
+        var a0: CGFloat = 0, a1: CGFloat = side ? view.bounds.height : view.bounds.width
+        if let band = spaceBandRange {
+            a0 = side ? toScreenY(band.lowerBound) : toScreenX(band.lowerBound)
+            a1 = side ? toScreenY(band.upperBound) : toScreenX(band.upperBound)
+            a0 -= 12; a1 += 12
+        }
+        let rect = side ? CGRect(x: min(s0, s1), y: a0, width: abs(s1 - s0), height: a1 - a0)
+                        : CGRect(x: a0, y: min(s0, s1), width: a1 - a0, height: abs(s1 - s0))
+        spaceBand.path = UIBezierPath(rect: rect).cgPath
         let line = UIBezierPath()
-        line.move(to: CGPoint(x: 0, y: sy))
-        line.addLine(to: CGPoint(x: w, y: sy))
+        line.move(to: side ? CGPoint(x: s0, y: a0) : CGPoint(x: a0, y: s0))
+        line.addLine(to: side ? CGPoint(x: s0, y: a1) : CGPoint(x: a1, y: s0))
         spaceLine.path = line.cgPath
         let amount = Int(abs(by).rounded())
-        let onPdf = pdfSpot(y)?.inside != nil
-        let what = by >= 0 ? (onPdf && BoardTools.shared.spaceOpensPage ? "Open up the page" : "Insert space") : "Take space away"
+        let what: String
+        if by < 0 {
+            what = "Take space away"
+        } else if side {
+            what = spaceBandRange == nil ? "Room to the right" : "Room to the right, this row"
+        } else {
+            let pdf = pdfSpot(at, band: spaceBandRange)
+            if pdf?.inside != nil {
+                what = BoardTools.shared.spaceOpensPage ? "Open up the page" : "Room between pages: the page stays whole"
+            } else {
+                what = spaceBandRange == nil ? "Insert space" : "Insert space, this column"
+            }
+        }
         spaceLabel.text = "  \(what) · \(amount)  "
         spaceLabel.sizeToFit()
         spaceLabel.frame.size.height = 24
-        spaceLabel.center = CGPoint(x: w / 2, y: max(sy, ey) + 18)
+        spaceLabel.center = side ? CGPoint(x: max(s0, s1) + spaceLabel.bounds.width / 2 + 8, y: (a0 + a1) / 2)
+                                 : CGPoint(x: (max(0, a0) + min(view.bounds.width, a1)) / 2, y: max(s0, s1) + 18)
         spaceGuide.isHidden = false
         view.bringSubviewToFront(spaceGuide)
         view.bringSubviewToFront(bar)

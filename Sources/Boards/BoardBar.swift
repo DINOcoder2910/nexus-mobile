@@ -226,6 +226,29 @@ final class BoardBar: UIView {
         return UIButton(configuration: c, primaryAction: UIAction { _ in action() })
     }
 
+    /// A pill that shows an option's choice (`show` words it); its menu, titled with the option, picks another.
+    private func choice<T: Equatable>(_ option: String, _ choices: [(String, T)], _ current: T, show: ((String) -> String)? = nil,
+                                      set: @escaping (T) -> Void) -> UIButton {
+        let now = choices.first { $0.1 == current }?.0 ?? choices.first?.0 ?? ""
+        var c = UIButton.Configuration.gray()
+        c.title = show?(now) ?? now
+        c.image = UIImage(systemName: "chevron.down", withConfiguration: UIImage.SymbolConfiguration(pointSize: 10, weight: .semibold))
+        c.imagePlacement = .trailing
+        c.imagePadding = 4
+        c.cornerStyle = .capsule
+        c.buttonSize = .small
+        let b = UIButton(configuration: c)
+        b.menu = UIMenu(title: option, children: choices.map { name, value in
+            UIAction(title: name, state: value == current ? .on : .off) { [weak self] _ in
+                set(value)
+                self?.refresh()
+            }
+        })
+        b.showsMenuAsPrimaryAction = true
+        b.accessibilityLabel = option + ": " + now
+        return b
+    }
+
     private func segmented(_ items: [String], selected: Int, action: @escaping (Int) -> Void) -> UISegmentedControl {
         let s = UISegmentedControl(items: items)
         s.selectedSegmentIndex = selected
@@ -378,12 +401,23 @@ final class BoardBar: UIView {
                 }
             }
         } else if t == .space {
-            rowStack.addArrangedSubview(label("Drag down where you want room, up to take empty space away."))
-            if !b.pdfs.isEmpty {
-                rowStack.addArrangedSubview(segmented(["Open up the page", "Move the whole page"], selected: tools.spaceOpensPage ? 0 : 1) { i in
-                    tools.spaceOpensPage = i == 0
-                })
-            }
+            rowStack.addArrangedSubview(label(tools.spaceDirection == .follow ? "Drag down or right for room, back to close it." : "Drag down for room, up to close it."))
+            // each option a pill showing its choice; its menu names the option and offers the others (defaults as approved)
+            rowStack.addArrangedSubview(choice("What moves", [("Everything below", InsertSpace.Moves.everything), ("Only this column", .column)],
+                                               tools.spaceMoves) { tools.spaceMoves = $0 })
+            rowStack.addArrangedSubview(choice("On a PDF page", [("Open up the page", true), ("Between pages only", false)],
+                                               tools.spaceOpensPage) { tools.spaceOpensPage = $0 })
+            rowStack.addArrangedSubview(choice("Direction", [("Follow my drag", InsertSpace.Direction.follow), ("Down only", .down)],
+                                               tools.spaceDirection) { tools.spaceDirection = $0 })
+            rowStack.addArrangedSubview(choice("Size", [("Snap to the background", InsertSpace.Size.snap), ("Free", .free)],
+                                               tools.spaceSize) { tools.spaceSize = $0 })
+            rowStack.addArrangedSubview(choice("Closing space", [("Stop at content", InsertSpace.Closing.stopAtContent), ("Free", .free)],
+                                               tools.spaceClosing, show: { "Closing: " + $0 }) { tools.spaceClosing = $0 })
+            rowStack.addArrangedSubview(choice("Tap without dragging", [("Half a screen", InsertSpace.Tap.half), ("Three lines", .threeLines),
+                                                                         ("A full screen", .full), ("Nothing", .nothing)],
+                                               tools.spaceTap, show: { "Tap: " + $0.lowercased() }) { tools.spaceTap = $0 })
+            rowStack.addArrangedSubview(choice("After one use", [("Back to the pen", InsertSpace.After.pen), ("Stay on Insert space", .stay)],
+                                               tools.spaceAfter) { tools.spaceAfter = $0 })
         } else if t == .text {
             rowStack.addArrangedSubview(label("Tap where you want to type."))
         } else if t == .lasso {
