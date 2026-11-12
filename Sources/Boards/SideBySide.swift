@@ -1,10 +1,12 @@
 import UIKit
 import PDFKit
+import UniformTypeIdentifiers
 import NexusCore
 
-/// Side by side: the board on the left and, when asked, a second pane on the right: another board, the same board again (each
-/// pane its own place and zoom; the two save through the same merge as the laptop and the iPad), or one of the board's PDFs on
-/// its own. Drag the divider to share the width; close the second pane from its own bar.
+/// Side by side: the board on the left and, when asked, a second pane on the right: Today or the Calendar (to plan while you write),
+/// another board, the same board again (each pane its own place and zoom; the two save through the same merge as the laptop and the
+/// iPad), one of the board's PDFs on its own, or any PDF from the Files app. Drag the divider to share the width; close the second
+/// pane from its own bar.
 final class BoardSplitController: UIViewController {
     let main: UINavigationController
     private(set) var side: UIViewController?
@@ -15,6 +17,10 @@ final class BoardSplitController: UIViewController {
     let root: URL
     weak var store: NexusStore?
     var onSaved: ((String) -> Void)?
+    /// Makes an app screen for the second pane (BoardPanes, which has the app's environment); the closure it is given closes the pane.
+    var makeScreen: ((SideScreen, @escaping () -> Void) -> UIViewController)?
+    /// Keeps the Files picker's delegate while it is open.
+    private var filesPick: PdfFilesPick?
 
     init(board: BoardController, root: URL) {
         main = BoardNavigationController(rootViewController: board)
@@ -98,6 +104,43 @@ final class BoardSplitController: UIViewController {
     func showPDF(_ url: URL, title: String) {
         show(PdfPaneController(url: url, title: title, onClose: { [weak self] in self?.closeSide() }))
     }
+
+    /// Today or the Calendar in the second pane (the app's own screen, with its own navigation).
+    func showScreen(_ screen: SideScreen) {
+        guard let vc = makeScreen?(screen, { [weak self] in self?.closeSide() }) else { return }
+        let nav = UINavigationController(rootViewController: vc)
+        nav.setNavigationBarHidden(true, animated: false) // the screen shows its own bar
+        show(nav)
+    }
+
+    /// A PDF from the Files app, read where it is (nothing is copied into the data folder).
+    func pickPDFFromFiles() {
+        let pick = PdfFilesPick { [weak self] url in
+            self?.filesPick = nil
+            guard let url else { return }
+            self?.showPDF(url, title: url.deletingPathExtension().lastPathComponent)
+        }
+        filesPick = pick
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.pdf], asCopy: true)
+        picker.delegate = pick
+        picker.allowsMultipleSelection = false
+        present(picker, animated: true)
+    }
+}
+
+/// The app screens Side by side can put beside a board.
+enum SideScreen: String, CaseIterable {
+    case today, calendar
+    var title: String { self == .today ? "Today" : "Calendar" }
+    var symbol: String { self == .today ? "sun.max" : "calendar" }
+}
+
+/// The Files picker's answer for Side by side (a copy in the app's temporary folder, so it stays readable).
+final class PdfFilesPick: NSObject, UIDocumentPickerDelegate {
+    let done: (URL?) -> Void
+    init(done: @escaping (URL?) -> Void) { self.done = done }
+    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) { done(urls.first) }
+    func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) { done(nil) }
 }
 
 /// One of a board's PDFs on its own: scroll and zoom it, search it, select its words.
@@ -136,12 +179,17 @@ extension BoardController {
         return nil
     }
 
-    /// Side by side's choices: this board again, another board, or one of this board's PDFs.
+    /// Side by side's choices: Today, the Calendar, this board again, another board, one of this board's PDFs, or a PDF from Files.
     func sideBySideMenu() -> [UIMenuElement] {
         guard let split else { return [] }
         var out: [UIMenuElement] = []
         if split.side != nil {
             out.append(UIAction(title: "Close the second pane", image: UIImage(systemName: "xmark.rectangle")) { [weak split] _ in split?.closeSide() })
+        }
+        if split.makeScreen != nil {
+            out.append(UIMenu(options: .displayInline, children: SideScreen.allCases.map { s in
+                UIAction(title: s.title, image: UIImage(systemName: s.symbol)) { [weak split] _ in split?.showScreen(s) }
+            }))
         }
         out.append(UIAction(title: "This board again", subtitle: "Look at two places of it at once", image: UIImage(systemName: "rectangle.split.2x1")) { [weak self, weak split] _ in
             guard let self else { return }
@@ -163,6 +211,7 @@ extension BoardController {
                 return UIAction(title: name) { [weak split] _ in split?.showPDF(url, title: name) }
             }))
         }
+        out.append(UIAction(title: "A PDF from Files…", image: UIImage(systemName: "folder")) { [weak split] _ in split?.pickPDFFromFiles() })
         return out
     }
 }

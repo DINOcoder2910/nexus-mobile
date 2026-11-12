@@ -1,5 +1,6 @@
 import UIKit
 import PencilKit
+import NexusCore
 
 /// The board's tools, in the bar (the redesign's Option B): what the Pencil does, each pen's colour and width, and the board
 /// settings that go with them. Kept between boards and launches (UserDefaults), the same on every board.
@@ -122,6 +123,32 @@ final class BoardTools {
         set { d.set(newValue, forKey: "board.spaceOpensPage") }
     }
 
+    // Insert space's other options (NexusCore InsertSpace); defaults as approved in the redesign proposal.
+    var spaceMoves: InsertSpace.Moves {
+        get { InsertSpace.Moves(rawValue: d.string(forKey: "board.spaceMoves") ?? "") ?? .everything }
+        set { d.set(newValue.rawValue, forKey: "board.spaceMoves") }
+    }
+    var spaceDirection: InsertSpace.Direction {
+        get { InsertSpace.Direction(rawValue: d.string(forKey: "board.spaceDirection") ?? "") ?? .follow }
+        set { d.set(newValue.rawValue, forKey: "board.spaceDirection") }
+    }
+    var spaceSize: InsertSpace.Size {
+        get { InsertSpace.Size(rawValue: d.string(forKey: "board.spaceSize") ?? "") ?? .snap }
+        set { d.set(newValue.rawValue, forKey: "board.spaceSize") }
+    }
+    var spaceClosing: InsertSpace.Closing {
+        get { InsertSpace.Closing(rawValue: d.string(forKey: "board.spaceClosing") ?? "") ?? .stopAtContent }
+        set { d.set(newValue.rawValue, forKey: "board.spaceClosing") }
+    }
+    var spaceTap: InsertSpace.Tap {
+        get { InsertSpace.Tap(rawValue: d.string(forKey: "board.spaceTap") ?? "") ?? .half }
+        set { d.set(newValue.rawValue, forKey: "board.spaceTap") }
+    }
+    var spaceAfter: InsertSpace.After {
+        get { InsertSpace.After(rawValue: d.string(forKey: "board.spaceAfter") ?? "") ?? .pen }
+        set { d.set(newValue.rawValue, forKey: "board.spaceAfter") }
+    }
+
     var fingersDraw: Bool {
         get { d.bool(forKey: "board.fingersDraw") }
         set { d.set(newValue, forKey: "board.fingersDraw") }
@@ -144,9 +171,11 @@ final class BoardTools {
         switch t {
         case .pen, .pencil, .highlighter, .shapes:
             let type: PKInkingTool.InkType = t == .pencil ? .pencil : t == .highlighter ? .marker : penKind.ink
-            var c = InkConvert.color(color(t))
-            if dark { c = PKInkingTool.convertColor(c, from: .light, to: .dark) }
-            return PKInkingTool(type, color: c, width: width(t))
+            // the tool's colour is always the light-board colour: a dark canvas shows it converted (black as white) and the stroke keeps
+            // the light colour, so it turns back when the board does. Converting it here as well made ink drawn on a dark board come out
+            // dark grey on dark, and stay grey on a light board.
+            _ = dark
+            return PKInkingTool(type, color: InkConvert.color(color(t)), width: width(t))
         case .eraser:
             return eraserPixel ? PKEraserTool(.bitmap, width: width(.eraser)) : PKEraserTool(.vector)
         case .lasso:

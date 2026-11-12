@@ -229,15 +229,14 @@ final class NotebookActions {
         store.openBoard = .init(path: rel, focus: nil)
     }
 
-    /// New board from scanned pages: they become one PDF (a printout down the board).
+    /// New board from scanned pages: they become one PDF with its words readable (HandoutScan.swift), a printout down the board,
+    /// the board and the PDF named after the handout's title.
     func newBoard(fromScan pages: [UIImage], in dir: String, _ store: NexusStore) {
-        let doc = PDFDocument()
-        for (i, img) in pages.enumerated() { if let p = PDFPage(image: img) { doc.insert(p, at: i) } }
-        guard doc.pageCount > 0, let data = doc.dataRepresentation() else { return }
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd HHmm"
-        do { try newBoard(pdfData: data, named: "Scan " + f.string(from: Date()), in: dir, store) }
-        catch { problem = "Couldn't make the board: \(error.localizedDescription)" }
+        ScanPDF.make(pages) { [self] r in
+            guard let r else { problem = "Couldn't make a PDF of the scan."; return }
+            do { try newBoard(pdfData: r.data, named: r.name, in: dir, store) }
+            catch { problem = "Couldn't make the board: \(error.localizedDescription)" }
+        }
     }
 
     /// New board from a photo: the picture in the board's files, on the board at the top left.
