@@ -139,7 +139,7 @@ final class TutorDrawer {
         var s = raw
         if raw.type == "yourturn" {
             let ask = (raw.ask ?? "").replacingOccurrences(of: #"^(?i)your turn:?\s*"#, with: "", options: .regularExpression)
-            guard let note = TutorSteps.normalize(.object([("type", .string("text")), ("text", .string("✎ **Your turn:** " + ask)), ("color", .string("blue"))])) else { return }
+            guard let note = TutorSteps.normalize(.object([("type", .string("text")), ("text", .string("✎ **Your turn:** " + ask)), ("color", .string("blue")), ("w", .number(380))])) else { return }
             s = note
         }
         steps.append(s)

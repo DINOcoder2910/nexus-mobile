@@ -36,7 +36,7 @@ enum TutorDemo {
 
     static let explain = #"""
 Let's solve two x plus six equals fourteen.
-<step>{"type":"math","id":"eq1","tex":"2x + 6 = 14","size":"large"}</step>
+<step>{"type":"math","id":"eq1","tex":"2x + 6 = 14"}</step>
 First we get the x term on its own, so we take six from both sides.
 <step>{"type":"math","id":"eq2","tex":"2x = 8"}</step>
 <step>{"type":"text","text":"− 6 both sides","color":"grey","size":"small","at":{"right":"eq2"}}</step>

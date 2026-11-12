@@ -277,11 +277,11 @@ struct TutorPanel: View {
             }
             Text(BoardTutor.cleanTurn(ask)).font(.callout).fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
-                Button { tutor.checkWork() } label: { Label("Check my work", systemImage: "checkmark.circle.fill") }
+                Button { tutor.checkWork() } label: { Label("Check my work", systemImage: "checkmark.circle.fill").lineLimit(1).fixedSize() }
                     .buttonStyle(.borderedProminent).tint(TutorStyle.turn)
-                Button { tutor.hint() } label: { Label("Hint", systemImage: "lightbulb") }
+                Button { tutor.hint() } label: { Label("Hint", systemImage: "lightbulb").lineLimit(1).fixedSize() }
                     .buttonStyle(.bordered)
-                Button { tutor.showMe() } label: { Label("Show me", systemImage: "eye") }
+                Button { tutor.showMe() } label: { Label("Show me", systemImage: "eye").lineLimit(1).fixedSize() }
                     .buttonStyle(.bordered)
             }
             .controlSize(.small)
