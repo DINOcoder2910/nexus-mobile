@@ -10,6 +10,8 @@ final class FormatBar: UIInputView {
     private let stack = UIStackView()
     private var styleButton = UIButton(type: .system)
     private var countLabel = UILabel()
+    /// á é í ó ú ñ ü ¿ ¡, shown for a Spanish block.
+    private let accentStack = UIStackView()
 
     init(session: WritingSession) {
         self.session = session
@@ -75,7 +77,25 @@ final class FormatBar: UIInputView {
         return wrap
     }
 
+    private func buildAccents() {
+        accentStack.axis = .horizontal
+        accentStack.spacing = 0
+        for ch in Accents.spanishRow {
+            var c = UIButton.Configuration.plain()
+            c.title = ch
+            c.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 7, bottom: 4, trailing: 7)
+            c.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { a in
+                var a = a; a.font = UIFont.systemFont(ofSize: 18); return a
+            }
+            let b = UIButton(configuration: c, primaryAction: UIAction { [weak self] _ in self?.session?.insert(ch) })
+            b.accessibilityLabel = "Type \(ch)"
+            accentStack.addArrangedSubview(b)
+        }
+        accentStack.isHidden = true
+    }
+
     private func build() {
+        buildAccents()
         var config = UIButton.Configuration.plain()
         config.title = "Body"
         config.image = UIImage(systemName: "chevron.down")
@@ -106,6 +126,16 @@ final class FormatBar: UIInputView {
             button("paintpalette", "Colour", menu: colourMenu()),
             button("square.fill.on.square", "Background", menu: deferred { [weak self] in self?.fillItems() ?? [] }),
             divider(),
+            button("globe", "Spanish", menu: deferred { [weak self] in
+                guard let s = self?.session, let b = s.board else { return [] }
+                return b.spanishMenu(s.id)
+            }),
+            accentStack,
+            button("text.badge.checkmark", "Review", menu: deferred { [weak self] in self?.reviewItems() ?? [] }),
+            button("square.on.square", "Drafts", menu: deferred { [weak self] in
+                guard let s = self?.session, let b = s.board else { return [] }
+                return b.draftMenu(s.id)
+            }),
             button("ellipsis.circle", "More", menu: deferred { [weak self] in self?.moreItems() ?? [] }),
         ]
         for v in views { stack.addArrangedSubview(v) }
@@ -130,7 +160,16 @@ final class FormatBar: UIInputView {
         config?.title = s.currentStyle.label
         styleButton.configuration = config
         let c = LiveMarkdown.count(s.text)
-        countLabel.text = c.words == 1 ? "1 word" : "\(c.words) words"
+        var label = c.words == 1 ? "1 word" : "\(c.words) words"
+        if let it = s.item, let left = Practice.left(it) {
+            label = (left > 0 ? "Practice \(Practice.clock(left)) left" : "Practice time's up") + " · " + label
+            countLabel.textColor = left > 0 ? .secondaryLabel : .systemOrange
+        } else {
+            countLabel.textColor = .secondaryLabel
+        }
+        countLabel.text = label
+        let spanish = s.isSpanish
+        if accentStack.isHidden == spanish { accentStack.isHidden = !spanish }
     }
 
     // MARK: menus
@@ -138,9 +177,14 @@ final class FormatBar: UIInputView {
     private func styleItems() -> [UIMenuElement] {
         guard let s = session else { return [] }
         let current = s.currentStyle
-        return BlockStyle.allCases.map { st in
+        let styles: [UIMenuElement] = BlockStyle.allCases.map { st in
             UIAction(title: st.label, state: st == current ? .on : .off) { [weak s] _ in s?.setStyle(st) }
         }
+        let id = s.id
+        return [UIMenu(options: .displayInline, children: styles),
+                UIAction(title: "Edit styles and font…", image: UIImage(systemName: "slider.horizontal.3")) { [weak b = s.board] _ in
+                    b?.openStyles(id, style: current)
+                }]
     }
 
     private func swatch(_ c: UIColor) -> UIImage {
@@ -210,6 +254,29 @@ final class FormatBar: UIInputView {
         }
     }
 
+    private func reviewItems() -> [UIMenuElement] {
+        guard let s = session, let b = s.board, let it = s.item else { return [] }
+        let id = s.id
+        let on = it.json["review"]?.bool ?? false
+        let n = s.suggestions.count
+        var out: [UIMenuElement] = [
+            UIAction(title: "Review mode", subtitle: on ? "Typing suggests changes" : "Typing changes the words", image: UIImage(systemName: "pencil.and.list.clipboard"),
+                     state: on ? .on : .off) { [weak b] _ in b?.setBlockField(id, "review", on ? nil : .bool(true)) },
+            UIAction(title: n == 1 ? "1 suggestion" : "\(n) suggestions", attributes: .disabled) { _ in },
+        ]
+        guard n > 0 else { return out }
+        out.append(UIMenu(options: .displayInline, children: [
+            UIAction(title: "Next suggestion", image: UIImage(systemName: "arrow.down.circle")) { [weak s] _ in s?.nextSuggestion() },
+            UIAction(title: "Accept", image: UIImage(systemName: "checkmark")) { [weak s] _ in s?.acceptHere(true) },
+            UIAction(title: "Reject", image: UIImage(systemName: "xmark")) { [weak s] _ in s?.acceptHere(false) },
+        ]))
+        out.append(UIMenu(options: .displayInline, children: [
+            UIAction(title: "Accept all", image: UIImage(systemName: "checkmark.circle")) { [weak s] _ in s?.reviewAll(true) },
+            UIAction(title: "Reject all", image: UIImage(systemName: "xmark.circle"), attributes: .destructive) { [weak s] _ in s?.reviewAll(false) },
+        ]))
+        return out
+    }
+
     private func moreItems() -> [UIMenuElement] {
         guard let s = session, let b = s.board, let it = s.item else { return [] }
         let id = s.id
@@ -218,18 +285,34 @@ final class FormatBar: UIInputView {
         out.append(UIAction(title: "Writing view", image: UIImage(systemName: "arrow.up.left.and.arrow.down.right")) { [weak b] _ in b?.openWritingView(id) })
         out.append(UIAction(title: "Find and replace", image: UIImage(systemName: "magnifyingglass")) { [weak b] _ in b?.openFind(id) })
         out.append(UIAction(title: "\(c.words) words · \(c.characters) characters", attributes: .disabled) { _ in })
+        let sel = s.textView.selectedRange
+        let shown = b.marksShown
+        out.append(UIMenu(options: .displayInline, children: [
+            UIAction(title: "Comment", image: UIImage(systemName: "text.bubble")) { [weak b] _ in b?.addComment(on: id, range: sel) },
+            UIAction(title: "Add a Nexus task", image: UIImage(systemName: "checkmark.circle.badge.plus")) { [weak b] _ in b?.addNexusTask(from: id, range: sel) },
+            UIAction(title: "All comments", image: UIImage(systemName: "list.bullet.rectangle")) { [weak b] _ in b?.openComments() },
+            UIAction(title: "Show comments", image: UIImage(systemName: "eye"), state: shown ? .on : .off) { [weak b] _ in b?.marksShown = !shown },
+        ]))
+        out.append(UIAction(title: "Cover with revision tape", subtitle: "A strip on each line; tap one to peek", image: UIImage(systemName: "rectangle.dashed")) { [weak b] _ in
+            b?.endWriting()
+            b?.tapeBlock(id)
+        })
+        if it.json["chip"]?.bool == true {
+            out.append(UIAction(title: "Unfold", subtitle: "Show the words on the board again", image: UIImage(systemName: "rectangle.expand.vertical")) { [weak b] _ in
+                b?.setBlockField(id, "chip", nil)
+            })
+        } else {
+            out.append(UIAction(title: "Fold into a chip", image: UIImage(systemName: "rectangle.compress.vertical")) { [weak b] _ in
+                b?.endWriting()
+                b?.setBlockField(id, "chip", .bool(true))
+            })
+        }
         let push = it.json["push"]?.bool ?? false
         out.append(UIMenu(options: .displayInline, children: [
             UIAction(title: "Make room", image: UIImage(systemName: "arrow.down.to.line")) { [weak b] _ in b?.makeRoom(id) },
             UIAction(title: "Push things below", image: UIImage(systemName: "arrow.down.square"), state: push ? .on : .off) { [weak b] _ in
                 b?.setBlockField(id, "push", push ? nil : .bool(true))
             },
-        ]))
-        let lang = it.string("lang")
-        out.append(UIMenu(title: "Language", image: UIImage(systemName: "globe"), children: [
-            UIAction(title: "Detect", state: lang == nil ? .on : .off) { [weak b] _ in b?.setBlockField(id, "lang", nil) },
-            UIAction(title: "English", state: lang == "en" ? .on : .off) { [weak b] _ in b?.setBlockField(id, "lang", .string("en")) },
-            UIAction(title: "Spanish", state: lang == "es" ? .on : .off) { [weak b] _ in b?.setBlockField(id, "lang", .string("es")) },
         ]))
         let chem = it.json["chem"]?.bool ?? true
         out.append(UIAction(title: "Chemistry subscripts", image: UIImage(systemName: "flask"), state: chem ? .on : .off) { [weak b] _ in

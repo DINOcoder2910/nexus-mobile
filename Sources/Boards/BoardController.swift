@@ -31,6 +31,8 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     // views
     let canvas = PKCanvasView()
     let world = UIView()
+    /// Above the ink: revision tape covers what is drawn too. Moves with `world`.
+    let overWorld = UIView()
     let pdfLayer = UIView(), imageLayer = UIView(), shapeLayer = UIView(), textLayer = UIView()
     let selection = SelectionView()
     let toolPicker = PKToolPicker()
@@ -55,6 +57,16 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     var writing: WritingSession?
     var pushedBottom: [String: CGFloat] = [:]
     var pushedBy: [String: CGFloat] = [:]
+    /// The draft this iPad shows for a block (each device's own view; nil or missing: the current draft).
+    var viewingDraft: [String: String] = [:]
+    /// The block open in the Writing view (full screen), if any.
+    weak var writingFull: WritingSession?
+    /// Where each comment's bubble is drawn (board units), for taps and selection.
+    var markBoxes: [String: CGRect] = [:]
+    /// The user's tasks, for "Add a Nexus task" from typed words.
+    weak var store: NexusStore?
+    /// Revision tape lifted on this iPad (each device's own; the file doesn't keep it).
+    var peeking: Set<String> = []
 
     // hold to make a shape (BoardController+Snap.swift)
     let snapOverlay = UIView(), snapLine = CAShapeLayer(), snapHalo = CAShapeLayer()
@@ -74,9 +86,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     var lastBarKey = ""
     /// Set when the board sits beside the sidebar: the bar's sidebar button calls it.
     var onSidebar: (() -> Void)?
-    /// Side by side (BoardPanes): what to open beside this board; nil in the side pane itself.
-    enum SideRequest { case same, pick, pdf(URL), close }
-    var onSide: ((SideRequest) -> Void)?
+    /// The board in Side by side's second pane (its bar's close button closes the pane).
     var isSidePane = false
 
     init(root: URL, path: String, focus: CGRect?) {
@@ -126,6 +136,10 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         canvas.alwaysBounceHorizontal = true
         canvas.overrideUserInterfaceStyle = .light
         view.addSubview(canvas)
+        overWorld.layer.anchorPoint = .zero
+        overWorld.layer.position = .zero
+        overWorld.isUserInteractionEnabled = false
+        view.insertSubview(overWorld, aboveSubview: canvas)
 
         load()
         canvas.delegate = self
@@ -210,6 +224,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
 
     func box(of it: BoardItem) -> CGRect {
         if it.type == "pdf", let p = pdfs[it.id] { return p.box }
+        if it.type == "mark" { return markBoxes[it.id] ?? CGRect(x: it.x, y: it.y, width: MarkView.size, height: MarkView.size) }
         return boardBox(it, textSize: textSizes[it.id])
     }
 
@@ -275,17 +290,25 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
             case "text":
                 let v = (itemViews[it.id] as? TextBlockView) ?? TextBlockView()
                 if v.superview == nil { textLayer.addSubview(v); itemViews[it.id] = v }
-                let md = content.texts[it.id] ?? ""
+                let md = content.texts[shownKey(it.id)] ?? ""
                 v.update(md: md, item: it)
+                v.marked = markedRanges(it.id)
                 v.setRenderScale(canvas.zoomScale)
                 textSizes[it.id] = v.frame.size
                 v.frame.origin = CGPoint(x: it.x + offset.x, y: it.y + offset.y)
+            case "mark":
+                break // placed below, once the blocks they sit on are laid out
+            case "tape":
+                let v = (itemViews[it.id] as? TapeView) ?? TapeView(frame: .zero)
+                if v.superview == nil { overWorld.addSubview(v); itemViews[it.id] = v }
+                v.update(it, offset: offset, peeking: peeking.contains(it.id))
             default:
                 let v = (itemViews[it.id] as? ForeignItemView) ?? ForeignItemView(frame: .zero)
                 if v.superview == nil { shapeLayer.addSubview(v); itemViews[it.id] = v }
                 v.update(it, offset: offset)
             }
         }
+        for it in content.items where it.type == "mark" { placeMark(it) }
         showSelection()
         updateContentSize()
         syncWorld()
@@ -311,6 +334,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         let w = max(b.maxX + offset.x + 1400, view.bounds.width / z)
         let h = max(b.maxY + offset.y + 1500, view.bounds.height * 2 / z)
         world.bounds = CGRect(x: 0, y: 0, width: w, height: h)
+        overWorld.bounds = world.bounds
         let target = CGSize(width: w * z, height: h * z)
         if abs(canvas.contentSize.width - target.width) > 1 || abs(canvas.contentSize.height - target.height) > 1 {
             canvas.contentSize = target
@@ -327,6 +351,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     func syncWorld() {
         let z = canvas.zoomScale, o = canvas.contentOffset
         world.transform = CGAffineTransform(a: z, b: 0, c: 0, d: z, tx: -o.x, ty: -o.y)
+        overWorld.transform = world.transform
         let vis = visibleBoard
         let scale = traitCollection.displayScale > 0 ? traitCollection.displayScale : 2
         var page = ""
@@ -456,10 +481,11 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
 
     /// Another device (sync) or app wrote the board: read it again, unless something here isn't saved yet (that wins on the next save).
     func checkOutside() {
-        guard !dirty, writing == nil, presentedViewController == nil, !canvas.isTracking else { return }
+        guard !dirty, presentedViewController == nil, !canvas.isTracking else { return }
         let now = fileStamps()
         guard now != stamps else { return }
         if takeOutsideWords(now) { return } // only words changed (the laptop typing): the ink and its undo stay as they are
+        guard writing == nil else { return } // a block is open: the whole board is read again once it closes
         let z = canvas.zoomScale
         let look = CGPoint(x: visibleBoard.minX, y: visibleBoard.minY)
         let keep = selected

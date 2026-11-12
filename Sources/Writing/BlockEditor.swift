@@ -36,7 +36,25 @@ final class BlockTextView: UITextView {
         key(UIKeyCommand.inputEscape, [], "done", "Done")
         key("\t", [], "indent", "Indent")
         key("\t", .shift, "outdent", "Outdent")
+        // Word's accent keys (the laptop's): a dead key, then the letter
+        key("'", .command, "dead:acute", "Acute accent (then a vowel)")
+        key("~", [.command, .shift], "dead:tilde", "Tilde (then n)")
+        key("`", [.command, .shift], "dead:tilde", "Tilde (then n)")
+        key(":", [.command, .shift], "dead:umlaut", "Diaeresis (then u)")
+        key(";", [.command, .shift], "dead:umlaut", "Diaeresis (then u)")
+        key("/", [.command, .alternate, .shift], "insert:¿", "¿")
+        key("?", [.command, .alternate, .shift], "insert:¿", "¿")
+        key("1", [.command, .alternate, .shift], "insert:¡", "¡")
+        key("!", [.command, .alternate, .shift], "insert:¡", "¡")
         return out
+    }
+
+    /// A Spanish block asks for a Spanish keyboard when one is set up (its spelling and suggestions then follow).
+    override var textInputMode: UITextInputMode? {
+        if session?.isSpanish == true, let es = UITextInputMode.activeInputModes.first(where: { $0.primaryLanguage?.hasPrefix("es") == true }) {
+            return es
+        }
+        return super.textInputMode
     }
 
     @objc func nexusKey(_ sender: UIKeyCommand) {
@@ -66,12 +84,20 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
     /// The block's size on the board (units), from its laid-out words.
     var displaySize: CGSize = .zero
     /// The board's items and words when typing started, for the board's undo.
-    let before: ([BoardItem], [String: String])
-    let startText: String
+    var before: ([BoardItem], [String: String])
+    var startText: String
+    /// Which words are open: the block's id for its current draft, `<id>~<draft>` for another one (BlockDrafts.key).
+    private(set) var key: String
     private var applying = false
     private var lastTyped: Int? = nil
+    /// A dead accent key waiting for its letter ("acute", "tilde", "umlaut").
+    var deadKey: String?
+    private var practiceTimer: Timer?
+    private var practiceOver = false
     private var keyboard: CGRect = .zero
     lazy var bar = FormatBar(session: self)
+    /// The block's drafts as tabs above it (only when it has drafts).
+    lazy var tabs = DraftTabs(session: self)
 
     /// In the Writing view: the text view scrolls on its own and is not placed over the board.
     let fullscreen: Bool
@@ -87,7 +113,8 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
         scale = fullscreen ? 1.25 : board.canvas.zoomScale
         look = BlockLook(item)
         before = (board.content.items, board.content.texts)
-        startText = board.content.texts[item.id] ?? ""
+        key = board.shownKey(item.id)
+        startText = board.content.texts[key] ?? ""
         let c = NSTextContainer(size: CGSize(width: 100, height: 10_000_000))
         c.lineFragmentPadding = 0
         c.widthTracksTextView = true
@@ -111,6 +138,7 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
         textView.smartInsertDeleteType = .no
         textView.inputAccessoryView = bar
         textView.text = startText
+        applyPractice()
 
         let tick = UITapGestureRecognizer(target: self, action: #selector(tappedInside(_:)))
         tick.delegate = self
@@ -168,6 +196,7 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
         textView.layer.position = b.viewPoint(board: CGPoint(x: it.x, y: it.y))
         let k = z / s
         textView.transform = abs(k - 1) < 0.0005 ? .identity : CGAffineTransform(scaleX: k, y: k)
+        tabs.place(over: textView.frame)
         if let fill = look.fill {
             textView.backgroundColor = fill
             textView.layer.cornerRadius = 4 * s
@@ -191,6 +220,7 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
     func lookChanged() {
         guard let it = item else { return }
         look = BlockLook(it)
+        if Practice.isOn(it) != (practiceTimer != nil) { applyPractice() }
         restyle()
         measure()
         place()
@@ -200,18 +230,64 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
 
     func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
         if applying { return true }
-        if board?.blockLocked(id) == true { return false }
+        if board?.blockLocked(id) == true {
+            board?.tellLocked(id)
+            return false
+        }
         lastTyped = nil
         if text == "\n", let e = MarkdownEdit.newline(self.text, range) {
             apply(e)
+            return false
+        }
+        if let dead = deadKey, (text as NSString).length == 1 {
+            deadKey = nil
+            let out = Accents.apply(dead, text)
+            if out != text {
+                apply(MDEdit((self.text as NSString).replacingCharacters(in: range, with: out), NSRange(location: range.location + (out as NSString).length, length: 0)))
+                return false
+            }
+        }
+        if look.review, text != "\n", textView.markedTextRange == nil {
+            // Review mode: the change becomes a suggestion
+            apply(Review.type(self.text, range: range, with: text))
             return false
         }
         if (text as NSString).length == 1, range.length == 0 { lastTyped = range.location + 1 }
         return true
     }
 
+    // MARK: Review mode
+
+    var suggestions: [Suggestion] { Review.suggestions(text) }
+
+    func acceptHere(_ accept: Bool) {
+        guard let s = Review.at(text, textView.selectedRange) else {
+            board?.tell("Put the caret in a suggestion first.", brief: true)
+            return
+        }
+        apply(accept ? Review.accept(text, s) : Review.reject(text, s))
+    }
+
+    func reviewAll(_ accept: Bool) {
+        let t = Review.all(text, accept: accept)
+        guard t != text else { return }
+        apply(MDEdit(t, NSRange(location: min(textView.selectedRange.location, (t as NSString).length), length: 0)))
+    }
+
+    /// Selects the next suggestion after the caret (from the top again at the end).
+    func nextSuggestion() {
+        let all = suggestions
+        guard !all.isEmpty else { board?.tell("No suggestions in this block.", brief: true); return }
+        let caret = NSMaxRange(textView.selectedRange)
+        let s = all.first { $0.range.location >= caret } ?? all[0]
+        textView.selectedRange = s.range
+        restyle()
+        keepCaretVisible()
+    }
+
     func textViewDidChange(_ textView: UITextView) {
         if applying { return }
+        board?.tellTyping(id)
         edited()
         if look.chem, let caret = lastTyped {
             lastTyped = nil
@@ -231,8 +307,30 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
         restyle()
         measure()
         place()
-        board?.typed(id, text)
+        board?.typed(id, key: key, text)
         keepCaretVisible()
+    }
+
+    /// Another draft is shown, or the drafts changed under the open block: show the words the board now has for it.
+    /// The typing so far must already be an undo step (BoardController.commitTyping).
+    func reload() {
+        guard let b = board else { return }
+        key = b.shownKey(id)
+        let words = b.content.texts[key] ?? ""
+        startText = words
+        before = (b.content.items, b.content.texts)
+        if text != words {
+            applying = true
+            textView.text = words
+            textView.selectedRange = NSRange(location: (words as NSString).length, length: 0)
+            applying = false
+        }
+        textView.undoManager?.removeAllActions()
+        if let it = item { look = BlockLook(it) }
+        restyle()
+        measure()
+        place()
+        tabs.refresh()
     }
 
     func convertChemistry(caret: Int) {
@@ -266,6 +364,25 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
         textView.selectedRange = NSRange(location: loc, length: min(e.selection.length, len - loc))
         applying = false
         edited()
+    }
+
+    // MARK: the edit menu (Comment)
+
+    func textView(_ textView: UITextView, editMenuForTextIn range: NSRange, suggestedActions: [UIMenuElement]) -> UIMenu? {
+        guard let b = board else { return nil }
+        let id = self.id
+        var extra: [UIMenuElement] = [
+            UIAction(title: "Comment", image: UIImage(systemName: "text.bubble")) { [weak b] _ in b?.addComment(on: id, range: range) },
+        ]
+        extra.append(UIAction(title: "Make a flashcard", image: UIImage(systemName: "rectangle.on.rectangle.angled")) { [weak b] _ in
+            b?.makeFlashcard(from: id, range: range)
+        })
+        if b.content.items.contains(where: { $0.id == id }) {
+            extra.append(UIAction(title: "Add a Nexus task", image: UIImage(systemName: "checkmark.circle.badge.plus")) { [weak b] _ in
+                b?.addNexusTask(from: id, range: range)
+            })
+        }
+        return UIMenu(children: suggestedActions + [UIMenu(options: .displayInline, children: extra)])
     }
 
     // MARK: words from the other device
@@ -337,8 +454,54 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
         case "done": if fullscreen { onDone?() } else { board?.endWriting() }
         case "writing": if fullscreen { onDone?() } else { board?.openWritingView(id) }
         case "find": board?.openFind(id)
-        default: break
+        default:
+            if action.hasPrefix("dead:") { deadKey = String(action.dropFirst(5)) }
+            else if action.hasPrefix("insert:") { insert(String(action.dropFirst(7))) }
         }
+    }
+
+    /// Types `s` at the caret (the accent row, ¿ and ¡).
+    func insert(_ s: String) {
+        if board?.blockLocked(id) == true { board?.tellLocked(id); return }
+        let sel = textView.selectedRange
+        if look.review { apply(Review.type(text, range: sel, with: s)); return }
+        apply(MDEdit((text as NSString).replacingCharacters(in: sel, with: s), NSRange(location: sel.location + (s as NSString).length, length: 0)))
+    }
+
+    // MARK: Spanish blocks and practice mode
+
+    /// The block is Spanish: its own `lang`, else what its words look like (as the laptop guesses it).
+    var isSpanish: Bool { BlockFacts.lang(item, text) == "es" }
+
+    var practicing: Bool { item.map(Practice.isOn) ?? false }
+
+    /// Practice mode turns every check off: spelling, autocorrect, predictions and Writing Tools; it is back on when practice ends.
+    func applyPractice() {
+        let on = practicing
+        textView.spellCheckingType = on ? .no : .default
+        textView.autocorrectionType = on ? .no : .default
+        textView.inlinePredictionType = on ? .no : .default
+        if #available(iOS 18.0, *) { textView.writingToolsBehavior = on ? .none : .default }
+        if textView.isFirstResponder { textView.reloadInputViews() }
+        practiceTimer?.invalidate()
+        practiceTimer = nil
+        practiceOver = false
+        if on {
+            practiceTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.tickPractice() }
+        }
+        bar.refresh()
+    }
+
+    func tickPractice() {
+        bar.refresh()
+        guard let it = item, let left = Practice.left(it), left <= 0, !practiceOver else { return }
+        practiceOver = true
+        board?.practiceOver(id)
+    }
+
+    func stopTimers() {
+        practiceTimer?.invalidate()
+        practiceTimer = nil
     }
 
     func setStyle(_ style: BlockStyle) { apply(MarkdownEdit.setStyle(text, textView.selectedRange, style)) }

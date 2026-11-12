@@ -20,7 +20,7 @@ public enum BoardFormat {
     public static let itemTypes: Set<String> = ["text", "image", "pdf", "shape"]
     /// The board redesign's features this app understands (nexus docs/data-format.md "Features"): a board.json naming one not here
     /// opens read-only. Add a name in the same change that makes the app read and write that feature.
-    public static let features: Set<String> = ["writing", "space"]
+    public static let features: Set<String> = ["writing", "space", "drafts", "marks", "tape"]
     /// A placeholder's size when a foreign item has none.
     public static let foreignSize = (w: 200.0, h: 80.0)
 
@@ -281,6 +281,13 @@ public enum BoardFiles {
                 c.texts[it.id] = md
                 c.textsOnDisk[it.id] = md
             } else { c.texts[it.id] = "" }
+            // its other drafts and their snapshots (docs/data-format.md "Drafts")
+            for key in BlockDrafts.fileKeys(it) {
+                guard let d = try? Data(contentsOf: board.appendingPathComponent(BoardFormat.textFile(key))) else { continue }
+                let md = String(decoding: d, as: UTF8.self)
+                c.texts[key] = md
+                c.textsOnDisk[key] = md
+            }
         }
         // strokes with no id (an old export) get one, so they can be written
         var taken = seen
@@ -327,9 +334,13 @@ public enum BoardFiles {
             }
         }
         var texts: [String: String] = [:]
-        let textIds = Set(c.items.filter { $0.type == "text" }.map(\.id))
+        let textItems = c.items.filter { $0.type == "text" }
+        let textIds = Set(textItems.map(\.id))
         for id in textIds { let md = c.texts[id] ?? ""; if c.textsOnDisk[id] != md { texts[id] = md } }
-        let removed = c.textsOnDisk.keys.filter { !textIds.contains($0) }
+        // other drafts and snapshots: written when held, kept while their block lists them
+        let draftKeys = Set(textItems.flatMap(BlockDrafts.fileKeys))
+        for key in draftKeys { if let md = c.texts[key], c.textsOnDisk[key] != md { texts[key] = md } }
+        let removed = c.textsOnDisk.keys.filter { !textIds.contains($0) && !draftKeys.contains($0) }
         return (tiles, texts, removed.sorted())
     }
 

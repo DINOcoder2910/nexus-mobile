@@ -98,7 +98,9 @@ extension BoardController {
     /// The block `id` is open for typing: merge the laptop's words into it (true), a clash (false: ours stay), or nil when that block
     /// isn't open. The board writing thread's WritingSession does the merge (`writing?.takeRemote(base:theirs:)`).
     func takeRemoteInOpenBlock(id: String, base: String?, theirs: String) -> Bool? {
-        nil
+        // only when the open block is showing its current draft (another draft's words are another file)
+        guard let w = writing, w.id == id, w.key == id else { return nil }
+        return w.takeRemote(base: base, theirs: theirs)
     }
 
     /// Keep `words` as a draft of block `id` (the laptop's, after a clash); the block's words stay as they are.

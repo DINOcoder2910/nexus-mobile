@@ -193,7 +193,7 @@ public enum MarkdownEdit {
     }
 
     /// The length of a list item's mark (after its indent): "- ", "- [ ] ", "12. ", "1. [x] ", or 0.
-    static func listPrefix(_ s: String) -> Int {
+    public static func listPrefix(_ s: String) -> Int {
         let u = Array(s.utf16)
         var p = leadingSpaces(s)
         let start = p

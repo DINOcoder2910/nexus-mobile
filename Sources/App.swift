@@ -31,8 +31,6 @@ struct RootView: View {
     @Environment(\.scenePhase) private var phase
     @State private var screen: Screen? = .today
     @State private var columns = NavigationSplitViewVisibility.all
-    /// Beside the open board (side by side).
-    @State private var side: SidePane?
     /// On the iPhone the sidebar and the screen are one stack: it opens on the screen (Today), with the sidebar one step back.
     @State private var compactColumn = NavigationSplitViewColumn.detail
 
@@ -44,7 +42,7 @@ struct RootView: View {
         } detail: {
             // an open board takes the detail column, beside the sidebar (its bar shows and hides the sidebar)
             if let target = store.openBoard {
-                BoardPanes(main: target, side: $side, columns: $columns).id(target.id)
+                BoardPanes(main: target, columns: $columns).id(target.id)
             } else {
                 NavigationStack {
                     detail
@@ -62,7 +60,6 @@ struct RootView: View {
         }
         .sheet(item: $store.capture) { start in CaptureSheet(start: start) }
         .onChange(of: store.openBoard?.id) { _, now in
-            side = nil
             withAnimation { columns = now == nil ? .all : .detailOnly }
         }
         .onChange(of: screen) { _, _ in store.openBoard = nil }

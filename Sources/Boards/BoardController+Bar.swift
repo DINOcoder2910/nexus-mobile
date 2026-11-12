@@ -160,8 +160,8 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
             beginWriting(it, at: p)
             return
         }
-        let id = BoardFormat.newId(taken: allIds)
-        let it = BoardItem(id: id, type: "text", x: Double((p.x - 4).rounded()), y: Double((p.y - 14).rounded()))
+        let it = newTextBlockItem(at: p) // on a PDF page: typed on that page
+        let id = it.id
         changeItems("Add text") { c in
             c.items.append(it)
             c.texts[id] = ""
@@ -182,6 +182,14 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
     func titleMenu() -> UIMenu {
         UIMenu(children: [
             UIAction(title: "Board info", image: UIImage(systemName: "info.circle")) { [weak self] _ in self?.showInfo() },
+            UIMenu(title: "Side by side", image: UIImage(systemName: "rectangle.split.2x1"), children: [
+                UIDeferredMenuElement.uncached { [weak self] done in done(self?.sideBySideMenu() ?? []) },
+            ]),
+            UIMenu(options: .displayInline, children: [
+                UIAction(title: "All comments", image: UIImage(systemName: "text.bubble")) { [weak self] _ in self?.openComments() },
+                UIAction(title: "Lift all revision tape", image: UIImage(systemName: "eye")) { [weak self] _ in self?.peekAll(true) },
+                UIAction(title: "Cover all revision tape", image: UIImage(systemName: "eye.slash")) { [weak self] _ in self?.peekAll(false) },
+            ]),
         ])
     }
 
@@ -224,18 +232,6 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
                 guard let self else { return }
                 self.showContents(from: self.bar.pagePill)
             })
-        }
-        if let onSide, !isSidePane {
-            var side: [UIMenuElement] = [
-                UIAction(title: "This board again", image: UIImage(systemName: "rectangle.split.2x1")) { _ in onSide(.same) },
-                UIAction(title: "Another board…", image: UIImage(systemName: "rectangle.on.rectangle")) { _ in onSide(.pick) },
-            ]
-            for p in pdfs.values.sorted(by: { $0.item.id < $1.item.id }) {
-                guard let url = resolve(p.item.src) else { continue }
-                side.append(UIAction(title: "\(p.name) on its own", image: UIImage(systemName: "doc.richtext")) { _ in onSide(.pdf(url)) })
-            }
-            side.append(UIAction(title: "Close the side pane", image: UIImage(systemName: "xmark")) { _ in onSide(.close) })
-            items.append(UIMenu(title: "Side by side", image: UIImage(systemName: "rectangle.split.2x1"), children: side))
         }
         // (Earlier versions, from the version history, goes here.)
         items.append(UIAction(title: "Hide the bars", image: UIImage(systemName: "rectangle.expand.vertical")) { [weak self] _ in

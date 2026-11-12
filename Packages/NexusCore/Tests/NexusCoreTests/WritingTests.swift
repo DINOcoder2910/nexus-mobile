@@ -180,32 +180,30 @@ final class MarkdownEditTests: XCTestCase {
 }
 
 final class ChemTests: XCTestCase {
-    func testFormulas() {
-        XCTAssertEqual(Chem.formula("H2O"), "H₂O")
-        XCTAssertEqual(Chem.formula("CO2"), "CO₂")
-        XCTAssertEqual(Chem.formula("SO4^2-"), "SO₄²⁻")
-        XCTAssertEqual(Chem.formula("Ca(OH)2"), "Ca(OH)₂")
-        XCTAssertEqual(Chem.formula("2H2O"), "2H₂O")
-        XCTAssertEqual(Chem.formula("Na^+"), "Na⁺")
-        XCTAssertEqual(Chem.formula("Fe2(SO4)3"), "Fe₂(SO₄)₃")
+    /// The laptop's table (nexus docs/board-writing.md, dev/unit-boardblocks.mjs CHEM).
+    let table: [(String, String)] = [
+        ("H2O", "H₂O"), ("CO2", "CO₂"), ("C6H12O6", "C₆H₁₂O₆"), ("Ca(OH)2", "Ca(OH)₂"), ("2H2O", "2H₂O"), ("Fe2O3", "Fe₂O₃"),
+        ("CH3COOH", "CH₃COOH"), ("SO4^2-", "SO₄²⁻"), ("SO42-", "SO₄²⁻"), ("NH4+", "NH₄⁺"), ("MnO4-", "MnO₄⁻"), ("Cr2O72-", "Cr₂O₇²⁻"),
+        ("PO4^3-", "PO₄³⁻"), ("CO32-", "CO₃²⁻"), ("Fe3+", "Fe³⁺"), ("Cu2+", "Cu²⁺"), ("O2-", "O²⁻"), ("Na+", "Na⁺"), ("Cl-", "Cl⁻"),
+        ("OH-", "OH⁻"), ("H+", "H⁺"), ("Na1+", "Na⁺"), ("CH3COO-", "CH₃COO⁻"), ("e-", "e⁻"), ("2e-", "2e⁻"), ("H2", "H₂"), ("O2", "O₂"),
+        ("Cl2", "Cl₂"), ("P4", "P₄"), ("S8", "S₈"), ("H2O(l)", "H₂O(l)"), ("CO2(g)", "CO₂(g)"), ("H2O2", "H₂O₂"), ("(OH)2", "(OH)₂"),
+        ("Mg(NO3)2", "Mg(NO₃)₂"), ("[Cu(H2O)6]2+", "[Cu(H₂O)₆]²⁺"), ("Fe2(SO4)3", "Fe₂(SO₄)₃"),
+    ]
+    let unchanged = ["NaCl(aq)", "NaCl", "HCl", "CO", "P2", "B2", "S1", "A1", "Q3", "U2", "H1", "MP3", "Win10", "x2", "IB", "2", "hello", "Step2"]
+
+    func testTheLaptopsTable() {
+        for (typed, stored) in table { XCTAssertEqual(Chem.formula(typed), stored, typed) }
+        for w in unchanged { XCTAssertNil(Chem.formula(w), w) }
     }
 
-    func testWordsThatAreNotFormulas() {
-        XCTAssertNil(Chem.formula("CO"))
-        XCTAssertNil(Chem.formula("Step2"))
-        XCTAssertNil(Chem.formula("A4"))
-        XCTAssertNil(Chem.formula("2020"))
-        XCTAssertNil(Chem.formula("Hello"))
-    }
-
-    func testConvertWhenTheWordEnds() {
-        let typed = "water is H2O "
-        let c = Chem.convert(typed, caret: (typed as NSString).length)
-        XCTAssertEqual(c?.range, NSRange(location: 9, length: 3))
+    func testConvertsWhenTheWordEnds() {
+        let t = "Water is H2O "
+        let c = Chem.convert(t, caret: (t as NSString).length)
         XCTAssertEqual(c?.with, "H₂O")
-        let stop = "made H2O."
-        XCTAssertEqual(Chem.convert(stop, caret: (stop as NSString).length)?.with, "H₂O")
-        XCTAssertNil(Chem.convert("H2O", caret: 3))
-        XCTAssertNil(Chem.convert("`H2O` ", caret: 6))
+        XCTAssertEqual(c?.range, NSRange(location: 9, length: 3))
+        XCTAssertEqual(Chem.convert("(see H2O)", caret: 9)?.with, "H₂O")
+        XCTAssertNil(Chem.convert("`H2O` ", caret: 5))
+        XCTAssertNil(Chem.convert("$H2O ", caret: 5))
+        XCTAssertNil(Chem.convert("xH2O ", caret: 5))
     }
 }
