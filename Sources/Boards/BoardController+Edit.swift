@@ -232,12 +232,15 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
             UIAction(title: "Line", image: UIImage(systemName: "line.diagonal")) { [weak self] _ in self?.insertShape("line") },
             UIAction(title: "Arrow", image: UIImage(systemName: "arrow.up.right")) { [weak self] _ in self?.insertShape("arrow") },
         ])
-        return UIMenu(children: [
+        var items: [UIMenuElement] = [
             UIAction(title: "Text", image: UIImage(systemName: "textformat")) { [weak self] _ in self?.insertText() },
             UIAction(title: "Image…", image: UIImage(systemName: "photo")) { [weak self] _ in self?.pickImage() },
             UIAction(title: "PDF printout…", image: UIImage(systemName: "doc.richtext")) { [weak self] _ in self?.pickPdf() },
-            shapes,
-        ])
+        ]
+        if ScanCamera.isSupported { // HandoutScan.swift
+            items.append(UIAction(title: "Scan a handout…", image: UIImage(systemName: "doc.viewfinder")) { [weak self] _ in self?.scanHandout() })
+        }
+        return UIMenu(children: items + [shapes])
     }
 
     var allIds: Set<String> { Set(content.items.map(\.id)).union(content.strokes.map(\.id)) }
@@ -328,18 +331,21 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
         guard let url = urls.first else { return }
         let access = url.startAccessingSecurityScopedResource()
         defer { if access { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url) else { tell("Couldn't read that PDF."); return }
+        addPdfPrintout(data: data, named: url.deletingPathExtension().lastPathComponent, label: "Add PDF")
+    }
+
+    /// A PDF (picked, or a scanned handout) saved beside the board under a free name, its pages down the board from the insert point.
+    func addPdfPrintout(data: Data, named want: String, label: String) {
         let dir = boardURL.deletingLastPathComponent()
         let taken = Set((try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? [])
-        let name = BoardFormat.freeName(url.deletingPathExtension().lastPathComponent, taken: taken, suffix: ".pdf")
-        do {
-            let data = try Data(contentsOf: url)
-            try FolderAccess.writeData(dir.appendingPathComponent(name), data)
-        } catch { tell("Couldn't bring the PDF in: \(error.localizedDescription)"); return }
+        let name = BoardFormat.freeName(want, taken: taken, suffix: ".pdf")
+        do { try FolderAccess.writeData(dir.appendingPathComponent(name), data) } catch { tell("Couldn't bring the PDF in: \(error.localizedDescription)"); return }
         let id = BoardFormat.newId(taken: allIds)
         let p = insertPoint
         let it = BoardItem(id: id, type: "pdf", x: Double(p.x), y: Double(p.y), fields: [
             ("src", .string("../" + name)), ("w", .number(BoardFormat.pdfWidth)), ("gap", .number(BoardFormat.pdfGap)),
         ])
-        changeItems("Add PDF") { c in c.items.append(it) }
+        changeItems(label) { c in c.items.append(it) }
     }
 }

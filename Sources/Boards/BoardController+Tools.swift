@@ -10,7 +10,8 @@ extension BoardController {
     }
 
     var toolPanelFrame: CGRect {
-        let w = min(520, max(320, view.bounds.width * 0.45))
+        // the whole width when the board is narrow (an iPhone), else a side column
+        let w = view.bounds.width < BoardBar.compactWidth ? view.bounds.width : min(520, max(320, view.bounds.width * 0.45))
         return CGRect(x: view.bounds.width - w, y: topInset, width: w, height: view.bounds.height - topInset)
     }
 
