@@ -203,26 +203,26 @@ final class TutorDrawer {
             let o = board.offset
             if inkLayer.superlayer == nil { board.world.layer.addSublayer(inkLayer) }
             for (st, l) in zip(strokes, lines.filter { $0.points.count >= 2 }) {
-                let path = UIBezierPath()
-                for (i, p) in st.points.enumerated() {
-                    let q = CGPoint(x: p[0] + o.x, y: p[1] + o.y)
-                    if i == 0 { path.move(to: q) } else { path.addLine(to: q) }
-                }
+                let pts = st.points.map { CGPoint(x: $0[0] + o.x, y: $0[1] + o.y) }
                 let shape = CAShapeLayer()
-                shape.path = path.cgPath
+                shape.path = TutorDrawer.smoothPath(pts, corners: l.corners).cgPath
                 shape.fillColor = nil
                 shape.strokeColor = InkConvert.color(st.color).cgColor
-                shape.lineWidth = CGFloat(l.width) * (l.ink == TutorDraw.marker ? 1 : 1.1)
+                // the same width as the PencilKit ink that takes its place, so nothing jumps when it does
+                shape.lineWidth = CGFloat(l.width)
                 shape.lineCap = l.ink == TutorDraw.marker ? .butt : .round
                 shape.lineJoin = .round
                 shape.strokeEnd = 0
                 inkLayer.addSublayer(shape)
-                let secs = max(0.06, TutorDraw.strokeTime(st)) / pace
+                let secs = max(0.08, TutorDraw.strokeTime(st)) / pace
                 let a = CABasicAnimation(keyPath: "strokeEnd")
                 a.fromValue = 0; a.toValue = 1; a.duration = secs
+                // a hand speeds up into a line and slows at its end
+                a.timingFunction = CAMediaTimingFunction(controlPoints: 0.35, 0.05, 0.4, 1)
                 shape.strokeEnd = 1
                 shape.add(a, forKey: "write")
-                try? await Task.sleep(nanoseconds: UInt64((secs + 0.04) * 1_000_000_000))
+                // a short lift of the pen between strokes
+                try? await Task.sleep(nanoseconds: UInt64((secs + min(0.12, 0.05 + secs * 0.15) / pace) * 1_000_000_000))
             }
         }
         // the real ink, all at once (one change to the drawing)
@@ -235,8 +235,28 @@ final class TutorDrawer {
             }
         }
         board.canvas.drawing = PKDrawing(strokes: pks)
-        inkLayer.sublayers?.forEach { $0.removeFromSuperlayer() }
+        // the animation's lines go once the canvas has drawn the ink under them (no flicker)
+        let drawnLayers = inkLayer.sublayers ?? []
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { drawnLayers.forEach { $0.removeFromSuperlayer() } }
         return prints
+    }
+
+    /// A smooth curve through the points (Catmull-Rom as cubic Béziers); straight segments where the line has corners (boxes, arrow heads).
+    static func smoothPath(_ p: [CGPoint], corners: Bool) -> UIBezierPath {
+        let path = UIBezierPath()
+        guard let first = p.first else { return path }
+        path.move(to: first)
+        if corners || p.count < 3 {
+            for q in p.dropFirst() { path.addLine(to: q) }
+            return path
+        }
+        for i in 0..<(p.count - 1) {
+            let p0 = p[max(0, i - 1)], p1 = p[i], p2 = p[i + 1], p3 = p[min(p.count - 1, i + 2)]
+            let c1 = CGPoint(x: p1.x + (p2.x - p0.x) / 6, y: p1.y + (p2.y - p0.y) / 6)
+            let c2 = CGPoint(x: p2.x - (p3.x - p1.x) / 6, y: p2.y - (p3.y - p1.y) / 6)
+            path.addCurve(to: p2, controlPoint1: c1, controlPoint2: c2)
+        }
+        return path
     }
 
     // MARK: text
