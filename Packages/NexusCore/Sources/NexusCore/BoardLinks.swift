@@ -149,7 +149,8 @@ public enum BoardLinks {
     }
 
     /// A link read on board `from`, its end turned to be read from board `to`.
-    public static func end(_ end: JSONValue, readOn from: String, shownOn to: String) -> JSONValue? {
+    public static func end(_ end: JSONValue?, readOn from: String, shownOn to: String) -> JSONValue? {
+        guard let end else { return nil }
         let k = kind(end)
         guard k == .here || k == .board else { return end }
         guard let target = board(of: end, from: from) else { return nil }

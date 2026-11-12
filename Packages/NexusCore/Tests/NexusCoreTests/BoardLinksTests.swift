@@ -19,7 +19,7 @@ final class BoardLinksTests: XCTestCase {
     func testNewLink() {
         let now = ISO8601DateFormatter().date(from: "2026-11-12T10:00:00Z")!
         let lk = BoardLinks.make(id: "k1", a: j(#"{"on":"a"}"#), b: j(#"{"task":"T-1"}"#), color: "#1f9d8b", by: "Duo", now: now, x: 10.126, y: 5)
-        XCTAssertEqual(lk?.json.text, #"{"id":"k1","type":"link","x":10.13,"y":5,"a":{"on":"a"},"b":{"task":"T-1"},"color":"#1F9D8B","made":"2026-11-12T10:00:00Z","by":"Duo"}"#)
+        XCTAssertEqual(lk?.json.text, ##"{"id":"k1","type":"link","x":10.13,"y":5,"a":{"on":"a"},"b":{"task":"T-1"},"color":"#1F9D8B","made":"2026-11-12T10:00:00Z","by":"Duo"}"##)
         XCTAssertNil(BoardLinks.make(id: "k", a: j(#"{"on":"a"}"#), b: j("{}")))
         XCTAssertEqual(BoardLinks.make(id: "k", a: j(#"{"on":"a"}"#), b: j(#"{"on":"b"}"#), color: "red")?.string("color"), BoardLinks.colors[0])
         XCTAssertTrue(BoardLinks.same(j(#"{"on":"a","page":2,"fx":0.1,"fy":0.2}"#), j(#"{"on":"a","page":2,"fx":0.1,"fy":0.2}"#)))
