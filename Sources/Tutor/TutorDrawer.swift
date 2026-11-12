@@ -82,7 +82,7 @@ final class TutorDrawer {
             if let l = s.label { label = (l, TutorDraw.labelAt(shaft)) }
         } else if s.type == "path" {
             let pts = s.points.map { [$0[0] + frame[0], $0[1] + frame[1]] }
-            lines.append(TutorDraw.Line(points: s.smooth ? TutorDraw.smooth(pts, closed: s.closed) : (s.closed ? pts + [pts[0]] : pts), color: color, width: width, corners: !s.smooth))
+            lines.append(TutorDraw.Line(points: s.smooth != false ? TutorDraw.smooth(pts, closed: s.closed) : (s.closed ? pts + [pts[0]] : pts), color: color, width: width, corners: s.smooth == false))
         } else {
             guard let tg = s.target, let t = TutorSteps.resolveTarget(tg, lookup, frame: frame) else { miss(s); return nil }
             let ls = TutorDraw.markLines(s.type, t)
