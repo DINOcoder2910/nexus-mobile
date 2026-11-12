@@ -112,6 +112,7 @@ final class NexusStore {
 
     /// Reads the folder again (after an edit, on coming back to the app, or when the files changed underneath).
     func reload() {
+        HangWatch.note("store: read the folder again")
         today = Days.today()
         snapshot = DataFolder.load(folder)
         fingerprint = DataFolder.fingerprint(folder)

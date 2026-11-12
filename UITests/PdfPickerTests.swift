@@ -54,6 +54,16 @@ final class PdfPickerTests: XCTestCase {
         step(what + ": cancelled after \(Int(Date().timeIntervalSince(t0))) s")
     }
 
+    /// The freeze recorder writes a report (the cloud run prints it from the simulator's data folder).
+    func testZFreezeIsRecorded() {
+        app.terminate()
+        app.launchArguments = ["-NexusTestStall"]
+        app.launch()
+        sleep(20)
+        step("after the test stall")
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10))
+    }
+
     func testNotebookFromAPdf() {
         openNotebook("PDF test")
         let new = app.buttons["New"].firstMatch

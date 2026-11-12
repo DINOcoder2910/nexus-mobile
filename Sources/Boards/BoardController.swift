@@ -206,6 +206,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        HangWatch.note("board: view will appear")
         // back from a board opened on top (a link's far end): look for outside changes again
         if poll?.isValid != true, isViewLoaded {
             poll = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.checkOutside() }
@@ -214,6 +215,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        HangWatch.note("board: view will disappear")
         if presentedViewController == nil { endWriting() }
         rememberPlace()
         tutorBoardClosing()
@@ -478,7 +480,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: work)
     }
 
-    @objc func saveNowSelector() { saveNow() }
+    @objc func saveNowSelector() { HangWatch.note("board: app resigning active, saving"); saveNow() }
 
     func saveNow() {
         saveWork?.cancel()

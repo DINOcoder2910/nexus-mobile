@@ -31,6 +31,7 @@ struct NexusMobileApp: App {
 
     @MainActor
     private func appPhase(_ now: ScenePhase) {
+        HangWatch.note("app phase: \(now)")
         switch now {
         case .active:
             AppServices.start()
@@ -71,6 +72,14 @@ enum AppServices {
     static func start() {
         guard !started else { return }
         started = true
+        HangWatch.shared.start(folder: store.folder)
+        // the UI check's own freeze, to see that the watcher records one (UITests/PdfPickerTests)
+        if ProcessInfo.processInfo.arguments.contains("-NexusTestStall") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 6) {
+                HangWatch.note("test: stalling the main thread for 7 s")
+                Thread.sleep(forTimeInterval: 7)
+            }
+        }
         sync.attach(store)
         reminders.attach(store, calendar)
         SpotlightIndex.update(store)
@@ -186,6 +195,7 @@ struct RootView: View {
             Button("OK", role: .cancel) {}
         } message: { Text(store.problem ?? "") }
         .onChange(of: phase) { _, now in
+            HangWatch.note("window phase: \(now)")
             if now == .active {
                 router.front = windowId
                 store.reloadIfChanged()

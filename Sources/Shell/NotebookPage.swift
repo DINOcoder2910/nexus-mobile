@@ -36,6 +36,7 @@ struct NotebookPage: View {
         .toolbar { ToolbarItem(placement: .primaryAction) { newMenu.disabled(nb == nil) } }
         .notebookPrompts(actions, store: store)
         .fileImporter(isPresented: $pickingPDF, allowedContentTypes: [.pdf]) { r in
+            HangWatch.note("notebook: PDF picker answered")
             if case .success(let url) = r { actions.newBoard(fromPDF: url, in: path, store) }
         }
         .photosPicker(isPresented: $pickingPhoto, selection: $photo, matching: .images)
@@ -61,7 +62,7 @@ struct NotebookPage: View {
     private var newMenu: some View {
         Menu {
             Button { actions.ask(.board, in: path) } label: { Label("Blank board", systemImage: "scribble") }
-            Button { pickingPDF = true } label: { Label("From a PDF…", systemImage: "doc.richtext") }
+            Button { HangWatch.note("notebook: From a PDF picker asked"); pickingPDF = true } label: { Label("From a PDF…", systemImage: "doc.richtext") }
             Button { pickingPhoto = true } label: { Label("From a photo…", systemImage: "photo") }
             if VNDocumentCameraViewController.isSupported {
                 Button { scanning = true } label: { Label("From a scan…", systemImage: "doc.viewfinder") }

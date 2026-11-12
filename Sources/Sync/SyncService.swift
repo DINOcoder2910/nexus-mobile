@@ -250,6 +250,8 @@ final class SyncService {
 
     private func runCycle() async -> Next {
         guard let client else { return .after(60) }
+        HangWatch.note("sync: cycle starts")
+        defer { HangWatch.note("sync: cycle ends") }
         cycling = true
         defer { cycling = false }
         do {

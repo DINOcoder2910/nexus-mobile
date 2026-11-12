@@ -73,6 +73,14 @@ jobs:
             awk '/Thread_[0-9]+.*com.apple.main-thread/{on=1} on{print; n++} n>=90{exit}' "$f" | cut -c1-220
           done
 
+      - name: Freeze reports the app wrote
+        if: always()
+        run: |
+          DATA=$(xcrun simctl get_app_container "${{ steps.sim.outputs.udid }}" app.nexus.mobile data 2>/dev/null || true)
+          echo "app data: $DATA"
+          ls -la "$DATA/Documents/nexus-data/diagnostics" 2>/dev/null || echo "no diagnostics folder"
+          for f in "$DATA"/Documents/nexus-data/diagnostics/*.txt; do [ -f "$f" ] && { echo "=================== $f"; cat "$f"; }; done
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
