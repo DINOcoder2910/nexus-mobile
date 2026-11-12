@@ -37,6 +37,7 @@ struct WorkstreamView: View {
             } else {
                 headerSection
                 tasksSection
+                studySection
                 somedaySection
                 doneSection
                 notesSection
@@ -163,6 +164,19 @@ struct WorkstreamView: View {
         }
     }
 
+    // MARK: study (the laptop's Study tab: this workstream's decks)
+
+    @ViewBuilder
+    private var studySection: some View {
+        if let id = workstreamId, let study = StudyLibrary.shared.study(id), !study.decks.isEmpty {
+            Section {
+                DeckRows(study: study)
+            } header: {
+                SectionTitle(title: "Study", count: nil)
+            }
+        }
+    }
+
     // MARK: notes and files
 
     @ViewBuilder
@@ -228,6 +242,7 @@ struct WorkstreamView: View {
 
     private func load() {
         guard let w = ws else { notes = nil; files = []; return }
+        StudyLibrary.shared.refreshIfChanged(store)
         let notesPath = w.folder + "/notes.md"
         notes = DataFolder.text(store.folder, notesPath)
         files = DataFolder.files(store.folder, in: w.folder)

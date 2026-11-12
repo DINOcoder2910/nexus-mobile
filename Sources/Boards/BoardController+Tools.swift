@@ -11,8 +11,9 @@ extension BoardController {
 
     /// Where the panel sits: on the right, under the bar; widened (its header's expand button), about 70% of the board.
     var toolPanelFrame: CGRect {
+        // the whole width when the board is narrow (an iPhone), else a side column, widened to about 70% by its expand button
         let W = view.bounds.width
-        let w = toolPanel?.wide == true ? max(320, (W * 0.7).rounded()) : min(520, max(320, W * 0.45))
+        let w = W < BoardBar.compactWidth ? W : (toolPanel?.wide == true ? max(320, (W * 0.7).rounded()) : min(520, max(320, W * 0.45)))
         return CGRect(x: W - w, y: topInset, width: w, height: view.bounds.height - topInset)
     }
 

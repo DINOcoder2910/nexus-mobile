@@ -307,7 +307,7 @@ extension BoardController {
 
     /// How far below the safe area's top the recording bar sits: 8 pt under the board's bar (topInset + 8).
     private func recordingBarGap(barsHidden: Bool? = nil) -> CGFloat {
-        (barsHidden ?? bar.isHidden) ? 8 : BoardBar.height + 8
+        (barsHidden ?? bar.isHidden) ? 8 : bar.height + 8
     }
 
     /// Puts the recording bar under the board's bar again (call when the bars are hidden or shown).

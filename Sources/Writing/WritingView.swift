@@ -15,6 +15,11 @@ final class WritingViewController: UIViewController, UITableViewDataSource, UITa
     private let count = UILabel()
     private let commentsButton = UIButton(configuration: .gray())
     private let draftsButton = UIButton(configuration: .gray())
+    private let outlineButton = UIButton(configuration: .gray())
+    private var backButton: UIButton?
+    private var historyButton: UIButton?
+    /// Below this the view is phone-sized: narrow margins, icon-only buttons (BoardBar.compactWidth's cut-off).
+    private static let compactWidth: CGFloat = 560
     private let page = UIView()
     private let side = UITableView(frame: .zero, style: .grouped)
     private let cards = UIView()
@@ -52,6 +57,7 @@ final class WritingViewController: UIViewController, UITableViewDataSource, UITa
         back.title = "Board"
         back.imagePadding = 4
         let backButton = UIButton(configuration: back, primaryAction: UIAction { [weak self] _ in self?.close() })
+        self.backButton = backButton
         titleLabel.font = .systemFont(ofSize: 15, weight: .semibold)
         titleLabel.lineBreakMode = .byTruncatingMiddle
         count.font = .monospacedDigitSystemFont(ofSize: 13, weight: .regular)
@@ -61,6 +67,12 @@ final class WritingViewController: UIViewController, UITableViewDataSource, UITa
         historyConf.title = "History"
         historyConf.imagePadding = 4
         let historyButton = UIButton(configuration: historyConf, primaryAction: UIAction { [weak self] _ in self?.openHistory() })
+        self.historyButton = historyButton
+        // where the left column doesn't fit (portrait, split view, iPhone): the outline and comments as a menu
+        outlineButton.configuration?.image = UIImage(systemName: "list.bullet.indent")
+        outlineButton.showsMenuAsPrimaryAction = true
+        outlineButton.accessibilityLabel = "Outline"
+        outlineButton.menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self] done in done(self?.outlineMenu() ?? []) }])
         commentsButton.addAction(UIAction { [weak self] _ in self?.toggleComments() }, for: .touchUpInside)
         draftsButton.configuration?.image = UIImage(systemName: "square.stack")
         draftsButton.showsMenuAsPrimaryAction = true
@@ -73,7 +85,7 @@ final class WritingViewController: UIViewController, UITableViewDataSource, UITa
         let left = UIStackView(arrangedSubviews: [backButton, titleLabel])
         left.spacing = 8
         left.alignment = .center
-        let right = UIStackView(arrangedSubviews: [count, commentsButton, historyButton, draftsButton, done])
+        let right = UIStackView(arrangedSubviews: [count, outlineButton, commentsButton, historyButton, draftsButton, done])
         right.spacing = 10
         right.alignment = .center
         for v in [left, right] as [UIView] { v.translatesAutoresizingMaskIntoConstraints = false; top.addSubview(v) }
@@ -174,14 +186,22 @@ final class WritingViewController: UIViewController, UITableViewDataSource, UITa
         super.viewDidLayoutSubviews()
         // narrow screens (split view, portrait): the left column gives way to the page; cards need a page wide enough for a margin
         let w = view.bounds.width
+        let compact = w < Self.compactWidth
         let showSide = w >= 900 && !(headings.isEmpty && comments.isEmpty)
         sideWidth?.constant = showSide ? 230 : 0
         side.isHidden = !showSide
+        outlineButton.isHidden = showSide || (headings.isEmpty && comments.isEmpty)
+        titleLabel.isHidden = compact
+        count.isHidden = compact
+        backButton?.configuration?.title = compact ? nil : "Board"
+        historyButton?.configuration?.title = compact ? nil : "History"
+        let margin = compact ? 20 : Self.margin
         let showCards = (board?.marksShown ?? true) && !comments.isEmpty && w >= 1000
-        let right = showCards ? Self.cardWidth + 40 : Self.margin
+        let right = showCards ? Self.cardWidth + 40 : margin
         pageWidth?.constant = showCards ? 780 + right - Self.margin : 780
         let tv = session.textView
-        if tv.textContainerInset.right != right { tv.textContainerInset.right = right }
+        let inset = UIEdgeInsets(top: compact ? 24 : 56, left: margin, bottom: 280, right: right)
+        if tv.textContainerInset != inset { tv.textContainerInset = inset }
         cards.isHidden = !showCards
         placeCards()
     }
@@ -213,7 +233,8 @@ final class WritingViewController: UIViewController, UITableViewDataSource, UITa
         let shown = board?.marksShown ?? true
         commentsButton.configuration = shown && !list.isEmpty ? .filled() : .gray()
         commentsButton.configuration?.image = UIImage(systemName: shown ? "text.bubble.fill" : "text.bubble")
-        commentsButton.configuration?.title = list.isEmpty ? "Comments" : "Comments \(list.count)"
+        let compact = view.bounds.width < Self.compactWidth
+        commentsButton.configuration?.title = compact ? (list.isEmpty ? nil : "\(list.count)") : (list.isEmpty ? "Comments" : "Comments \(list.count)")
         commentsButton.configuration?.imagePadding = 4
         let drafts = session.item.map { BlockDrafts.list($0) } ?? []
         draftsButton.configuration?.title = drafts.count > 1 ? (drafts.first { $0.id == board?.shownDraft(session.id) }?.name ?? "Drafts") : "Drafts"
@@ -395,6 +416,25 @@ final class WritingViewController: UIViewController, UITableViewDataSource, UITa
     }
 
     // MARK: the outline and the comments list
+
+    /// The left column as a menu, for widths it doesn't fit.
+    private func outlineMenu() -> [UIMenuElement] {
+        let outline = headings.enumerated().map { k, h in
+            UIAction(title: String(repeating: "   ", count: max(0, h.level - 1)) + h.title, state: k == lastCaretHeading ? .on : .off) { [weak self] _ in
+                self?.go(to: NSRange(location: h.at, length: 0))
+            }
+        }
+        let marks = comments.map { m in
+            UIAction(title: "“" + (BoardMarks.anchor(m)?.q ?? (m.string("text") ?? "")) + "”", image: UIImage(systemName: "text.bubble")) { [weak self] _ in
+                guard let self else { return }
+                if let r = self.range(of: m) { self.go(to: r) } else { self.board?.openMark(m.id) }
+            }
+        }
+        var out: [UIMenuElement] = []
+        if !outline.isEmpty { out.append(UIMenu(title: "Outline", options: .displayInline, children: outline)) }
+        if !marks.isEmpty { out.append(UIMenu(title: "Comments", options: .displayInline, children: marks)) }
+        return out
+    }
 
     func numberOfSections(in tableView: UITableView) -> Int { 2 }
 
