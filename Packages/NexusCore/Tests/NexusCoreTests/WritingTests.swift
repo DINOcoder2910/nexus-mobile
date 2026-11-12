@@ -134,6 +134,31 @@ final class MarkdownEditTests: XCTestCase {
         XCTAssertEqual(MarkdownEdit.link("see it", r(4, 2)), MDEdit("see [it]()", r(9)))
     }
 
+    func testWordAtTheCaret() {
+        XCTAssertEqual(MarkdownEdit.wordRange("see the site", at: 6), r(4, 3))
+        XCTAssertEqual(MarkdownEdit.wordRange("see the site", at: 4), r(4, 3))   // at its start
+        XCTAssertEqual(MarkdownEdit.wordRange("see the site", at: 7), r(4, 3))   // at its end
+        XCTAssertEqual(MarkdownEdit.wordRange("**año**", at: 3), r(2, 3))
+        XCTAssertNil(MarkdownEdit.wordRange("a  b", at: 2))
+        XCTAssertNil(MarkdownEdit.wordRange("", at: 0))
+        XCTAssertNil(MarkdownEdit.wordRange("x, ", at: 3))
+        // an emoji is two UTF-16 units and not part of a word
+        XCTAssertEqual(MarkdownEdit.wordRange("😀ab", at: 4), r(2, 2))
+    }
+
+    func testTheLinkButton() {
+        // a selection is linked as Ctrl+K does
+        XCTAssertEqual(MarkdownEdit.linkWords("see it", r(4, 2)), MDEdit("see [it]()", r(9)))
+        // no selection: the word at the caret
+        XCTAssertEqual(MarkdownEdit.linkWords("see it now", r(5)), MDEdit("see [it]() now", r(9)))
+        // no word there: nothing, so no stray []()
+        XCTAssertNil(MarkdownEdit.linkWords("see  it", r(4)))
+        XCTAssertNil(MarkdownEdit.linkWords("", r(0)))
+        // the address box
+        XCTAssertEqual(MarkdownEdit.linkAddress("a  b", r(2), " https://x.y "), MDEdit("a [https://x.y](https://x.y) b", r(28)))
+        XCTAssertNil(MarkdownEdit.linkAddress("a", r(1), "  "))
+    }
+
     func testListsToggleAndSwap() {
         XCTAssertEqual(MarkdownEdit.toggleLinePrefix("a\nb", r(0, 3), "- ").text, "- a\n- b")
         XCTAssertEqual(MarkdownEdit.toggleLinePrefix("- a\n- b", r(0, 7), "- ").text, "a\nb")
