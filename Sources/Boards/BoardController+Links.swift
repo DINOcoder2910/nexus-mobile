@@ -92,7 +92,7 @@ extension BoardController {
     func setUpLinks() {
         linkOverlay.frame = view.bounds
         linkOverlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        view.addSubview(linkOverlay)
+        view.insertSubview(linkOverlay, aboveSubview: canvas)
         // a link opened from another board: look at its end here, its links shown
         if let fe = focusEnd, let b = endBox(fe) {
             focus = b.insetBy(dx: -40, dy: -40)
@@ -106,8 +106,8 @@ extension BoardController {
     // MARK: where things are
 
     func screenPoint(_ b: CGPoint) -> CGPoint {
-        let z = canvas.zoomScale, o = canvas.contentOffset
-        return CGPoint(x: (b.x + offset.x) * z - o.x, y: (b.y + offset.y) * z - o.y)
+        let z = canvas.zoomScale, o = canvas.contentOffset, f = canvas.frame.origin
+        return CGPoint(x: (b.x + offset.x) * z - o.x + f.x, y: (b.y + offset.y) * z - o.y + f.y)
     }
 
     func screenRect(_ r: CGRect) -> CGRect {
@@ -142,8 +142,7 @@ extension BoardController {
             return CGRect(x: b[0], y: b[1], width: max(4, b[2] - b[0]), height: max(4, b[3] - b[1]))
         }
         if it.type == "text", let at = e["at"], let md = content.texts[id], let r = BoardLinks.find(md, at),
-           let v = itemViews[id] as? TextBlockView,
-           let w = v.wordsRect(BoardLinks.plainWords((md as NSString).substring(with: r))) {
+           let v = itemViews[id] as? TextBlockView, let w = v.rect(ofMarkdown: r) {
             return w.insetBy(dx: -2, dy: -1).offsetBy(dx: CGFloat(it.x), dy: CGFloat(it.y))
         }
         return box(of: it)
@@ -402,6 +401,15 @@ extension BoardController {
             UIAction(title: "Peek", image: UIImage(systemName: "eye")) { [weak self] _ in self?.peek(e, from: l.id, side: side) },
             UIAction(title: openTitle(e), image: UIImage(systemName: "arrow.up.forward.app")) { [weak self] _ in self?.open(e) },
         ]
+        if BoardLinks.kind(e) == .board, let onSide, !isSidePane, let target = BoardLinks.board(of: e, from: path) {
+            items.append(UIAction(title: "Open beside", image: UIImage(systemName: "rectangle.split.2x1")) { [weak self] _ in
+                guard let self else { return }
+                self.saveNow()
+                var t = NexusStore.BoardTarget(path: target, focus: nil)
+                if e?["on"] != nil { t.focusEnd = BoardLinks.end(e, readOn: self.path, shownOn: target) }
+                onSide(.board(t))
+            })
+        }
         if !readOnly {
             items.append(colorMenu(l.id))
             items.append(UIAction(title: "Remove link", image: UIImage(systemName: "link.badge.minus"), attributes: .destructive) { [weak self] _ in
@@ -442,16 +450,25 @@ extension BoardController {
 
     // MARK: the bar
 
-    func linkBarItems() -> [UIBarButtonItem] {
-        var out: [UIBarButtonItem] = []
-        let menu = UIBarButtonItem(title: "Links", image: UIImage(systemName: "point.3.connected.trianglepath.dotted"), primaryAction: nil, menu: linksMenu())
-        out.append(menu)
+    /// The bar's link buttons (BoardBar's extra buttons): Link mode, and the Links menu.
+    func linkBarButtons() -> [UIButton] {
+        let size = UIImage.SymbolConfiguration(pointSize: 17)
+        var out: [UIButton] = []
         if !readOnly {
-            let b = UIBarButtonItem(image: UIImage(systemName: links.mode ? "link.circle.fill" : "link"), style: .plain, target: self,
-                                    action: #selector(toggleLinkMode))
+            var c = links.mode ? UIButton.Configuration.tinted() : UIButton.Configuration.plain()
+            c.image = UIImage(systemName: "link", withConfiguration: size)
+            let b = UIButton(configuration: c, primaryAction: UIAction { [weak self] _ in self?.toggleLinkMode() })
             b.accessibilityLabel = links.mode ? "Link mode on" : "Link mode"
+            b.isSelected = links.mode
             out.append(b)
         }
+        var m = UIButton.Configuration.plain()
+        m.image = UIImage(systemName: "point.3.connected.trianglepath.dotted", withConfiguration: size)
+        let mb = UIButton(configuration: m)
+        mb.menu = linksMenu()
+        mb.showsMenuAsPrimaryAction = true
+        mb.accessibilityLabel = "Links"
+        out.append(mb)
         return out
     }
 
@@ -982,5 +999,14 @@ extension BoardController {
         let host = UIHostingController(rootView: list)
         host.modalPresentationStyle = .formSheet
         present(host, animated: true)
+    }
+}
+
+extension TextBlockView {
+    /// Where the markdown's characters in `range` are drawn (this view's coordinates): the block lays out its markdown as it is.
+    func rect(ofMarkdown range: NSRange) -> CGRect? {
+        guard let t = layout?.text, range.location >= 0, range.length > 0, NSMaxRange(range) <= t.storage.length else { return nil }
+        let g = t.manager.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+        return t.manager.boundingRect(forGlyphRange: g, in: t.container).offsetBy(dx: t.padding.x, dy: t.padding.y)
     }
 }

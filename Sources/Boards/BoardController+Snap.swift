@@ -51,7 +51,7 @@ extension BoardController {
             let q = CGPoint(x: (CGFloat(p.x) + offset.x) * z - o.x, y: (CGFloat(p.y) + offset.y) * z - o.y)
             if i == 0 { path.move(to: q) } else { path.addLine(to: q) }
         }
-        let tool = toolPicker.selectedTool as? PKInkingTool
+        let tool = canvas.tool as? PKInkingTool
         let width = max(2, (tool?.width ?? 3) * z * 0.6)
         snapLine.path = path.cgPath
         snapLine.strokeColor = (tool?.color ?? .black).cgColor
@@ -75,7 +75,7 @@ extension BoardController {
         if let n = awaitingSnap {
             awaitingSnap = nil
             let landed = canvas.drawing.strokes.count == n
-            if landed, held || endsInHold(canvas.drawing.strokes[n - 1]) {
+            if landed, held || alwaysSnap || endsInHold(canvas.drawing.strokes[n - 1]) {
                 _ = hold.take()
                 snapLastStroke()
             }
@@ -91,9 +91,12 @@ extension BoardController {
             return
         }
         let held = hold.take()
-        if let last = canvas.drawing.strokes.last, held || endsInHold(last) { snapLastStroke() }
+        if let last = canvas.drawing.strokes.last, held || alwaysSnap || endsInHold(last) { snapLastStroke() }
         pendingShape = nil
     }
+
+    /// The Shapes tool snaps every stroke it can, without the hold.
+    var alwaysSnap: Bool { BoardTools.shared.tool == .shapes }
 
     func endsInHold(_ k: PKStroke) -> Bool {
         let s = InkConvert.boardStroke(k, offset: offset, id: "")
@@ -106,7 +109,7 @@ extension BoardController {
         guard let stroke = strokes.last else { return }
         let s = InkConvert.boardStroke(stroke, offset: offset, id: "")
         guard let shape = pendingShape ?? Shapes.recognize(s.points.map { SIMD2<Double>($0[0], $0[1]) }) else {
-            if pathLength(s.points.map { SIMD2<Double>($0[0], $0[1]) }) * Double(canvas.zoomScale) > 60 { toast("Hold noticed: no shape there") }
+            if !alwaysSnap, pathLength(s.points.map { SIMD2<Double>($0[0], $0[1]) }) * Double(canvas.zoomScale) > 60 { toast("Hold noticed: no shape there") }
             return
         }
         pendingShape = nil

@@ -1,0 +1,253 @@
+{
+ "_doc": "Shared test table for marks that hold on to words: nexus renderer/src/board/anchor.js and nexus-mobile NexusCore Anchor.swift must both pass it. Positions are UTF-16 offsets. want null = a ghost (ghost = where it waits). make: makeAnchor(text, from, to) must give at.",
+ "find": [
+  {
+   "name": "unchanged text finds the words where they were",
+   "text": "Redox is the transfer of electrons.\nOxidation is loss of electrons; reduction is gain of electrons.\nOIL RIG helps you remember it.",
+   "at": {
+    "q": "loss of electrons",
+    "pre": "trons.\nOxidation is ",
+    "post": "; reduction is gain ",
+    "i": 49
+   },
+   "want": {
+    "from": 49,
+    "to": 66,
+    "how": "exact"
+   }
+  },
+  {
+   "name": "a sentence added above moves the mark down with its words",
+   "text": "A new first line.\nRedox is the transfer of electrons.\nOxidation is loss of electrons; reduction is gain of electrons.\nOIL RIG helps you remember it.",
+   "at": {
+    "q": "loss of electrons",
+    "pre": "trons.\nOxidation is ",
+    "post": "; reduction is gain ",
+    "i": 49
+   },
+   "want": {
+    "from": 67,
+    "to": 84,
+    "how": "exact"
+   }
+  },
+  {
+   "name": "text added just before the words on the same line",
+   "text": "Redox is the transfer of electrons.\nOxidation (OIL) is loss of electrons; reduction is gain of electrons.\nOIL RIG helps you remember it.",
+   "at": {
+    "q": "loss of electrons",
+    "pre": "trons.\nOxidation is ",
+    "post": "; reduction is gain ",
+    "i": 49
+   },
+   "want": {
+    "from": 55,
+    "to": 72,
+    "how": "exact"
+   }
+  },
+  {
+   "name": "of three copies of a word, the one with the same surroundings",
+   "text": "Redox is the transfer of electrons.\nOxidation is loss of electrons; reduction is gain of electrons.\nOIL RIG helps you remember it.",
+   "at": {
+    "q": "electrons",
+    "pre": "eduction is gain of ",
+    "post": ".\nOIL RIG helps you ",
+    "i": 89
+   },
+   "want": {
+    "from": 89,
+    "to": 98,
+    "how": "exact"
+   }
+  },
+  {
+   "name": "the same surroundings win over being nearest",
+   "text": "electrons electrons electrons. Redox is the transfer of electrons.\nOxidation is loss of electrons; reduction is gain of electrons.\nOIL RIG helps you remember it.",
+   "at": {
+    "q": "electrons",
+    "pre": "eduction is gain of ",
+    "post": ".\nOIL RIG helps you ",
+    "i": 89
+   },
+   "want": {
+    "from": 120,
+    "to": 129,
+    "how": "exact"
+   }
+  },
+  {
+   "name": "two equal copies: the one nearest to where it was",
+   "text": "gain of electrons.\ngain of electrons.\n",
+   "at": {
+    "q": "electrons",
+    "pre": " electrons.\ngain of ",
+    "post": ".\n",
+    "i": 27
+   },
+   "want": {
+    "from": 27,
+    "to": 36,
+    "how": "exact"
+   }
+  },
+  {
+   "name": "the words deleted: a ghost",
+   "text": "Redox is the transfer of electrons.\nOxidation is loss of electrons; reduction is gain of electrons.\nhelps you remember it.",
+   "at": {
+    "q": "OIL RIG",
+    "pre": " gain of electrons.\n",
+    "post": " helps you remember ",
+    "i": 100
+   },
+   "want": null,
+   "ghost": 100
+  },
+  {
+   "name": "the words replaced by other words: a ghost",
+   "text": "Redox is the transfer of electrons.\nOxidation is loss of electrons; reduction is gain of electrons.\nIt helps you remember it.",
+   "at": {
+    "q": "OIL RIG",
+    "pre": " gain of electrons.\n",
+    "post": " helps you remember ",
+    "i": 100
+   },
+   "want": null,
+   "ghost": 100
+  },
+  {
+   "name": "a letter case change inside the words still holds",
+   "text": "Redox is the transfer of electrons.\nOxidation is Loss of Electrons; reduction is gain of electrons.\nOIL RIG helps you remember it.",
+   "at": {
+    "q": "loss of electrons",
+    "pre": "trons.\nOxidation is ",
+    "post": "; reduction is gain ",
+    "i": 49
+   },
+   "want": {
+    "from": 49,
+    "to": 66,
+    "how": "between"
+   }
+  },
+  {
+   "name": "a word inside the marked words fixed: it holds on to what is between",
+   "text": "Redox is the transfer of electrons.\nOxidation is loss of an electron; reduction is gain of electrons.\nOIL RIG helps you remember it.",
+   "at": {
+    "q": "loss of electrons",
+    "pre": "trons.\nOxidation is ",
+    "post": "; reduction is gain ",
+    "i": 49
+   },
+   "want": {
+    "from": 49,
+    "to": 68,
+    "how": "between"
+   }
+  },
+  {
+   "name": "the words and what was around them all gone: a ghost",
+   "text": "Something else entirely.",
+   "at": {
+    "q": "loss of electrons",
+    "pre": "trons.\nOxidation is ",
+    "post": "; reduction is gain ",
+    "i": 49
+   },
+   "want": null,
+   "ghost": 0
+  },
+  {
+   "name": "an empty block: a ghost",
+   "text": "",
+   "at": {
+    "q": "OIL RIG",
+    "pre": " gain of electrons.\n",
+    "post": " helps you remember ",
+    "i": 100
+   },
+   "want": null,
+   "ghost": 0
+  },
+  {
+   "name": "emoji and accents before the words count in UTF-16",
+   "text": "Él 😀 Redox is the transfer of electrons.\nOxidation is loss of electrons; reduction is gain of electrons.\nOIL RIG helps you remember it.",
+   "at": {
+    "q": "OIL RIG",
+    "pre": " gain of electrons.\n",
+    "post": " helps you remember ",
+    "i": 100
+   },
+   "want": {
+    "from": 106,
+    "to": 113,
+    "how": "exact"
+   }
+  },
+  {
+   "name": "the whole block was the quote",
+   "text": "café",
+   "at": {
+    "q": "café",
+    "pre": "",
+    "post": "",
+    "i": 0
+   },
+   "want": {
+    "from": 0,
+    "to": 4,
+    "how": "exact"
+   }
+  },
+  {
+   "name": "the words moved to another line",
+   "text": "Redox is the transfer of electrons.\nOxidation is loss of electrons; reduction is gain of electrons.\nRemember: OIL RIG helps you remember it.",
+   "at": {
+    "q": "OIL RIG",
+    "pre": " gain of electrons.\n",
+    "post": " helps you remember ",
+    "i": 100
+   },
+   "want": {
+    "from": 110,
+    "to": 117,
+    "how": "exact"
+   }
+  }
+ ],
+ "make": [
+  {
+   "text": "Redox is the transfer of electrons.\nOxidation is loss of electrons; reduction is gain of electrons.\nOIL RIG helps you remember it.",
+   "from": 49,
+   "to": 66,
+   "at": {
+    "q": "loss of electrons",
+    "pre": "trons.\nOxidation is ",
+    "post": "; reduction is gain ",
+    "i": 49
+   }
+  },
+  {
+   "text": "ab",
+   "from": 0,
+   "to": 2,
+   "at": {
+    "q": "ab",
+    "pre": "",
+    "post": "",
+    "i": 0
+   }
+  },
+  {
+   "text": "x😀y",
+   "from": 1,
+   "to": 3,
+   "at": {
+    "q": "😀",
+    "pre": "x",
+    "post": "y",
+    "i": 1
+   }
+  }
+ ]
+}

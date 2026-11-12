@@ -28,6 +28,8 @@ struct RootView: View {
     @Environment(\.scenePhase) private var phase
     @State private var screen: Screen? = .today
     @State private var columns = NavigationSplitViewVisibility.all
+    /// Beside the open board (side by side).
+    @State private var side: SidePane?
 
     var body: some View {
         @Bindable var store = store
@@ -35,23 +37,26 @@ struct RootView: View {
             Sidebar(selection: $screen)
                 .navigationSplitViewColumnWidth(min: 240, ideal: 280, max: 340)
         } detail: {
-            NavigationStack {
-                detail
+            // an open board takes the detail column, beside the sidebar (its bar shows and hides the sidebar)
+            if let target = store.openBoard {
+                BoardPanes(main: target, side: $side, columns: $columns).id(target.id)
+            } else {
+                NavigationStack {
+                    detail
+                }
+                .id(screen)
             }
-            .id(screen)
         }
         .overlay(alignment: .bottom) { UndoBar().animation(.snappy, value: store.toast) }
         .sheet(isPresented: Binding(get: { store.openTaskId != nil }, set: { if !$0 { store.openTaskId = nil } })) {
             if let id = store.openTaskId { TaskDetailView(taskId: id).id(id) }
         }
         .sheet(item: $store.capture) { start in CaptureSheet(start: start) }
-        .fullScreenCover(item: $store.openBoard) { target in
-            BoardHost(target: target, root: store.folder, onClose: { store.openBoard = nil }, onSaved: { path in
-                store.boardsChanged()
-                HandwritingIndex.shared.refresh(board: path, root: store.folder)
-            })
-            .ignoresSafeArea()
+        .onChange(of: store.openBoard?.id) { _, now in
+            side = nil
+            withAnimation { columns = now == nil ? .all : .detailOnly }
         }
+        .onChange(of: screen) { _, _ in store.openBoard = nil }
         .alert("Couldn't do that", isPresented: Binding(get: { store.problem != nil }, set: { if !$0 { store.problem = nil } })) {
             Button("OK", role: .cancel) {}
         } message: { Text(store.problem ?? "") }

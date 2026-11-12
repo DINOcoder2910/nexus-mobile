@@ -9,7 +9,7 @@ import Foundation
 ///     outside boards     { task: "<task id>" } | { note: "<data-folder path>" } | { deck: "<data-folder path>", card: "<card id>" }
 ///
 /// Here: making and reading ends, holding on to words (the quote with its context, found again after edits; offsets count UTF-16
-/// units, as JavaScript does), PDF spots as fractions of a page, which links touch what, the cross-board index's pieces, the ribbon's
+/// units, as JavaScript does; found again by Anchor.swift), PDF spots as fractions of a page, which links touch what, the cross-board index's pieces, the ribbon's
 /// geometry and the words shown for an end. Pure: the board screen (BoardController+Links.swift) draws and edits.
 public enum BoardLinks {
     public static let feature = "links"
@@ -183,40 +183,10 @@ public enum BoardLinks {
         return .object([("q", .string(q)), ("pre", .string(pre)), ("post", .string(post)), ("i", .number(Double(from)))])
     }
 
-    /// Where the quoted words are now (UTF-16 offsets): the occurrence whose context matches best, nearest the hint; nil = a ghost.
+    /// Where the quoted words are now (UTF-16 offsets), found as a mark finds its words (Anchor.swift); nil = a ghost.
     public static func find(_ md: String, _ at: JSONValue?) -> NSRange? {
-        guard let at, let q = str(at["q"]) else { return nil }
-        let s = md as NSString, n = s.length
-        let pre = (at["pre"]?.string ?? "") as NSString, post = (at["post"]?.string ?? "") as NSString
-        let qn = (q as NSString).length
-        let hint = at["i"].flatMap(numeric) ?? 0
-        var best: (r: NSRange, score: Double)?
-        var start = 0
-        while start <= n {
-            let r = s.range(of: q, options: .literal, range: NSRange(location: start, length: n - start))
-            if r.location == NSNotFound { break }
-            let k = r.location
-            let b0 = max(0, k - pre.length)
-            let before = s.substring(with: NSRange(location: b0, length: k - b0)) as NSString
-            let aEnd = min(n, k + qn + post.length)
-            let after = s.substring(with: NSRange(location: k + qn, length: aEnd - k - qn)) as NSString
-            let score = Double(common(before, pre, fromEnd: true) + common(after, post, fromEnd: false)) - min(20, abs(Double(k) - hint) / 50)
-            if best == nil || score > best!.score { best = (NSRange(location: k, length: qn), score) }
-            start = k + 1
-        }
-        return best?.r
-    }
-
-    static func common(_ x: NSString, _ y: NSString, fromEnd: Bool) -> Int {
-        var n = 0
-        let L = min(x.length, y.length)
-        while n < L {
-            let a = fromEnd ? x.character(at: x.length - 1 - n) : x.character(at: n)
-            let b = fromEnd ? y.character(at: y.length - 1 - n) : y.character(at: n)
-            if a != b { break }
-            n += 1
-        }
-        return n
+        guard let a = WordAnchor(at), !a.q.isEmpty, let m = Anchor.find(md, a) else { return nil }
+        return NSRange(location: m.from, length: m.to - m.from)
     }
 
     /// The quote as plain words (markdown marks out), to find it in the drawn block.

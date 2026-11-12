@@ -20,7 +20,7 @@ public enum BoardFormat {
     public static let itemTypes: Set<String> = ["text", "image", "pdf", "shape", "link"]
     /// The board redesign's features this app understands (nexus docs/data-format.md "Features"): a board.json naming one not here
     /// opens read-only. Add a name in the same change that makes the app read and write that feature.
-    public static let features: Set<String> = [BoardLinks.feature]
+    public static let features: Set<String> = ["writing", "space", BoardLinks.feature]
     /// A placeholder's size when a foreign item has none.
     public static let foreignSize = (w: 200.0, h: 80.0)
 

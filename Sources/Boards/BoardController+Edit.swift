@@ -21,6 +21,7 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
 
     func setUpGestures() {
         let tap = UITapGestureRecognizer(target: self, action: #selector(tapped(_:)))
+        tap.name = "tap"
         tap.allowedTouchTypes = BoardController.direct
         tap.delegate = self
         canvas.addGestureRecognizer(tap)
@@ -53,6 +54,7 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
     }
 
     func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
+        if let tool = toolGestureShouldBegin(g) { return tool }
         guard g.name == "itemPan", let pan = g as? UIPanGestureRecognizer else { return true }
         if links.mode { return linkPanShouldBegin(pan) }
         guard !readOnly, let id = selected, let it = content.items.first(where: { $0.id == id }) else { return false }
@@ -74,6 +76,8 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
     }
 
     @objc func tapped(_ g: UITapGestureRecognizer) {
+        // a tap away from the block being typed in closes it
+        if writing != nil { endWriting(); return }
         let p = boardPoint(g)
         if links.mode { linkTapped(p); return }
         guard let it = hitItem(p, pdf: false) else { selected = nil; return }
@@ -84,7 +88,7 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
                 changeItems("Tick") { $0.texts[it.id] = md }
                 return
             }
-            if selected == it.id { edit(it); return }
+            if selected == it.id { beginWriting(it, at: p); return }
         }
         selected = it.id
     }
@@ -191,33 +195,9 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
         if let id = selected, let it = content.items.first(where: { $0.id == id }) { edit(it) }
     }
 
-    /// The text block's editor: its markdown, size, colour and background.
+    /// Typing in a block, in place (BoardController+Writing.swift).
     func edit(_ it: BoardItem) {
-        guard !readOnly else { return }
-        let id = it.id
-        // the editor closes itself
-        let editor = TextBlockEditor(markdown: content.texts[id] ?? "", item: it, onDone: { [weak self] md, item in
-            self?.finishEdit(id, md, item)
-        }, onDelete: { [weak self] in
-            self?.selected = nil
-            self?.changeItems("Delete") { c in c.items.removeAll { $0.id == id || BoardLinks.side($0, on: id) != nil }; c.texts[id] = nil }
-        })
-        let host = UIHostingController(rootView: AnyView(editor.onDisappear { [weak self] in self?.dropIfEmpty(id) }))
-        host.modalPresentationStyle = .formSheet
-        present(host, animated: true)
-    }
-
-    func finishEdit(_ id: String, _ md: String, _ item: BoardItem) {
-        guard content.items.contains(where: { $0.id == id }) else { return }
-        if md.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            selected = nil
-            changeItems("Delete") { c in c.items.removeAll { $0.id == id || BoardLinks.side($0, on: id) != nil }; c.texts[id] = nil }
-            return
-        }
-        changeItems("Edit text") { c in
-            if let i = c.items.firstIndex(where: { $0.id == id }) { c.items[i] = item }
-            c.texts[id] = md
-        }
+        beginWriting(it)
     }
 
     /// A new block left empty goes away again (as on the laptop).
@@ -265,9 +245,10 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
         edit(it)
     }
 
+    /// The pen's colour as saved (light), for a shape added from the menu.
     var currentColor: String {
-        if let tool = canvas.tool as? PKInkingTool { return InkConvert.hex(tool.color) }
-        return "#1B1B1BFF"
+        let t = BoardTools.shared.tool
+        return BoardTools.shared.color(t.inks && t != .highlighter ? t : .pen) + "FF"
     }
 
     func insertShape(_ kind: String) {
