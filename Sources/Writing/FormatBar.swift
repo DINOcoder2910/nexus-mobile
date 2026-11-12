@@ -301,6 +301,8 @@ final class FormatBar: UIInputView {
         return out
     }
 
+    /// The block's menu, kept short enough to fit above the keyboard: the everyday rows, Fold and Delete at the top, the rest in
+    /// Comments, Room and Options submenus.
     private func moreItems() -> [UIMenuElement] {
         guard let s = session, let b = s.board, let it = s.item else { return [] }
         let id = s.id
@@ -308,19 +310,6 @@ final class FormatBar: UIInputView {
         var out: [UIMenuElement] = []
         out.append(UIAction(title: "Writing view", image: UIImage(systemName: "arrow.up.left.and.arrow.down.right")) { [weak b] _ in b?.openWritingView(id) })
         out.append(UIAction(title: "Find and replace", image: UIImage(systemName: "magnifyingglass")) { [weak b] _ in b?.openFind(id) })
-        out.append(UIAction(title: "\(c.words) words · \(c.characters) characters", attributes: .disabled) { _ in })
-        let sel = s.textView.selectedRange
-        let shown = b.marksShown
-        out.append(UIMenu(options: .displayInline, children: [
-            UIAction(title: "Comment", image: UIImage(systemName: "text.bubble")) { [weak b] _ in b?.addComment(on: id, range: sel) },
-            UIAction(title: "Add a Nexus task", image: UIImage(systemName: "checkmark.circle.badge.plus")) { [weak b] _ in b?.addNexusTask(from: id, range: sel) },
-            UIAction(title: "All comments", image: UIImage(systemName: "list.bullet.rectangle")) { [weak b] _ in b?.openComments() },
-            UIAction(title: "Show comments", image: UIImage(systemName: "eye"), state: shown ? .on : .off) { [weak b] _ in b?.marksShown = !shown },
-        ]))
-        out.append(UIAction(title: "Cover with revision tape", subtitle: "A strip on each line; tap one to peek", image: UIImage(systemName: "rectangle.dashed")) { [weak b] _ in
-            b?.endWriting()
-            b?.tapeBlock(id)
-        })
         if it.json["chip"]?.bool == true {
             out.append(UIAction(title: "Unfold", subtitle: "Show the words on the board again", image: UIImage(systemName: "rectangle.expand.vertical")) { [weak b] _ in
                 b?.setBlockField(id, "chip", nil)
@@ -331,17 +320,32 @@ final class FormatBar: UIInputView {
                 b?.setBlockField(id, "chip", .bool(true))
             })
         }
+        let sel = s.textView.selectedRange
+        let shown = b.marksShown
+        out.append(UIAction(title: "Add a Nexus task", image: UIImage(systemName: "checkmark.circle.badge.plus")) { [weak b] _ in b?.addNexusTask(from: id, range: sel) })
+        out.append(UIMenu(title: "Comments", image: UIImage(systemName: "text.bubble"), children: [
+            UIAction(title: "Comment", image: UIImage(systemName: "text.bubble")) { [weak b] _ in b?.addComment(on: id, range: sel) },
+            UIAction(title: "All comments", image: UIImage(systemName: "list.bullet.rectangle")) { [weak b] _ in b?.openComments() },
+            UIAction(title: "Show comments", image: UIImage(systemName: "eye"), state: shown ? .on : .off) { [weak b] _ in b?.marksShown = !shown },
+        ]))
         let push = it.json["push"]?.bool ?? false
-        out.append(UIMenu(options: .displayInline, children: [
+        out.append(UIMenu(title: "Room", image: UIImage(systemName: "arrow.down.to.line"), children: [
             UIAction(title: "Make room", image: UIImage(systemName: "arrow.down.to.line")) { [weak b] _ in b?.makeRoom(id) },
             UIAction(title: "Push things below", image: UIImage(systemName: "arrow.down.square"), state: push ? .on : .off) { [weak b] _ in
                 b?.setBlockField(id, "push", push ? nil : .bool(true))
             },
         ]))
         let chem = it.json["chem"]?.bool ?? true
-        out.append(UIAction(title: "Chemistry subscripts", image: UIImage(systemName: "flask"), state: chem ? .on : .off) { [weak b] _ in
-            b?.setBlockField(id, "chem", chem ? .bool(false) : nil)
-        })
+        out.append(UIMenu(title: "Options", image: UIImage(systemName: "gearshape"), children: [
+            UIAction(title: "Cover with revision tape", subtitle: "A strip on each line; tap one to peek", image: UIImage(systemName: "rectangle.dashed")) { [weak b] _ in
+                b?.endWriting()
+                b?.tapeBlock(id)
+            },
+            UIAction(title: "Chemistry subscripts", image: UIImage(systemName: "flask"), state: chem ? .on : .off) { [weak b] _ in
+                b?.setBlockField(id, "chem", chem ? .bool(false) : nil)
+            },
+        ]))
+        out.append(UIAction(title: "\(c.words) words · \(c.characters) characters", attributes: .disabled) { _ in })
         out.append(UIMenu(options: .displayInline, children: [
             UIAction(title: "Delete block", image: UIImage(systemName: "trash"), attributes: .destructive) { [weak b] _ in b?.deleteBlock(id) },
         ]))
