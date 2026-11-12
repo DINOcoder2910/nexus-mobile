@@ -78,8 +78,11 @@ final class MDLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
             let at = location(forGlyphAt: g)
             let font = (storage.attribute(.font, at: range.location, effectiveRange: nil) as? UIFont) ?? UIFont.systemFont(ofSize: 16)
             let baseline = frag.minY + at.y
-            let r = CGRect(x: origin.x + frag.minX + at.x, y: origin.y + baseline - font.xHeight / 2 - box.size.height / 2,
-                           width: box.size.width, height: box.size.height)
+            let r = box.block
+                ? CGRect(x: origin.x + frag.minX + max(0, (frag.width - box.size.width) / 2), y: origin.y + baseline - box.size.height - font.descender,
+                         width: box.size.width, height: box.size.height)
+                : CGRect(x: origin.x + frag.minX + at.x, y: origin.y + baseline - font.xHeight / 2 - box.size.height / 2,
+                         width: box.size.width, height: box.size.height)
             box.image.draw(in: r)
         }
     }
