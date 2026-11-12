@@ -158,7 +158,7 @@ extension BoardController {
             guard let top = ys.min(), top < line, let low = ys.max() else { continue }
             bottom = max(bottom, low)
         }
-        for it in content.items where !except.contains(it.id) {
+        for it in content.items where !except.contains(it.id) && !BoardLinks.isLink(it) {
             let b = box(of: it)
             if b.minY < line { bottom = max(bottom, b.maxY) }
         }

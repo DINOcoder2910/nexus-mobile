@@ -44,7 +44,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     var pdfs: [String: PdfPrintout] = [:]
     var itemViews: [String: UIView] = [:]
     var textSizes: [String: CGSize] = [:]
-    var selected: String? { didSet { showSelection(); updateBar() } }
+    var selected: String? { didSet { showSelection(); updateBar(); paintLinks() } }
 
     var offset = CGPoint(x: 1200, y: 1200)
     let pad: CGFloat = 1200
@@ -79,6 +79,12 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     var pendingShape: Shapes.Recognized?
     var awaitingSnap: Int?
     let toastLabel = UILabel()
+
+    // links (BoardController+Links.swift)
+    let linkOverlay = LinkOverlay()
+    var links = LinkState()
+    /// An end on this board to show first (a link opened from another board).
+    var focusEnd: JSONValue?
 
     // the bar, the paper, dark boards, Insert space (BoardController+Bar, BoardTheme, BoardController+Space)
     let bar = BoardBar()
@@ -154,6 +160,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         setUpSpaceGuide()
         setUpBar()
         applyTool()
+        setUpLinks()
 
         NotificationCenter.default.addObserver(self, selector: #selector(saveNowSelector), name: UIApplication.willResignActiveNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(otherPaneSaved(_:)), name: BoardController.savedNote, object: nil)
@@ -184,6 +191,14 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         applyTheme()
         if !readOnly { canvas.becomeFirstResponder() }
         if let p = loadProblem ?? content.readOnly { tell(p) } else { showHintOnce() }
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        // back from a board opened on top (a link's far end): look for outside changes again
+        if poll?.isValid != true, isViewLoaded {
+            poll = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.checkOutside() }
+        }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -229,7 +244,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         } else if includeInk, !canvas.drawing.strokes.isEmpty {
             r = canvas.drawing.bounds.offsetBy(dx: -offset.x, dy: -offset.y)
         }
-        for it in content.items { r = r.union(box(of: it)) }
+        for it in content.items where !BoardLinks.isLink(it) { r = r.union(box(of: it)) }
         return r.isNull ? nil : r
     }
 
@@ -281,6 +296,8 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         for (id, p) in pdfs where !ids.contains(id) { p.remove(); pdfs[id] = nil }
         for it in content.items.sorted(by: { $0.id < $1.id }) {
             switch it.type {
+            case "link":
+                continue // drawn over the board by paintLinks
             case "pdf":
                 if let p = pdfs[it.id] {
                     if p.item.src == it.src { p.update(it) } else { p.remove(); pdfs[it.id] = nil }
@@ -384,6 +401,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
             bar.updatePills()
         }
         writing?.place()
+        paintLinks()
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) { syncWorld() }
@@ -521,7 +539,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     func updateBar() {
         guard isViewLoaded else { return }
         // rebuilt only when something it shows changed (this runs on every item move)
-        let key = "\(selected ?? "")|\(pdfs.count)|\(readOnly)|\(paper.kind.rawValue)\(paper.size)|\(canvas.isRulerActive)|\(toolPanel != nil)"
+        let key = "\(selected ?? "")|\(pdfs.count)|\(readOnly)|\(paper.kind.rawValue)\(paper.size)|\(canvas.isRulerActive)|\(toolPanel != nil)|\(links.mode)\(links.showAll)\(links.color)"
         guard key != lastBarKey else { return }
         lastBarKey = key
         bar.refresh()

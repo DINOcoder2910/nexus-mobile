@@ -32,6 +32,8 @@ final class NexusStore {
         var path: String
         /// A place on the board (board units) to show first, e.g. a search hit.
         var focus: CGRect?
+        /// A link's end on the board to show first (its box is known once the board is read).
+        var focusEnd: JSONValue? = nil
     }
 
     struct Toast: Identifiable, Equatable {

@@ -184,7 +184,7 @@ extension BoardController {
             for p in s.points where p.count >= 2 { r = r.union(CGRect(x: p[0], y: p[1], width: 0.1, height: 0.1)) }
             if !r.isNull { out.append(("stroke", s.id, r)) }
         }
-        for it in content.items where it.id != id { out.append(("item", it.id, box(of: it))) }
+        for it in content.items where it.id != id && !BoardLinks.isLink(it) { out.append(("item", it.id, box(of: it))) }
         return out
     }
 

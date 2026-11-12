@@ -85,8 +85,9 @@ final class BoardSplitController: UIViewController {
     }
 
     /// A board in the second pane.
-    func showBoard(_ path: String) {
+    func showBoard(_ path: String, focusEnd: JSONValue? = nil) {
         let b = BoardController(root: root, path: path, focus: nil)
+        b.focusEnd = focusEnd
         b.store = store
         b.onSaved = onSaved
         b.onClose = { [weak self] in self?.closeSide() }

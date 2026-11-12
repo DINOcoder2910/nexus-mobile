@@ -252,7 +252,7 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
         tools.tintColor = toolPanel != nil ? .tintColor : .label
         tools.accessibilityLabel = "Tools"
         tools.toolTip = "Tools"
-        return [tools] + boardExtraButtons()
+        return [tools] + boardExtraButtons() + linkBarButtons()
     }
 
     var pageLabel: String { currentPage.isEmpty ? "" : currentPage }

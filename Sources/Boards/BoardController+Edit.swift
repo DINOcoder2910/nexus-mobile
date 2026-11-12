@@ -56,6 +56,7 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
     func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
         if let tool = toolGestureShouldBegin(g) { return tool }
         guard g.name == "itemPan", let pan = g as? UIPanGestureRecognizer else { return true }
+        if links.mode { return linkPanShouldBegin(pan) }
         guard !readOnly, let id = selected, let it = content.items.first(where: { $0.id == id }) else { return false }
         let z = canvas.zoomScale
         let t = pan.translation(in: canvas)
@@ -70,7 +71,7 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
     func hitItem(_ p: CGPoint, pdf: Bool) -> BoardItem? {
         let z = canvas.zoomScale
         let order = ["text": 0, "shape": 1, "image": 2, "tool": 2, "pdf": 3]
-        let items = content.items.filter { pdf || $0.type != "pdf" }.sorted { (order[$0.type] ?? 9, $1.id) < (order[$1.type] ?? 9, $0.id) }
+        let items = content.items.filter { !BoardLinks.isLink($0) && (pdf || $0.type != "pdf") }.sorted { (order[$0.type] ?? 9, $1.id) < (order[$1.type] ?? 9, $0.id) }
         return items.first { box(of: $0).insetBy(dx: -6 / z, dy: -6 / z).contains(p) }
     }
 
@@ -79,6 +80,7 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
         if writing != nil { endWriting(); return }
         let p = boardPoint(g)
         if recordingTap(p) { return }
+        if links.mode { linkTapped(p); return }
         guard let it = hitItem(p, pdf: false) else { selected = nil; return }
         if it.type == "mark" { selected = nil; openMark(it.id); return }
         if it.type == "tape", selected != it.id { togglePeek(it.id); return }
@@ -107,6 +109,7 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
     }
 
     @objc func panned(_ g: UIPanGestureRecognizer) {
+        if links.mode || links.band != nil { linkPanned(g); return }
         let z = canvas.zoomScale
         switch g.state {
         case .began:
@@ -195,7 +198,7 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
         guard let id = selected else { return }
         selected = nil
         changeItems("Delete") { c in
-            c.items.removeAll { $0.id == id }
+            c.items.removeAll { $0.id == id || BoardLinks.side($0, on: id) != nil } // its links go with it
             c.texts[id] = nil
         }
     }
