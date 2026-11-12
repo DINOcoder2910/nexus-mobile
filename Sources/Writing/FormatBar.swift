@@ -12,11 +12,20 @@ final class FormatBar: UIInputView {
     private var countLabel = UILabel()
     /// á é í ó ú ñ ü ¿ ¡, shown for a Spanish block.
     private let accentStack = UIStackView()
+    /// A solid backing: on iPadOS 26 a `.keyboard` input view draws nothing behind its buttons, so the board showed through.
+    private let backdrop = UIView()
+    private let hairline = UIView()
 
     init(session: WritingSession) {
         self.session = session
         super.init(frame: CGRect(x: 0, y: 0, width: 800, height: 50), inputViewStyle: .keyboard)
         autoresizingMask = [.flexibleWidth]
+        backdrop.backgroundColor = .secondarySystemBackground
+        backdrop.translatesAutoresizingMaskIntoConstraints = false
+        hairline.backgroundColor = .separator
+        hairline.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(backdrop)
+        addSubview(hairline)
         scroll.showsHorizontalScrollIndicator = false
         scroll.translatesAutoresizingMaskIntoConstraints = false
         stack.axis = .horizontal
@@ -26,6 +35,14 @@ final class FormatBar: UIInputView {
         addSubview(scroll)
         scroll.addSubview(stack)
         NSLayoutConstraint.activate([
+            backdrop.leadingAnchor.constraint(equalTo: leadingAnchor),
+            backdrop.trailingAnchor.constraint(equalTo: trailingAnchor),
+            backdrop.topAnchor.constraint(equalTo: topAnchor),
+            backdrop.bottomAnchor.constraint(equalTo: bottomAnchor),
+            hairline.leadingAnchor.constraint(equalTo: leadingAnchor),
+            hairline.trailingAnchor.constraint(equalTo: trailingAnchor),
+            hairline.topAnchor.constraint(equalTo: topAnchor),
+            hairline.heightAnchor.constraint(equalToConstant: 1 / UIScreen.main.scale),
             scroll.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
             scroll.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
             scroll.topAnchor.constraint(equalTo: topAnchor),
@@ -56,6 +73,13 @@ final class FormatBar: UIInputView {
         } else if let action {
             b.addAction(UIAction { [weak self] _ in self?.session?.perform(action) }, for: .touchUpInside)
         }
+        return b
+    }
+
+    /// Link: the selection or the word at the caret, else it asks for the address (⌘K keeps typing `[]()`).
+    private func linkButton() -> UIButton {
+        let b = button("link", "Link")
+        b.addAction(UIAction { [weak self] _ in self?.session?.linkFromBar() }, for: .touchUpInside)
         return b
     }
 
@@ -119,12 +143,12 @@ final class FormatBar: UIInputView {
             button("list.bullet", "Bulleted list", action: "bullets"),
             button("list.number", "Numbered list", action: "numbers"),
             button("checklist", "Checklist", action: "checklist"),
-            button("link", "Link", action: "link"),
+            linkButton(),
             divider(),
             button("textformat", "Font", menu: deferred { [weak self] in self?.fontItems() ?? [] }),
             button("textformat.size", "Size", menu: deferred { [weak self] in self?.sizeItems() ?? [] }),
             button("paintpalette", "Colour", menu: colourMenu()),
-            button("square.fill.on.square", "Background", menu: deferred { [weak self] in self?.fillItems() ?? [] }),
+            button("square.fill.on.square", "Block background", menu: deferred("Block background") { [weak self] in self?.fillItems() ?? [] }),
             divider(),
             button("globe", "Spanish", menu: deferred { [weak self] in
                 guard let s = self?.session, let b = s.board else { return [] }
@@ -149,8 +173,8 @@ final class FormatBar: UIInputView {
         stack.addArrangedSubview(done)
     }
 
-    private func deferred(_ items: @escaping () -> [UIMenuElement]) -> UIMenu {
-        UIMenu(children: [UIDeferredMenuElement.uncached { done in done(items()) }])
+    private func deferred(_ title: String = "", _ items: @escaping () -> [UIMenuElement]) -> UIMenu {
+        UIMenu(title: title, children: [UIDeferredMenuElement.uncached { done in done(items()) }])
     }
 
     /// Show where the caret is: its style, and the block's word count.
@@ -277,6 +301,8 @@ final class FormatBar: UIInputView {
         return out
     }
 
+    /// The block's menu, kept short enough to fit above the keyboard: the everyday rows, Fold and Delete at the top, the rest in
+    /// Comments, Room and Options submenus.
     private func moreItems() -> [UIMenuElement] {
         guard let s = session, let b = s.board, let it = s.item else { return [] }
         let id = s.id
@@ -284,19 +310,6 @@ final class FormatBar: UIInputView {
         var out: [UIMenuElement] = []
         out.append(UIAction(title: "Writing view", image: UIImage(systemName: "arrow.up.left.and.arrow.down.right")) { [weak b] _ in b?.openWritingView(id) })
         out.append(UIAction(title: "Find and replace", image: UIImage(systemName: "magnifyingglass")) { [weak b] _ in b?.openFind(id) })
-        out.append(UIAction(title: "\(c.words) words · \(c.characters) characters", attributes: .disabled) { _ in })
-        let sel = s.textView.selectedRange
-        let shown = b.marksShown
-        out.append(UIMenu(options: .displayInline, children: [
-            UIAction(title: "Comment", image: UIImage(systemName: "text.bubble")) { [weak b] _ in b?.addComment(on: id, range: sel) },
-            UIAction(title: "Add a Nexus task", image: UIImage(systemName: "checkmark.circle.badge.plus")) { [weak b] _ in b?.addNexusTask(from: id, range: sel) },
-            UIAction(title: "All comments", image: UIImage(systemName: "list.bullet.rectangle")) { [weak b] _ in b?.openComments() },
-            UIAction(title: "Show comments", image: UIImage(systemName: "eye"), state: shown ? .on : .off) { [weak b] _ in b?.marksShown = !shown },
-        ]))
-        out.append(UIAction(title: "Cover with revision tape", subtitle: "A strip on each line; tap one to peek", image: UIImage(systemName: "rectangle.dashed")) { [weak b] _ in
-            b?.endWriting()
-            b?.tapeBlock(id)
-        })
         if it.json["chip"]?.bool == true {
             out.append(UIAction(title: "Unfold", subtitle: "Show the words on the board again", image: UIImage(systemName: "rectangle.expand.vertical")) { [weak b] _ in
                 b?.setBlockField(id, "chip", nil)
@@ -307,17 +320,32 @@ final class FormatBar: UIInputView {
                 b?.setBlockField(id, "chip", .bool(true))
             })
         }
+        let sel = s.textView.selectedRange
+        let shown = b.marksShown
+        out.append(UIAction(title: "Add a Nexus task", image: UIImage(systemName: "checkmark.circle.badge.plus")) { [weak b] _ in b?.addNexusTask(from: id, range: sel) })
+        out.append(UIMenu(title: "Comments", image: UIImage(systemName: "text.bubble"), children: [
+            UIAction(title: "Comment", image: UIImage(systemName: "text.bubble")) { [weak b] _ in b?.addComment(on: id, range: sel) },
+            UIAction(title: "All comments", image: UIImage(systemName: "list.bullet.rectangle")) { [weak b] _ in b?.openComments() },
+            UIAction(title: "Show comments", image: UIImage(systemName: "eye"), state: shown ? .on : .off) { [weak b] _ in b?.marksShown = !shown },
+        ]))
         let push = it.json["push"]?.bool ?? false
-        out.append(UIMenu(options: .displayInline, children: [
+        out.append(UIMenu(title: "Room", image: UIImage(systemName: "arrow.down.to.line"), children: [
             UIAction(title: "Make room", image: UIImage(systemName: "arrow.down.to.line")) { [weak b] _ in b?.makeRoom(id) },
             UIAction(title: "Push things below", image: UIImage(systemName: "arrow.down.square"), state: push ? .on : .off) { [weak b] _ in
                 b?.setBlockField(id, "push", push ? nil : .bool(true))
             },
         ]))
         let chem = it.json["chem"]?.bool ?? true
-        out.append(UIAction(title: "Chemistry subscripts", image: UIImage(systemName: "flask"), state: chem ? .on : .off) { [weak b] _ in
-            b?.setBlockField(id, "chem", chem ? .bool(false) : nil)
-        })
+        out.append(UIMenu(title: "Options", image: UIImage(systemName: "gearshape"), children: [
+            UIAction(title: "Cover with revision tape", subtitle: "A strip on each line; tap one to peek", image: UIImage(systemName: "rectangle.dashed")) { [weak b] _ in
+                b?.endWriting()
+                b?.tapeBlock(id)
+            },
+            UIAction(title: "Chemistry subscripts", image: UIImage(systemName: "flask"), state: chem ? .on : .off) { [weak b] _ in
+                b?.setBlockField(id, "chem", chem ? .bool(false) : nil)
+            },
+        ]))
+        out.append(UIAction(title: "\(c.words) words · \(c.characters) characters", attributes: .disabled) { _ in })
         out.append(UIMenu(options: .displayInline, children: [
             UIAction(title: "Delete block", image: UIImage(systemName: "trash"), attributes: .destructive) { [weak b] _ in b?.deleteBlock(id) },
         ]))

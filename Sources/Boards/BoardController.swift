@@ -174,10 +174,18 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
 
     deinit { poll?.invalidate() }
 
+    /// The board's own undo steps (ink, items, typing's board steps). Without this the canvas used the window's shared undo manager,
+    /// so steps from a board that had been closed stayed on it pointing at a controller that was gone, and Undo (a two-finger tap)
+    /// ended the app (the Nov 12 crash in NSUndoManager undoNestedGroup from BoardGestures.tapped). Each board's steps now go with it.
+    private let boardUndo = UndoManager()
+    override var undoManager: UndoManager? { boardUndo }
+
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         guard view.bounds.width > 0 else { return }
         layOutBar()
+        // the Tools panel follows resizes that aren't turns (the Side by side divider, the sidebar), but not while it slides in or out
+        if let p = toolPanel, p.view.transform == .identity, p.view.frame != toolPanelFrame { placeToolPanel() }
         if !didFirstLayout {
             didFirstLayout = true
             updateContentSize()

@@ -74,6 +74,7 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
         case "textTap": return t == .text && !readOnly
         case "spacePan": return t == .space && !readOnly
         case "spaceTap": return t == .space && !readOnly && BoardTools.shared.spaceTap != .nothing
+        case "quietTap": return t == .lasso && lassoTapIsEmpty(g)
         case "tap": return (t == .text || t == .space) && !readOnly ? false : nil
         case "itemPan": return t == .space ? false : nil
         default: return nil
@@ -161,13 +162,27 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
 
     // MARK: the Text tool
 
-    /// Tap a block to type in it, or anywhere else to start a new one there.
+    /// The Text tool (it stays on until another tool is picked): tap a block to type in it, empty board (or a PDF page) to start a new
+    /// one there; a tap on anything else (a card, a picture, a shape, a folded chip, a comment, tape) does what a finger's tap does.
+    /// While a block is open, a tap away from it closes it; a new block still empty moves to the tap instead of going away.
     @objc func textTapped(_ g: UITapGestureRecognizer) {
-        if writing != nil { endWriting(); return }
         let p = boardPoint(g)
-        if let it = hitItem(p, pdf: false), it.type == "text" {
-            selected = it.id
-            beginWriting(it, at: p)
+        if let w = writing {
+            if hitItem(p, pdf: false)?.id == w.id { return }
+            let emptyNew = w.startText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && w.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            endWriting() // the empty block goes, and a new one starts at the tap below
+            if !emptyNew, hitItem(p, pdf: false) == nil { return }
+        }
+        if recordingTap(p) { return }
+        if links.mode { linkTapped(p); return }
+        if let it = hitItem(p, pdf: false) {
+            if it.type == "text", it.json["chip"]?.bool != true {
+                selected = it.id
+                beginWriting(it, at: p)
+            } else {
+                tapItem(it, at: p)
+            }
             return
         }
         let it = newTextBlockItem(at: p) // on a PDF page: typed on that page
@@ -232,7 +247,8 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
                 self?.bar.refresh()
             }
         }
-        var items: [UIMenuElement] = [UIMenu(title: "Dark board", image: UIImage(systemName: "moon"), children: dark)]
+        // the three dark-board choices at the top, one tap each (not a submenu)
+        var items: [UIMenuElement] = [UIMenu(title: "Dark board", options: .displayInline, children: dark)]
         if !Device.isPhone { // on an iPhone the finger always draws
             items.append(UIAction(title: "Fingers draw too", image: UIImage(systemName: "hand.draw"), state: tools.fingersDraw ? .on : .off) { [weak self] _ in
                 tools.fingersDraw.toggle()
@@ -289,7 +305,11 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
     }
 
     func zoomMenu() -> UIMenu {
-        var items: [UIMenuElement] = []
+        var items: [UIMenuElement] = [
+            UIAction(title: "Show everything", image: UIImage(systemName: "arrow.down.right.and.arrow.up.left")) { [weak self] _ in
+                self?.showEverything()
+            },
+        ]
         if let p = nearestPrintout {
             items.append(UIAction(title: "Fit the page width") { [weak self] _ in
                 guard let self else { return }
@@ -317,7 +337,29 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
         bar.refresh()
     }
 
+    /// Everything on the board on screen, with a margin, below the bar (NexusCore BoardFit); an empty board: 100%, at the top left.
+    func showEverything() {
+        let top = topInset, W = view.bounds.width, H = view.bounds.height - top
+        if let b = contentBounds(), W > 0, H > 0 {
+            let fit = BoardFit.fit(minX: Double(b.minX), minY: Double(b.minY), maxX: Double(b.maxX), maxY: Double(b.maxY),
+                                   width: Double(W), height: Double(H), minZoom: Double(canvas.minimumZoomScale), maxZoom: Double(canvas.maximumZoomScale))
+            let z = CGFloat(fit.zoom)
+            canvas.zoomScale = z
+            updateContentSize()
+            scroll(toBoard: CGPoint(x: CGFloat(fit.x), y: CGFloat(fit.y) - top / z))
+        } else {
+            canvas.zoomScale = 1
+            updateContentSize()
+            scroll(toBoard: CGPoint(x: -60, y: -60 - top))
+        }
+        sharpenText()
+        writing?.rescale()
+        showSelection()
+        bar.refresh()
+    }
+
     func setBarsHidden(_ hidden: Bool) {
+        placeRecordingBar(barsHidden: hidden)
         UIView.animate(withDuration: 0.2) {
             self.bar.alpha = hidden ? 0 : 1
             self.showBarsButton.alpha = hidden ? 1 : 0

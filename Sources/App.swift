@@ -12,6 +12,8 @@ struct NexusMobileApp: App {
     /// The app as a whole (all its windows): sync runs while any window is in front.
     @Environment(\.scenePhase) private var phase
 
+    init() { WebRender.warmUp() }
+
     var body: some Scene {
         // one kind of window, opened plain or on a board ("Open in a new window"); on the iPad there can be several
         WindowGroup(for: WindowStart.self) { $start in

@@ -240,6 +240,7 @@ final class BoardRecorder {
 
 private var recorderKey: UInt8 = 0
 private var recordingBarKey: UInt8 = 0
+private var recordingBarTopKey: UInt8 = 0
 
 extension BoardController {
     var recorder: BoardRecorder {
@@ -286,20 +287,33 @@ extension BoardController {
     }
 
     func showRecordingBar() {
-        if let v = objc_getAssociatedObject(self, &recordingBarKey) as? UIViewController { v.view.isHidden = false; view.bringSubviewToFront(v.view); refreshExtraButtons(); return }
+        if let v = objc_getAssociatedObject(self, &recordingBarKey) as? UIViewController { v.view.isHidden = false; view.bringSubviewToFront(v.view); placeRecordingBar(); refreshExtraButtons(); return }
         let host = UIHostingController(rootView: RecordingBar(rec: recorder))
         host.view.backgroundColor = .clear
         host.sizingOptions = .intrinsicContentSize
         addChild(host)
         view.addSubview(host.view)
         host.view.translatesAutoresizingMaskIntoConstraints = false
+        let top = host.view.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: recordingBarGap())
         NSLayoutConstraint.activate([
             host.view.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            host.view.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 10),
+            top,
         ])
         host.didMove(toParent: self)
         objc_setAssociatedObject(self, &recordingBarKey, host, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        objc_setAssociatedObject(self, &recordingBarTopKey, top, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
         refreshExtraButtons()
+    }
+
+    /// How far below the safe area's top the recording bar sits: 8 pt under the board's bar (topInset + 8).
+    private func recordingBarGap(barsHidden: Bool? = nil) -> CGFloat {
+        (barsHidden ?? bar.isHidden) ? 8 : bar.height + 8
+    }
+
+    /// Puts the recording bar under the board's bar again (call when the bars are hidden or shown).
+    func placeRecordingBar(barsHidden: Bool? = nil) {
+        guard let top = objc_getAssociatedObject(self, &recordingBarTopKey) as? NSLayoutConstraint else { return }
+        top.constant = recordingBarGap(barsHidden: barsHidden)
     }
 
     func hideRecordingBar() {
