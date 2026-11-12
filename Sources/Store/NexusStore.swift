@@ -32,6 +32,8 @@ final class NexusStore {
         var path: String
         /// A place on the board (board units) to show first, e.g. a search hit.
         var focus: CGRect?
+        /// A link's end on the board to show first (its box is known once the board is read).
+        var focusEnd: JSONValue? = nil
     }
 
     struct Toast: Identifiable, Equatable {
@@ -57,11 +59,18 @@ final class NexusStore {
         today = Days.today()
         snapshot = DataFolder.load(url)
         fingerprint = DataFolder.fingerprint(url)
+        ShortcutCenter.shared.onWrite = { [weak self] in self?.onWrite?() }
+        loadShortcuts()
+    }
+
+    /// Both devices' shortcuts files, read with the folder (Settings › Shortcuts, the keys the app runs).
+    private func loadShortcuts() {
+        ShortcutCenter.shared.load(root: folder, canWrite: snapshot.isDataFolder && snapshot.readOnlyReason == nil)
     }
 
     var planning: Planning { Planning(snapshot, today: today) }
     var editor: TaskEditor { TaskEditor(root: folder, read: FolderAccess.read, write: FolderAccess.write) }
-    var folderName: String { pickedFolder ? folder.lastPathComponent : "On My iPad › Nexus › nexus-data" }
+    var folderName: String { pickedFolder ? folder.lastPathComponent : Device.defaultFolder }
 
     // MARK: reading
 
@@ -70,6 +79,7 @@ final class NexusStore {
         today = Days.today()
         snapshot = DataFolder.load(folder)
         fingerprint = DataFolder.fingerprint(folder)
+        loadShortcuts()
     }
 
     /// Cheap check for another writer; reloads only when something changed. True when the files changed.

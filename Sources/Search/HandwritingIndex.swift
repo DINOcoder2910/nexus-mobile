@@ -21,7 +21,7 @@ final class HandwritingIndex {
         let id: String
         let boardPath: String
         let boardName: String
-        /// "Notebook › Section", or "Notebook".
+        /// "Notebook › Notebook inside it", or "Notebook".
         let place: String
         let text: String
         /// Where it is on the board (board units, y down).
@@ -221,16 +221,9 @@ final class HandwritingIndex {
         var place: String
     }
 
-    /// Every board in `notebooks/`: straight in a notebook and in its sections.
+    /// Every board in `notebooks/`, in notebooks inside notebooks to any depth.
     static func boardRefs(_ root: URL) -> [BoardRef] {
-        var out: [BoardRef] = []
-        for nb in Notebook.list(root) {
-            for b in nb.boards { out.append(BoardRef(path: b.path, name: b.name, place: nb.name)) }
-            for s in nb.sections {
-                for b in s.boards { out.append(BoardRef(path: b.path, name: b.name, place: nb.name + " › " + s.name)) }
-            }
-        }
-        return out
+        Notebook.list(root).flatMap { nb in nb.allBoards.map { BoardRef(path: $0.board.path, name: $0.board.name, place: $0.place) } }
     }
 
     /// "notebooks/Chem/R3/Lesson 1.board" → ("Lesson 1", "Chem › R3").

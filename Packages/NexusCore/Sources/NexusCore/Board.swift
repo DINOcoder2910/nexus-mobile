@@ -16,7 +16,31 @@ public enum BoardFormat {
     public static let pdfWidth: Double = 820
     public static let pdfGap: Double = 24
     public static let pointFields = ["x", "y", "force", "azimuth", "altitude", "t", "w", "h", "opacity"]
-    public static let itemTypes: Set<String> = ["text", "image", "pdf", "shape"]
+    /// The item types this app draws and edits; any other type (made by a newer Nexus) is kept as it is and shown as a placeholder.
+    public static let itemTypes: Set<String> = ["text", "image", "pdf", "shape", "tool", "link"]
+    /// The board redesign's features this app understands (nexus docs/data-format.md "Features"): a board.json naming one not here
+    /// opens read-only. Add a name in the same change that makes the app read and write that feature.
+    public static let features: Set<String> = ["writing", "space", "drafts", "marks", "tape", "tool", BoardLinks.feature]
+    /// A placeholder's size when a foreign item has none.
+    public static let foreignSize = (w: 200.0, h: 80.0)
+
+    /// board.json with `name` added to its features (the first time this app writes that feature); the same when it is there already.
+    public static func withFeature(_ meta: JSONValue, _ name: String) -> JSONValue {
+        var f = meta["features"]?.array ?? []
+        if f.contains(where: { $0.string == name }) { return meta }
+        f.append(.string(name))
+        return meta.setting("features", .array(f))
+    }
+
+    /// board.json's text as the laptop writes it (`JSON.stringify(meta, null, 2)` and a newline).
+    public static func metaText(_ meta: JSONValue) -> String { meta.pretty + "\n" }
+
+    /// The features a board.json names that this app doesn't know, in the order named.
+    public static func unknownFeatures(_ meta: JSONValue?, known: Set<String> = features) -> [String] {
+        var out: [String] = []
+        for f in meta?["features"]?.array?.compactMap(\.string) ?? [] where !known.contains(f) && !out.contains(f) { out.append(f) }
+        return out
+    }
     public static let shapes: Set<String> = ["rect", "ellipse", "line", "arrow"]
     public static let notebooks = "notebooks"
     /// A typed block wraps at this width until it is given its own (the laptop's TEXT_W).
@@ -137,7 +161,7 @@ public struct BoardItem: Equatable, Identifiable {
     public var json: JSONValue
 
     public init?(_ v: JSONValue) {
-        guard let id = v["id"]?.string, !id.isEmpty, let t = v["type"]?.string, BoardFormat.itemTypes.contains(t),
+        guard let id = v["id"]?.string, !id.isEmpty, let t = v["type"]?.string, !t.isEmpty,
               let x = v["x"]?.number, let y = v["y"]?.number, x.isFinite, y.isFinite else { return nil }
         json = v
         if t == "shape", !BoardFormat.shapes.contains(v["shape"]?.string ?? "") { json = json.setting("shape", .string("rect")) }
@@ -156,6 +180,8 @@ public struct BoardItem: Equatable, Identifiable {
     public var src: String? { json["src"]?.string }
     public var shape: String? { json["shape"]?.string }
     public var tileKey: String { BoardFormat.tileKey(x, y) }
+    /// Made by a newer Nexus: a type this app doesn't draw. Kept and written back unchanged.
+    public var isForeign: Bool { !BoardFormat.itemTypes.contains(type) }
     public func number(_ k: String) -> Double? { json[k]?.number }
     public func string(_ k: String) -> String? { json[k]?.string }
 
@@ -182,6 +208,10 @@ public struct BoardContent {
     /// What each tile file held when read (or last written), to write only what changed.
     public var tilesOnDisk: [String: String] = [:]
     public var textsOnDisk: [String: String] = [:]
+    /// board.json as read (unknown keys kept), and what it was on disk: save writes it when the two differ (paper, features, ...).
+    /// Change it with `BoardFormat.withFeature` or `setting`; nil for an ink test board until its first save.
+    public var meta: JSONValue?
+    public var metaOnDisk: JSONValue?
     /// A newer format: shown, never written.
     public var readOnly: String?
     public var created: String?
@@ -223,10 +253,15 @@ public enum BoardFiles {
         let meta = try? JSONValue.parse(String(decoding: metaData, as: UTF8.self))
         let fmt = meta?["format"]?.string ?? ""
         c.created = meta?["created"]?.string
+        if fmt == BoardFormat.format { c.meta = meta; c.metaOnDisk = meta }
         if fmt != BoardFormat.format {
             if fmt.hasPrefix("nexus-board/") { c.readOnly = "This board was made by a newer Nexus (\(fmt))." }
             else if fmt == "nexus-board-test/1" { return legacy(board, meta: meta) }
             else { throw Failure.notABoard("board.json is not a Nexus board") }
+        }
+        let unknown = BoardFormat.unknownFeatures(meta)
+        if c.readOnly == nil, !unknown.isEmpty {
+            c.readOnly = "This board uses \(unknown.joined(separator: ", ")) from a newer Nexus. Update the iPad app to edit it."
         }
         let tiles = board.appendingPathComponent("tiles")
         let names = ((try? fm.contentsOfDirectory(atPath: tiles.path)) ?? []).sorted()
@@ -246,6 +281,13 @@ public enum BoardFiles {
                 c.texts[it.id] = md
                 c.textsOnDisk[it.id] = md
             } else { c.texts[it.id] = "" }
+            // its other drafts and their snapshots (docs/data-format.md "Drafts")
+            for key in BlockDrafts.fileKeys(it) {
+                guard let d = try? Data(contentsOf: board.appendingPathComponent(BoardFormat.textFile(key))) else { continue }
+                let md = String(decoding: d, as: UTF8.self)
+                c.texts[key] = md
+                c.textsOnDisk[key] = md
+            }
         }
         // strokes with no id (an old export) get one, so they can be written
         var taken = seen
@@ -292,9 +334,13 @@ public enum BoardFiles {
             }
         }
         var texts: [String: String] = [:]
-        let textIds = Set(c.items.filter { $0.type == "text" }.map(\.id))
+        let textItems = c.items.filter { $0.type == "text" }
+        let textIds = Set(textItems.map(\.id))
         for id in textIds { let md = c.texts[id] ?? ""; if c.textsOnDisk[id] != md { texts[id] = md } }
-        let removed = c.textsOnDisk.keys.filter { !textIds.contains($0) }
+        // other drafts and snapshots: written when held, kept while their block lists them
+        let draftKeys = Set(textItems.flatMap(BlockDrafts.fileKeys))
+        for key in draftKeys { if let md = c.texts[key], c.textsOnDisk[key] != md { texts[key] = md } }
+        let removed = c.textsOnDisk.keys.filter { !textIds.contains($0) && !draftKeys.contains($0) }
         return (tiles, texts, removed.sorted())
     }
 
@@ -306,9 +352,16 @@ public enum BoardFiles {
         let fm = FileManager.default
         let metaURL = board.appendingPathComponent("board.json")
         if let d = try? Data(contentsOf: metaURL), (try? JSONValue.parse(String(decoding: d, as: UTF8.self)))?["format"]?.string != BoardFormat.format {
-            try write(metaURL, BoardFormat.boardJSON()) // an ink test board becomes a real one on its first save
+            let text = BoardFormat.boardJSON() // an ink test board becomes a real one on its first save
+            try write(metaURL, text)
+            out.meta = try? JSONValue.parse(text)
+            out.metaOnDisk = out.meta
         } else if !fm.fileExists(atPath: metaURL.path) {
-            try write(metaURL, BoardFormat.boardJSON())
+            try write(metaURL, c.meta.map(BoardFormat.metaText) ?? BoardFormat.boardJSON())
+            out.metaOnDisk = c.meta
+        } else if let m = c.meta, m != c.metaOnDisk {
+            try write(metaURL, BoardFormat.metaText(m))
+            out.metaOnDisk = m
         }
         let ch = changes(c)
         for (key, text) in ch.tiles {
@@ -327,14 +380,55 @@ public enum BoardFiles {
     }
 
     /// A PDF printout's page frames on the board: each `w` wide, `gap` apart, from the page sizes (rotation applied).
+    /// Each page's frame on the board, from its top to its bottom (a page opened in two spans the room between its parts).
     public static func pdfFrames(_ item: BoardItem, sizes: [(w: Double, h: Double)]) -> [(x: Double, y: Double, w: Double, h: Double)] {
-        let w = item.w ?? BoardFormat.pdfWidth, gap = item.number("gap") ?? BoardFormat.pdfGap
-        var y = item.y
-        return sizes.map { s in
-            let h = w * (s.h / max(1, s.w))
-            defer { y += h + gap }
-            return (item.x, y, w, h)
+        var out = sizes.map { _ in (x: item.x, y: Double.nan, w: 0.0, h: 0.0) }
+        for s in pdfSegments(item, sizes: sizes) {
+            let f = out[s.page]
+            if f.y.isNaN { out[s.page] = (s.x, s.y, s.w, s.h) } else { out[s.page].h = s.y + s.h - f.y }
         }
+        return out
+    }
+
+    /// One drawn piece of a page: the whole page, or one part of a page opened in two (`top`, `bottom`: fractions of its height).
+    public struct PdfSegment: Equatable {
+        public var page: Int // from 0
+        public var x, y, w, h: Double
+        public var top, bottom: Double
+    }
+
+    /// Room in a printout (the pdf item's `space`, nexus docs/data-format.md "Space in a PDF"), cleaned: pages from 1, `at` 0...1,
+    /// `gap` > 0, sorted by page then at.
+    public static func pdfSpace(_ item: BoardItem) -> [(page: Int, at: Double, gap: Double)] {
+        (item.json["space"]?.array ?? []).compactMap { v -> (page: Int, at: Double, gap: Double)? in
+            guard let p = v["page"]?.number, p >= 1, let g = v["gap"]?.number, g > 0 else { return nil }
+            return (Int(p), min(1, max(0, v["at"]?.number ?? 1)), g)
+        }.sorted { ($0.page, $0.at) < ($1.page, $1.at) }
+    }
+
+    /// The pages laid down the board from the item's x, y, each `w` wide and `gap` apart, with the room in `space`: `at` 0 opens room
+    /// above the page, 1 after it, and in between opens the page in two there (the lower part moves down by `gap`).
+    public static func pdfSegments(_ item: BoardItem, sizes: [(w: Double, h: Double)]) -> [PdfSegment] {
+        let w = item.w ?? BoardFormat.pdfWidth, gap = item.number("gap") ?? BoardFormat.pdfGap
+        let space = pdfSpace(item)
+        var y = item.y
+        var out: [PdfSegment] = []
+        for (i, s) in sizes.enumerated() {
+            let h = w * (s.h / max(1, s.w))
+            var top = 0.0
+            for sp in space where sp.page == i + 1 {
+                if sp.at <= 0 { y += sp.gap; continue }
+                if sp.at >= 1 { continue }
+                guard sp.at > top else { y += sp.gap; continue }
+                out.append(PdfSegment(page: i, x: item.x, y: y, w: w, h: h * (sp.at - top), top: top, bottom: sp.at))
+                y += h * (sp.at - top) + sp.gap
+                top = sp.at
+            }
+            out.append(PdfSegment(page: i, x: item.x, y: y, w: w, h: h * (1 - top), top: top, bottom: 1))
+            y += h * (1 - top) + gap
+            for sp in space where sp.page == i + 1 && sp.at >= 1 { y += sp.gap }
+        }
+        return out
     }
 
     /// A path relative to the board ("files/a.png", "../Book.pdf") as a URL, or nil when it leaves `root` (the data folder).
@@ -352,24 +446,37 @@ public enum BoardFiles {
     }
 }
 
-/// The notebooks: `notebooks/<notebook>/<section>/<board>.board`, a board may also sit straight in a notebook.
+/// The notebooks, as the laptop's `notebookTree` (nexus docs/data-format.md "The board redesign's additions", Notebooks): every plain
+/// folder under `notebooks/` is a notebook, to any depth; a `<name>.board` folder in one is a board. Each list is by name.
 public struct Notebook: Identifiable, Hashable {
-    public struct Section: Identifiable, Hashable {
-        public var name: String
-        public var path: String
-        public var boards: [BoardRef]
-        public var id: String { path }
-    }
     public struct BoardRef: Identifiable, Hashable {
         public var name: String
         public var path: String
         public var id: String { path }
+        public init(name: String, path: String) { self.name = name; self.path = path }
     }
     public var name: String
     public var path: String
+    /// 0 for a top-level notebook.
+    public var depth: Int
+    /// Its colour from `notebook.json` (`#RRGGBB`), or nil.
+    public var color: String?
     public var boards: [BoardRef]
-    public var sections: [Section]
+    public var notebooks: [Notebook]
     public var id: String { path }
+
+    /// Every board in it and in the notebooks inside it (any depth), with where each sits ("Chem › R3").
+    public var allBoards: [(board: BoardRef, place: String)] {
+        boards.map { ($0, name) } + notebooks.flatMap { nb in nb.allBoards.map { ($0.board, name + " › " + $0.place) } }
+    }
+    /// Itself and every notebook inside it, depth first.
+    public var allNotebooks: [Notebook] { [self] + notebooks.flatMap(\.allNotebooks) }
+
+    /// The notebook at `path` in a tree, or nil.
+    public static func find(_ tree: [Notebook], _ path: String) -> Notebook? {
+        for nb in tree { if nb.path == path { return nb }; if let f = find(nb.notebooks, path) { return f } }
+        return nil
+    }
 
     /// Reads `notebooks/` of a data folder.
     public static func list(_ root: URL) -> [Notebook] {
@@ -380,16 +487,46 @@ public struct Notebook: Identifiable, Hashable {
             return items.filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }.map(\.lastPathComponent)
                 .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
         }
-        func boards(_ rel: String) -> [BoardRef] {
-            dirs(rel).filter { $0.lowercased().hasSuffix(".board") }.map { BoardRef(name: String($0.dropLast(6)), path: rel + "/" + $0) }
+        func node(_ rel: String, _ depth: Int) -> Notebook {
+            let kids = dirs(rel)
+            let meta = try? String(contentsOf: root.appendingPathComponent(rel).appendingPathComponent(NotebookMeta.file), encoding: .utf8)
+            return Notebook(name: (rel as NSString).lastPathComponent, path: rel, depth: depth, color: NotebookMeta.color(meta),
+                            boards: kids.filter { $0.lowercased().hasSuffix(".board") }.map { BoardRef(name: String($0.dropLast(6)), path: rel + "/" + $0) },
+                            notebooks: kids.filter { !$0.lowercased().hasSuffix(".board") }.map { node(rel + "/" + $0, depth + 1) })
         }
         let base = BoardFormat.notebooks
-        return dirs(base).filter { !$0.lowercased().hasSuffix(".board") }.map { nb in
-            let p = base + "/" + nb
-            return Notebook(name: nb, path: p, boards: boards(p),
-                            sections: dirs(p).filter { !$0.lowercased().hasSuffix(".board") }.map { s in
-                                Section(name: s, path: p + "/" + s, boards: boards(p + "/" + s))
-                            })
-        }
+        return dirs(base).filter { !$0.lowercased().hasSuffix(".board") }.map { node(base + "/" + $0, 0) }
+    }
+
+    /// May `from` (a notebook or a board) move into the notebook `to`? Not into itself, below itself, or where it already is.
+    public static func canMove(_ from: String, into to: String) -> Bool {
+        let parent = (from as NSString).deletingLastPathComponent
+        return !from.isEmpty && to != parent && to != from && !to.hasPrefix(from + "/")
+    }
+}
+
+/// `notebook.json` in a notebook folder: `{"format": "nexus-notebook/1", "color": "#RRGGBB"}` (the colour shows for top-level
+/// notebooks; other fields are kept).
+public enum NotebookMeta {
+    public static let format = "nexus-notebook/1"
+    public static let file = "notebook.json"
+    /// The ten colours the laptop offers for workstreams and notebooks (its light values), in its order.
+    public static let colors: [(name: String, hex: String)] = [
+        ("Blue", "#2769B7"), ("Amber", "#9A5600"), ("Green", "#007F43"), ("Rose", "#A14174"), ("Violet", "#6A57B3"),
+        ("Olive", "#6F6E00"), ("Teal", "#007F88"), ("Coral", "#AA442B"), ("Pink", "#94468F"), ("Slate", "#556B82"),
+    ]
+
+    public static func color(_ text: String?) -> String? {
+        guard let text, let v = try? JSONValue.parse(text), let c = v["color"]?.string,
+              c.range(of: #"^#[0-9a-fA-F]{6}$"#, options: .regularExpression) != nil else { return nil }
+        return c
+    }
+
+    /// The file's text with `color` set (nil removes it), keeping the other fields; as the laptop writes it (2-space JSON).
+    public static func json(_ old: String?, color: String?) -> String {
+        var v: JSONValue = .object((old.flatMap { try? JSONValue.parse($0) }?.object) ?? [])
+        v = v.setting("format", .string(format)).setting("color", color.map { .string($0) })
+        let body = (v.object ?? []).map { "  " + JSONValue.string($0.0).text + ": " + $0.1.text }.joined(separator: ",\n")
+        return "{\n" + body + "\n}\n"
     }
 }

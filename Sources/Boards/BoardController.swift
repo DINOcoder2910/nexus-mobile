@@ -27,10 +27,16 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     var dirty = false
     var loadProblem: String?
     var stamps: [String: String] = [:]
+    /// The version history log and the board's picture (BoardController+History.swift).
+    let log = BoardLog()
+    /// A board shown inside the History view: never saved, nothing drawn on it (BoardController+History.swift).
+    var replay = false
 
     // views
     let canvas = PKCanvasView()
     let world = UIView()
+    /// Above the ink: revision tape covers what is drawn too. Moves with `world`.
+    let overWorld = UIView()
     let pdfLayer = UIView(), imageLayer = UIView(), shapeLayer = UIView(), textLayer = UIView()
     let selection = SelectionView()
     let toolPicker = PKToolPicker()
@@ -38,7 +44,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     var pdfs: [String: PdfPrintout] = [:]
     var itemViews: [String: UIView] = [:]
     var textSizes: [String: CGSize] = [:]
-    var selected: String? { didSet { showSelection(); updateBar() } }
+    var selected: String? { didSet { showSelection(); updateBar(); paintLinks() } }
 
     var offset = CGPoint(x: 1200, y: 1200)
     let pad: CGFloat = 1200
@@ -48,8 +54,52 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     var currentPage = ""
     var saveWork: DispatchWorkItem?
     var poll: Timer?
+    let live = LiveState()
     var strokeCount = 0
     var drag: Drag?
+    // typing (BoardController+Writing.swift)
+    var writing: WritingSession?
+    var pushedBottom: [String: CGFloat] = [:]
+    var pushedBy: [String: CGFloat] = [:]
+    /// The draft this iPad shows for a block (each device's own view; nil or missing: the current draft).
+    var viewingDraft: [String: String] = [:]
+    /// The block open in the Writing view (full screen), if any.
+    weak var writingFull: WritingSession?
+    /// Where each comment's bubble is drawn (board units), for taps and selection.
+    var markBoxes: [String: CGRect] = [:]
+    /// The user's tasks, for "Add a Nexus task" from typed words.
+    weak var store: NexusStore?
+    /// Revision tape lifted on this iPad (each device's own; the file doesn't keep it).
+    var peeking: Set<String> = []
+    /// The Tools panel (BoardController+Tools.swift), while it is shown.
+    var toolPanel: ToolPanelController?
+
+    // hold to make a shape (BoardController+Snap.swift)
+    let snapOverlay = UIView(), snapLine = CAShapeLayer(), snapHalo = CAShapeLayer()
+    var pendingShape: Shapes.Recognized?
+    var awaitingSnap: Int?
+    let toastLabel = UILabel()
+
+    // links (BoardController+Links.swift)
+    let linkOverlay = LinkOverlay()
+    var links = LinkState()
+    /// An end on this board to show first (a link opened from another board).
+    var focusEnd: JSONValue?
+
+    // the bar, the paper, dark boards, Insert space (BoardController+Bar, BoardTheme, BoardController+Space)
+    let bar = BoardBar()
+    let paperView = PaperView()
+    let showBarsButton = UIButton(type: .system)
+    var themeWatch: (any UITraitChangeRegistration)?
+    var colorEdit: (BoardTool, Int)?
+    var spaceStart: CGFloat?
+    let spaceGuide = UIView(), spaceBand = CAShapeLayer(), spaceLine = CAShapeLayer(), spaceLabel = UILabel()
+    var lastZoomLabel = 0
+    var lastBarKey = ""
+    /// Set when the board sits beside the sidebar: the bar's sidebar button calls it.
+    var onSidebar: (() -> Void)?
+    /// The board in Side by side's second pane (its bar's close button closes the pane).
+    var isSidePane = false
 
     init(root: URL, path: String, focus: CGRect?) {
         self.root = root
@@ -60,7 +110,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    var readOnly: Bool { content.readOnly != nil || loadProblem != nil }
+    var readOnly: Bool { content.readOnly != nil || loadProblem != nil || replay }
 
     // MARK: setup
 
@@ -68,8 +118,11 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         super.viewDidLoad()
         overrideUserInterfaceStyle = .light
         edgesForExtendedLayout = []
-        view.backgroundColor = UIColor(white: 0.96, alpha: 1)
+        view.backgroundColor = PaperView.back(false)
         title = boardName
+        paperView.frame = view.bounds
+        paperView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.addSubview(paperView)
 
         world.layer.anchorPoint = .zero
         world.layer.position = .zero
@@ -86,27 +139,34 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         canvas.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         canvas.backgroundColor = .clear
         canvas.isOpaque = false
-        canvas.drawingPolicy = .pencilOnly
+        canvas.drawingPolicy = Device.isPhone ? .anyInput : .pencilOnly // an iPhone has no Pencil: the finger draws (two fingers scroll)
         canvas.minimumZoomScale = 0.2
         canvas.maximumZoomScale = 5
+        canvas.bouncesZoom = false // a bounce moved the canvas without telling us, so the items and PDF slid off the ink
         canvas.contentInsetAdjustmentBehavior = .never
         canvas.alwaysBounceVertical = true
         canvas.alwaysBounceHorizontal = true
         canvas.overrideUserInterfaceStyle = .light
         view.addSubview(canvas)
+        overWorld.layer.anchorPoint = .zero
+        overWorld.layer.position = .zero
+        overWorld.isUserInteractionEnabled = false
+        view.insertSubview(overWorld, aboveSubview: canvas)
 
         load()
         canvas.delegate = self
         setUpGestures()
-        updateBar()
-
-        toolPicker.colorUserInterfaceStyle = .light
-        toolPicker.overrideUserInterfaceStyle = .light
-        toolPicker.addObserver(canvas)
-        toolPicker.setVisible(!readOnly, forFirstResponder: canvas)
+        setUpSnap()
+        setUpSpaceGuide()
+        setUpBar()
+        applyTool()
+        setUpLinks()
 
         NotificationCenter.default.addObserver(self, selector: #selector(saveNowSelector), name: UIApplication.willResignActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(otherPaneSaved(_:)), name: BoardController.savedNote, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(mathDrawn), name: BlockStyler.mathReady, object: nil)
         poll = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.checkOutside() }
+        setUpLive()
     }
 
     deinit { poll?.invalidate() }
@@ -114,10 +174,11 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         guard view.bounds.width > 0 else { return }
+        layOutBar()
         if !didFirstLayout {
             didFirstLayout = true
             updateContentSize()
-            showStart()
+            if focus != nil || !restorePlace() { showStart() }
         }
         updateContentSize()
         syncWorld()
@@ -125,14 +186,30 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        navigationController?.setNavigationBarHidden(true, animated: false)
+        watchSystemStyle()
+        applyTheme()
         if !readOnly { canvas.becomeFirstResponder() }
-        if let p = loadProblem ?? content.readOnly { tell(p) }
+        if let p = loadProblem ?? content.readOnly { tell(p) } else { showHintOnce() }
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        // back from a board opened on top (a link's far end): look for outside changes again
+        if poll?.isValid != true, isViewLoaded {
+            poll = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.checkOutside() }
+        }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        if presentedViewController == nil { endWriting() }
+        rememberPlace()
+        tutorBoardClosing()
+        recordingBoardClosing()
         saveNow()
         poll?.invalidate()
+        boardClosing()
     }
 
     // MARK: reading
@@ -153,8 +230,10 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         strokeCount = canvas.drawing.strokes.count
         shifting = false
         canvas.undoManager?.removeAllActions()
+        paperView.paper = paper
         rebuildItems()
         dirty = false
+        if !replay { log.loaded(content, board: boardURL) }
     }
 
     /// Everything on the board (board units): the ink and the items.
@@ -165,37 +244,38 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         } else if includeInk, !canvas.drawing.strokes.isEmpty {
             r = canvas.drawing.bounds.offsetBy(dx: -offset.x, dy: -offset.y)
         }
-        for it in content.items { r = r.union(box(of: it)) }
+        for it in content.items where !BoardLinks.isLink(it) { r = r.union(box(of: it)) }
         return r.isNull ? nil : r
     }
 
     func box(of it: BoardItem) -> CGRect {
         if it.type == "pdf", let p = pdfs[it.id] { return p.box }
+        if it.type == "mark" { return markBoxes[it.id] ?? CGRect(x: it.x, y: it.y, width: MarkView.size, height: MarkView.size) }
         return boardBox(it, textSize: textSizes[it.id])
     }
 
     /// Where to look first: the place asked for, the first PDF page, or the top left of what is there.
     func showStart() {
-        let W = view.bounds.width, H = view.bounds.height
+        let W = view.bounds.width, top = topInset, H = view.bounds.height - top
         if let f = focus {
             let z = min(2, max(0.5, min(W / max(f.width + 200, 1), H / max(f.height + 200, 1))))
             canvas.zoomScale = z
             updateContentSize()
-            scroll(toBoard: CGPoint(x: f.midX - W / 2 / z, y: f.midY - H / 2 / z))
+            scroll(toBoard: CGPoint(x: f.midX - W / 2 / z, y: f.midY - (H / 2 + top) / z))
         } else if let pdf = content.items.first(where: { $0.type == "pdf" }) {
             let w = pdf.w ?? BoardFormat.pdfWidth
             let z = min(1.5, max(0.3, (W - 80) / (w + 80)))
             canvas.zoomScale = z
             updateContentSize()
-            scroll(toBoard: CGPoint(x: pdf.x - 40 / z, y: pdf.y - 24 / z))
+            scroll(toBoard: CGPoint(x: pdf.x - 40 / z, y: pdf.y - (24 + top) / z))
         } else if let b = contentBounds() {
             canvas.zoomScale = 1
             updateContentSize()
-            scroll(toBoard: CGPoint(x: b.minX - 60, y: b.minY - 60))
+            scroll(toBoard: CGPoint(x: b.minX - 60, y: b.minY - 60 - top))
         } else {
             canvas.zoomScale = 1
             updateContentSize()
-            scroll(toBoard: CGPoint(x: -60, y: -60))
+            scroll(toBoard: CGPoint(x: -60, y: -60 - top))
         }
     }
 
@@ -216,11 +296,16 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         for (id, p) in pdfs where !ids.contains(id) { p.remove(); pdfs[id] = nil }
         for it in content.items.sorted(by: { $0.id < $1.id }) {
             switch it.type {
+            case "link":
+                continue // drawn over the board by paintLinks
             case "pdf":
                 if let p = pdfs[it.id] {
                     if p.item.src == it.src { p.update(it) } else { p.remove(); pdfs[it.id] = nil }
                 }
-                if pdfs[it.id] == nil, let url = resolve(it.src), let p = PdfPrintout(item: it, url: url) { pdfs[it.id] = p }
+                if pdfs[it.id] == nil, let url = resolve(it.src), let p = PdfPrintout(item: it, url: url) {
+                    p.setDim(paperView.dark)
+                    pdfs[it.id] = p
+                }
                 pdfs[it.id]?.place(in: pdfLayer, offset: offset)
             case "image":
                 let v = (itemViews[it.id] as? ImageItemView) ?? ImageItemView(frame: .zero)
@@ -230,18 +315,33 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
                 let v = (itemViews[it.id] as? ShapeItemView) ?? ShapeItemView(frame: .zero)
                 if v.superview == nil { shapeLayer.addSubview(v); itemViews[it.id] = v }
                 v.update(it, offset: offset)
+            case "tool":
+                let v = (itemViews[it.id] as? ToolCardView) ?? ToolCardView(frame: .zero)
+                if v.superview == nil { imageLayer.addSubview(v); itemViews[it.id] = v }
+                v.update(it, offset: offset, pageURL: ToolCatalog.pageURL(it.src, board: boardURL, root: root),
+                         imageURL: resolve(it.string("image")))
             case "text":
                 let v = (itemViews[it.id] as? TextBlockView) ?? TextBlockView()
                 if v.superview == nil { textLayer.addSubview(v); itemViews[it.id] = v }
-                let md = content.texts[it.id] ?? ""
+                let md = content.texts[shownKey(it.id)] ?? ""
                 v.update(md: md, item: it)
+                v.marked = markedRanges(it.id)
                 v.setRenderScale(canvas.zoomScale)
                 textSizes[it.id] = v.frame.size
                 v.frame.origin = CGPoint(x: it.x + offset.x, y: it.y + offset.y)
+            case "mark":
+                break // placed below, once the blocks they sit on are laid out
+            case "tape":
+                let v = (itemViews[it.id] as? TapeView) ?? TapeView(frame: .zero)
+                if v.superview == nil { overWorld.addSubview(v); itemViews[it.id] = v }
+                v.update(it, offset: offset, peeking: peeking.contains(it.id))
             default:
-                break
+                let v = (itemViews[it.id] as? ForeignItemView) ?? ForeignItemView(frame: .zero)
+                if v.superview == nil { shapeLayer.addSubview(v); itemViews[it.id] = v }
+                v.update(it, offset: offset)
             }
         }
+        for it in content.items where it.type == "mark" { placeMark(it) }
         showSelection()
         updateContentSize()
         syncWorld()
@@ -267,6 +367,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         let w = max(b.maxX + offset.x + 1400, view.bounds.width / z)
         let h = max(b.maxY + offset.y + 1500, view.bounds.height * 2 / z)
         world.bounds = CGRect(x: 0, y: 0, width: w, height: h)
+        overWorld.bounds = world.bounds
         let target = CGSize(width: w * z, height: h * z)
         if abs(canvas.contentSize.width - target.width) > 1 || abs(canvas.contentSize.height - target.height) > 1 {
             canvas.contentSize = target
@@ -283,6 +384,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     func syncWorld() {
         let z = canvas.zoomScale, o = canvas.contentOffset
         world.transform = CGAffineTransform(a: z, b: 0, c: 0, d: z, tx: -o.x, ty: -o.y)
+        overWorld.transform = world.transform
         let vis = visibleBoard
         let scale = traitCollection.displayScale > 0 ? traitCollection.displayScale : 2
         var page = ""
@@ -290,10 +392,16 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
             let first = p.refresh(visible: vis, zoom: z, screenScale: scale)
             if page.isEmpty, first > 0 { page = (pdfs.count > 1 ? p.name + " · " : "") + "p. \(first) of \(p.doc.pageCount)" }
         }
-        if page != currentPage {
+        paperView.show(visible: vis, zoom: z)
+        let zl = Int((z * 100).rounded())
+        if page != currentPage || zl != lastZoomLabel {
             currentPage = page
+            lastZoomLabel = zl
             title = page.isEmpty ? boardName : boardName + " · " + page
+            bar.updatePills()
         }
+        writing?.place()
+        paintLinks()
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) { syncWorld() }
@@ -302,6 +410,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         updateContentSize()
         syncWorld()
         sharpenText()
+        writing?.rescale()
     }
 
     /// Typed text draws itself: draw it again at the new zoom so it stays sharp.
@@ -333,31 +442,13 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
         if shifting { return }
         let n = canvas.drawing.strokes.count
-        if hold.take(), n == strokeCount + 1, let last = canvas.drawing.strokes.last { snapToShape(last) }
+        if n == strokeCount + 1 { strokeLanded() }
         strokeCount = canvas.drawing.strokes.count
+        recordingDrawingChanged()
         if selected != nil { selected = nil }
         growIfNeeded()
         updateContentSize()
         changed()
-    }
-
-    /// Hold at the end of a stroke: a line, circle, ellipse or polygon you meant comes out straight (the laptop's shapes.js).
-    func snapToShape(_ stroke: PKStroke) {
-        let s = InkConvert.boardStroke(stroke, offset: offset, id: "")
-        let pts = s.points.map { SIMD2<Double>($0[0], $0[1]) }
-        guard let shape = Shapes.recognize(pts) else { return }
-        let points = Shapes.shapePoints(shape, written: s.points)
-        guard points.count >= 2 else { return }
-        var snapped = s
-        snapped.points = points
-        snapped.ranges = nil
-        guard let k = InkConvert.pkStrokes(snapped, offset: offset).first else { return }
-        let ink = PKInk(stroke.ink.inkType, color: stroke.ink.color)
-        var strokes = canvas.drawing.strokes
-        strokes[strokes.count - 1] = PKStroke(ink: ink, path: k.path, transform: .identity, mask: nil)
-        shifting = true
-        canvas.drawing = PKDrawing(strokes: strokes)
-        shifting = false
     }
 
     // MARK: saving
@@ -378,11 +469,21 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         guard dirty, !readOnly else { return }
         let taken = Set(content.items.map(\.id))
         content.strokes = ledger.strokes(canvas.drawing, offset: offset, taken: taken)
+        recordingSaved()
         do {
+            // what the laptop wrote since this board was read is merged in first, never written over (BoardController+Live)
+            let merged = try reconcileBeforeSave()
+            content = merged.content
+            let ch = BoardFiles.changes(content)
+            var wrote = Set(ch.tiles.keys.map(BoardFormat.tileFile) + ch.texts.keys.map(BoardFormat.textFile) + ch.removedTexts.map(BoardFormat.textFile))
+            if content.meta != content.metaOnDisk { wrote.insert("board.json") }
             content = try BoardFiles.save(content, to: boardURL, write: { url, text in try FolderAccess.write(url, text) },
                                           remove: { url in try FileManager.default.removeItem(at: url) })
             dirty = false
-            stamps = fileStamps()
+            stamps = stampsAfterSave(wrote: wrote)
+            afterReconcile(merged)
+            NotificationCenter.default.post(name: BoardController.savedNote, object: self, userInfo: ["path": path])
+            afterSave()
             onSaved?(path)
         } catch {
             tell("Couldn't save the board: \(error.localizedDescription)")
@@ -407,11 +508,21 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         return out
     }
 
+    static let savedNote = Notification.Name("NexusBoardSaved")
+
+    /// The same board open in the other pane was saved: read it in now rather than at the next look.
+    @objc func otherPaneSaved(_ n: Notification) {
+        guard (n.object as? BoardController) !== self, n.userInfo?["path"] as? String == path else { return }
+        checkOutside()
+    }
+
     /// Another device (sync) or app wrote the board: read it again, unless something here isn't saved yet (that wins on the next save).
     func checkOutside() {
         guard !dirty, presentedViewController == nil, !canvas.isTracking else { return }
         let now = fileStamps()
         guard now != stamps else { return }
+        if takeOutsideWords(now) { return } // only words changed (the laptop typing): the ink and its undo stay as they are
+        guard writing == nil else { return } // a block is open: the whole board is read again once it closes
         let z = canvas.zoomScale
         let look = CGPoint(x: visibleBoard.minX, y: visibleBoard.minY)
         let keep = selected
@@ -427,41 +538,21 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
 
     func updateBar() {
         guard isViewLoaded else { return }
-        navigationItem.leftBarButtonItem = UIBarButtonItem(title: "Close", style: .done, target: self, action: #selector(close))
-        var items: [UIBarButtonItem] = []
-        if !readOnly {
-            items.append(UIBarButtonItem(image: UIImage(systemName: "arrow.uturn.forward"), style: .plain, target: self, action: #selector(redo)))
-            items.append(UIBarButtonItem(image: UIImage(systemName: "arrow.uturn.backward"), style: .plain, target: self, action: #selector(undo)))
-            items.append(UIBarButtonItem(image: UIImage(systemName: canvas.drawingPolicy == .pencilOnly ? "pencil.tip" : "hand.draw"),
-                                         style: .plain, target: self, action: #selector(togglePolicy(_:))))
-            items.append(UIBarButtonItem(title: nil, image: UIImage(systemName: "plus.circle"), primaryAction: nil, menu: insertMenu()))
-        }
-        if !pdfs.isEmpty {
-            items.append(UIBarButtonItem(image: UIImage(systemName: "list.bullet"), style: .plain, target: self, action: #selector(showContents(_:))))
-        }
-        if let id = selected, let it = content.items.first(where: { $0.id == id }), !readOnly {
-            items.append(UIBarButtonItem(image: UIImage(systemName: "trash"), style: .plain, target: self, action: #selector(deleteSelected)))
-            if it.type == "text" {
-                items.append(UIBarButtonItem(image: UIImage(systemName: "character.cursor.ibeam"), style: .plain, target: self, action: #selector(editSelected)))
-            }
-        }
-        navigationItem.rightBarButtonItems = items
+        // rebuilt only when something it shows changed (this runs on every item move)
+        let key = "\(selected ?? "")|\(pdfs.count)|\(readOnly)|\(paper.kind.rawValue)\(paper.size)|\(canvas.isRulerActive)|\(toolPanel != nil)|\(links.mode)\(links.showAll)\(links.color)"
+        guard key != lastBarKey else { return }
+        lastBarKey = key
+        bar.refresh()
     }
 
     @objc func close() {
+        rememberPlace()
         saveNow()
         onClose?()
     }
 
     @objc func undo() { canvas.undoManager?.undo() }
     @objc func redo() { canvas.undoManager?.redo() }
-
-    @objc func togglePolicy(_ sender: UIBarButtonItem) {
-        let pencilOnly = canvas.drawingPolicy == .pencilOnly
-        canvas.drawingPolicy = pencilOnly ? .anyInput : .pencilOnly
-        updateBar()
-        tell(pencilOnly ? "Fingers draw too" : "Pencil only: fingers scroll and pick things", brief: true)
-    }
 
     func tell(_ message: String, brief: Bool = false) {
         guard presentedViewController == nil else { return }
@@ -477,10 +568,9 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
 
     // MARK: Contents (the PDF's chapters)
 
-    @objc func showContents(_ sender: UIBarButtonItem) {
+    func showContents(from anchor: UIView) {
         // the printout nearest the middle of the screen
-        let mid = CGPoint(x: visibleBoard.midX, y: visibleBoard.midY)
-        guard let p = pdfs.values.min(by: { dist($0.box, mid) < dist($1.box, mid) }) else { return }
+        guard let p = nearestPrintout else { return }
         let items = p.outline().map { BoardViewController.OutlineItem(title: $0.title, page: $0.page, depth: $0.depth) }
         let list = ContentsViewController(items: items, pageCount: p.doc.pageCount)
         list.onPick = { [weak self] page in
@@ -492,7 +582,8 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         }
         let nav = UINavigationController(rootViewController: list)
         nav.modalPresentationStyle = .popover
-        nav.popoverPresentationController?.barButtonItem = sender
+        nav.popoverPresentationController?.sourceView = anchor
+        nav.popoverPresentationController?.sourceRect = anchor.bounds
         nav.preferredContentSize = CGSize(width: 380, height: 560)
         present(nav, animated: true)
     }
@@ -516,6 +607,6 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         guard !p.frames.isEmpty else { return }
         let f = p.frames[min(max(i, 0), p.frames.count - 1)]
         let z = canvas.zoomScale
-        scroll(toBoard: CGPoint(x: f.midX - canvas.bounds.width / 2 / z, y: f.minY - 20 / z))
+        scroll(toBoard: CGPoint(x: f.midX - canvas.bounds.width / 2 / z, y: f.minY - (20 + topInset) / z))
     }
 }

@@ -89,8 +89,9 @@ final class BoardTests: XCTestCase {
         XCTAssertEqual(t.strokes.count, 1)
         XCTAssertEqual(t.strokes[0].points, [[1, 2, 0.5, 0, Double.pi / 2, 0, 2, 2, 1]])
         XCTAssertEqual(t.strokes[0].color, "#000000FF")
-        XCTAssertEqual(t.items.count, 1)
-        XCTAssertEqual(t.items[0].shape, "rect")
+        XCTAssertEqual(t.items.count, 2, "an item of a type a newer Nexus made is kept")
+        XCTAssertTrue(t.items[0].isForeign)
+        XCTAssertEqual(t.items[1].shape, "rect")
     }
 
     func testTileKeys() {
@@ -185,6 +186,48 @@ final class BoardTests: XCTestCase {
         XCTAssertThrowsError(try BoardFiles.load(dir.appendingPathComponent("X.board")))
     }
 
+    func testUnknownFeaturesAreReadOnly() throws {
+        try write("F.board/board.json", "{\"format\":\"nexus-board/1\",\"features\":[\"hologram\",\"links\",\"x\",\"hologram\"],\"paper\":{\"kind\":\"dots\"}}")
+        let c = try BoardFiles.load(dir.appendingPathComponent("F.board"))
+        XCTAssertEqual(c.readOnly, "This board uses hologram, x from a newer Nexus. Update the iPad app to edit it.")
+        var wrote = false
+        _ = try BoardFiles.save(c, to: dir.appendingPathComponent("F.board"), write: { _, _ in wrote = true })
+        XCTAssertFalse(wrote)
+        XCTAssertEqual(BoardFormat.unknownFeatures(try JSONValue.parse("{\"features\":[\"space\"]}"), known: ["space"]), [])
+        try write("E.board/board.json", "{\"format\":\"nexus-board/1\",\"features\":[]}")
+        XCTAssertNil(try BoardFiles.load(dir.appendingPathComponent("E.board")).readOnly)
+    }
+
+    /// board.json changes (a feature, the paper) are written as the laptop writes them, keeping keys this app doesn't know.
+    func testMetaIsWrittenWhenItChanges() throws {
+        try write("M.board/board.json", "{\n  \"format\": \"nexus-board/1\",\n  \"created\": \"2026-11-12T09:00Z\",\n  \"tile\": 1024,\n  \"later\": {\"a\": [1, 2]}\n}\n")
+        let board = dir.appendingPathComponent("M.board")
+        var c = try BoardFiles.load(board)
+        var writes: [String: String] = [:]
+        let w: (URL, String) throws -> Void = { url, text in writes[url.lastPathComponent] = text; try text.write(to: url, atomically: true, encoding: .utf8) }
+        c = try BoardFiles.save(c, to: board, write: w)
+        XCTAssertNil(writes["board.json"], "nothing changed, nothing written")
+        let m = BoardFormat.withFeature(c.meta!, "space")
+        XCTAssertEqual(BoardFormat.withFeature(m, "space"), m)
+        c.meta = m.setting("paper", .object([("kind", .string("dots")), ("size", .number(24))]))
+        c = try BoardFiles.save(c, to: board, write: w)
+        XCTAssertEqual(writes["board.json"], "{\n  \"format\": \"nexus-board/1\",\n  \"created\": \"2026-11-12T09:00Z\",\n  \"tile\": 1024,\n  \"later\": {\n    \"a\": [\n      1,\n      2\n    ]\n  },\n  \"features\": [\n    \"space\"\n  ],\n  \"paper\": {\n    \"kind\": \"dots\",\n    \"size\": 24\n  }\n}\n")
+        XCTAssertEqual(try BoardFiles.load(board).meta, c.meta)
+        XCTAssertEqual(JSONValue.object([]).pretty, "{}")
+        XCTAssertEqual(JSONValue.array([]).pretty, "[]")
+    }
+
+    /// An item a newer Nexus made is kept and written back exactly as the laptop writes it (JSON.stringify of what was read).
+    func testForeignItemsAreKeptAsTheyWere() throws {
+        let mark = "{\"id\":\"m1abc\",\"type\":\"mark\",\"kind\":\"bubble\",\"x\":4,\"y\":5,\"on\":\"txt22\",\"at\":{\"q\":\"hola\",\"pre\":\"\"},\"done\":false}"
+        let tile = "{\"format\":\"nexus-board-tile/1\",\"pointFields\":[\"x\",\"y\",\"force\",\"azimuth\",\"altitude\",\"t\",\"w\",\"h\",\"opacity\"],\n\"strokes\":[],\n\"items\":[\n" + mark + "\n]}\n"
+        let t = try BoardFiles.parseTile(tile)
+        XCTAssertEqual(t.items.count, 1)
+        XCTAssertTrue(t.items[0].isForeign)
+        XCTAssertFalse(BoardItem(id: "a", type: "text", x: 0, y: 0).isForeign)
+        XCTAssertEqual(BoardFiles.tileJSON(strokes: t.strokes, items: t.items), tile)
+    }
+
     func testInkTestBoardBecomesARealOneOnItsFirstSave() throws {
         try write("Old.board/board.json", "{\"name\":\"Old\",\"format\":\"nexus-board-test/1\",\"pdf\":\"Book.pdf\",\"originX\":120,\"originY\":80}")
         try write("Old.board/strokes.json", "{\"format\":\"nexus-ink/1\",\"pointFields\":[\"x\",\"y\",\"force\",\"azimuth\",\"altitude\",\"t\",\"w\",\"h\",\"opacity\"],\"strokes\":[{\"ink\":\"com.apple.ink.pen\",\"color\":\"#000000FF\",\"points\":[[200,300,1,0,1.571,0,2,2,1]]},{\"ink\":\"com.apple.ink.pen\",\"color\":\"#000000FF\",\"points\":[[2000,300,1,0,1.571,0,2,2,1]]}]}")
@@ -257,9 +300,37 @@ final class BoardTests: XCTestCase {
         XCTAssertEqual(nbs.map(\.name), ["Chem", "Spanish"])
         let chem = nbs[0]
         XCTAssertEqual(chem.boards.map(\.name), ["Loose"])
-        XCTAssertEqual(chem.sections.map(\.name), ["R1 energy", "R3 redox"])
-        XCTAssertEqual(chem.sections[1].boards.map(\.name), ["Lesson 1", "Lesson 2", "Lesson 10"])
-        XCTAssertEqual(chem.sections[1].boards[0].path, "notebooks/Chem/R3 redox/Lesson 1.board")
+        XCTAssertEqual(chem.notebooks.map(\.name), ["R1 energy", "R3 redox"])
+        XCTAssertEqual(chem.notebooks[1].boards.map(\.name), ["Lesson 1", "Lesson 2", "Lesson 10"])
+        XCTAssertEqual(chem.notebooks[1].boards[0].path, "notebooks/Chem/R3 redox/Lesson 1.board")
+        XCTAssertEqual(chem.notebooks[1].depth, 1)
         XCTAssertEqual(nbs[1].boards.map(\.path), ["notebooks/Spanish/Verbs.board"])
+    }
+
+    func testNotebooksNestToAnyDepth() throws {
+        for p in ["notebooks/School/Chem/R3/Week 1/Lesson 1.board", "notebooks/School/Chem/Intro.board", "notebooks/School/Chem/R3/Notes.board"] {
+            try FileManager.default.createDirectory(at: dir.appendingPathComponent(p), withIntermediateDirectories: true)
+        }
+        let nbs = Notebook.list(dir)
+        XCTAssertEqual(nbs.map(\.name), ["School"])
+        let week = Notebook.find(nbs, "notebooks/School/Chem/R3/Week 1")
+        XCTAssertEqual(week?.depth, 3)
+        XCTAssertEqual(week?.boards.map(\.name), ["Lesson 1"])
+        XCTAssertEqual(nbs[0].allBoards.map(\.place), ["School › Chem", "School › Chem › R3", "School › Chem › R3 › Week 1"])
+        XCTAssertEqual(nbs[0].allNotebooks.map(\.name), ["School", "Chem", "R3", "Week 1"])
+        XCTAssertTrue(Notebook.canMove("notebooks/School/Chem/Intro.board", into: "notebooks/School"))
+        XCTAssertFalse(Notebook.canMove("notebooks/School/Chem/Intro.board", into: "notebooks/School/Chem"))
+        XCTAssertFalse(Notebook.canMove("notebooks/School/Chem", into: "notebooks/School/Chem/R3"))
+        XCTAssertFalse(Notebook.canMove("notebooks/School/Chem", into: "notebooks/School/Chem"))
+    }
+
+    func testNotebookColour() {
+        XCTAssertEqual(NotebookMeta.json(nil, color: "#2769B7"), "{\n  \"format\": \"nexus-notebook/1\",\n  \"color\": \"#2769B7\"\n}\n")
+        let old = "{\"color\":\"#007F43\",\"format\":\"nexus-notebook/1\",\"pinned\":true}"
+        XCTAssertEqual(NotebookMeta.color(old), "#007F43")
+        XCTAssertEqual(NotebookMeta.json(old, color: "#9A5600"), "{\n  \"color\": \"#9A5600\",\n  \"format\": \"nexus-notebook/1\",\n  \"pinned\": true\n}\n")
+        XCTAssertEqual(NotebookMeta.json(old, color: nil), "{\n  \"format\": \"nexus-notebook/1\",\n  \"pinned\": true\n}\n")
+        XCTAssertNil(NotebookMeta.color("{\"color\":\"blue\"}"))
+        XCTAssertNil(NotebookMeta.color(nil))
     }
 }

@@ -5,6 +5,9 @@ import NexusCore
 /// strip at the top, and the task bank of unplanned tasks below, to drag onto a day.
 struct PlannerView: View {
     @Environment(NexusStore.self) private var store
+    @Environment(CalendarStore.self) private var cal
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    @State private var eventSheet: EventSheet?
     /// 3 or 7 days.
     @AppStorage("plannerSpan") private var span = 3
     @AppStorage("plannerBankOpen") private var bankOpen = true
@@ -18,11 +21,14 @@ struct PlannerView: View {
     private let gap: CGFloat = 10
 
     private var first: String { start ?? store.today }
+    /// On the iPhone (and a narrow iPad window) the days are stacked, full width, instead of side by side.
+    private var stacked: Bool { sizeClass == .compact }
     private var days: [String] { (0..<max(1, span)).map { Days.add(first, $0) } }
 
     var body: some View {
         let p = store.planning
         let shown = days
+        let events = cal.eventsOnPlan ? cal.events(from: shown.first ?? first, through: shown.last ?? first) : []
         GeometryReader { geo in
             let n = CGFloat(shown.count)
             let fit = (geo.size.width - pad * 2 - gap * (n - 1)) / n
@@ -32,15 +38,24 @@ struct PlannerView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     if !p.slipped.isEmpty { slippedStrip(p) }
                     rangeLine(shown)
-                    ScrollView(.horizontal, showsIndicators: true) {
-                        HStack(alignment: .top, spacing: gap) {
+                    if stacked {
+                        VStack(spacing: gap) {
                             ForEach(shown, id: \.self) { day in
-                                dayColumn(day, p: p, shown: shown, width: colW, height: colH)
+                                dayColumn(day, p: p, shown: shown, events: events, width: nil, height: nil)
                             }
                         }
                         .padding(.horizontal, pad)
+                    } else {
+                        ScrollView(.horizontal, showsIndicators: true) {
+                            HStack(alignment: .top, spacing: gap) {
+                                ForEach(shown, id: \.self) { day in
+                                    dayColumn(day, p: p, shown: shown, events: events, width: colW, height: colH)
+                                }
+                            }
+                            .padding(.horizontal, pad)
+                        }
+                        .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
                     }
-                    .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
                     bankSection(p, shown: shown)
                 }
                 .padding(.vertical, 12)
@@ -48,14 +63,26 @@ struct PlannerView: View {
             .refreshable { store.reload() }
         }
         .navigationTitle("Planner")
+        .eventSheet($eventSheet, store: cal)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
-                Picker("Days", selection: $span) {
-                    Text("3 days").tag(3)
-                    Text("Week").tag(7)
+                if stacked {
+                    Menu {
+                        Picker("Days", selection: $span) {
+                            Text("3 days").tag(3)
+                            Text("Week").tag(7)
+                        }
+                    } label: {
+                        Text(span == 7 ? "Week" : "3 days")
+                    }
+                } else {
+                    Picker("Days", selection: $span) {
+                        Text("3 days").tag(3)
+                        Text("Week").tag(7)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 160)
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 160)
                 Button { step(-1) } label: { Image(systemName: "chevron.left") }
                     .accessibilityLabel("One day earlier")
                 Button("Today") { start = nil }
@@ -77,36 +104,26 @@ struct PlannerView: View {
         HStack(spacing: 8) {
             Text("\(Days.label(shown.first ?? first)) – \(Days.label(shown.last ?? first))")
                 .font(.subheadline.weight(.semibold))
-            Text("Drag a task onto a day.")
-                .font(.caption).foregroundStyle(.secondary)
+            if !stacked {
+                Text("Drag a task onto a day.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
         }
         .padding(.horizontal, pad)
     }
 
-    private func dayColumn(_ day: String, p: Planning, shown: [String], width: CGFloat, height: CGFloat) -> some View {
+    /// One day: its header, the day's events (from the device's calendars), its deadlines and its planned tasks. Side by side
+    /// each day has a fixed size and scrolls inside; stacked (iPhone) it is as tall as what it holds.
+    private func dayColumn(_ day: String, p: Planning, shown: [String], events: [CalEvent], width: CGFloat?, height: CGFloat?) -> some View {
         let isToday = day == store.today
-        let tasks = p.planned(on: day)
-        let deadlines = p.due(on: day)
         let targeted = targetDay == day
         return VStack(spacing: 0) {
             dayHeader(day, isToday: isToday, load: p.load(on: day))
             Divider()
-            ScrollView(.vertical) {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(deadlines) { t in deadlineRow(t, day: day) }
-                    if !deadlines.isEmpty && !tasks.isEmpty { Divider() }
-                    ForEach(tasks) { t in
-                        TaskRow(task: t, day: day, showWorkstream: true, showCrumb: true, compact: true)
-                    }
-                    if tasks.isEmpty {
-                        Text("Nothing planned")
-                            .font(.caption).foregroundStyle(.tertiary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.top, deadlines.isEmpty ? 24 : 8)
-                    }
-                }
-                .padding(10)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            if height != nil {
+                ScrollView(.vertical) { dayContent(day, p: p, events: events) }
+            } else {
+                dayContent(day, p: p, events: events)
             }
         }
         .frame(width: width, height: height)
@@ -121,6 +138,32 @@ struct PlannerView: View {
         } isTargeted: { on in
             if on { targetDay = day } else if targetDay == day { targetDay = nil }
         }
+    }
+
+    private func dayContent(_ day: String, p: Planning, events: [CalEvent]) -> some View {
+        let tasks = p.planned(on: day)
+        let deadlines = p.due(on: day)
+        let dayEvents = events.filter { $0.days.contains(day) }
+        return VStack(alignment: .leading, spacing: 8) {
+            ForEach(dayEvents) { e in
+                Button { eventSheet = .show(e.event) } label: { EventLine(thing: CalThing(event: e, day: day), small: true) }
+                    .buttonStyle(.plain)
+            }
+            if !dayEvents.isEmpty && !(deadlines.isEmpty && tasks.isEmpty) { Divider() }
+            ForEach(deadlines) { t in deadlineRow(t, day: day) }
+            if !deadlines.isEmpty && !tasks.isEmpty { Divider() }
+            ForEach(tasks) { t in
+                TaskRow(task: t, day: day, showWorkstream: true, showCrumb: true, compact: true)
+            }
+            if tasks.isEmpty {
+                Text("Nothing planned")
+                    .font(.caption).foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, deadlines.isEmpty && dayEvents.isEmpty ? (stacked ? 8 : 24) : 8)
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func dayHeader(_ day: String, isToday: Bool, load: Double) -> some View {
