@@ -73,7 +73,8 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
         case "textTap": return t == .text && !readOnly
         case "spacePan": return t == .space && !readOnly
         case "spaceTap": return t == .space && !readOnly && BoardTools.shared.spaceTap != .nothing
-        case "quietTap": return t == .lasso && lassoTapIsEmpty(g)        case "tap": return (t == .text || t == .space) && !readOnly ? false : nil
+        case "quietTap": return t == .lasso && lassoTapIsEmpty(g)
+        case "tap": return (t == .text || t == .space) && !readOnly ? false : nil
         case "itemPan": return t == .space ? false : nil
         default: return nil
         }
