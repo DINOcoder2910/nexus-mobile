@@ -84,11 +84,6 @@ final class LinkOverlay: UIView {
 /// menu shows them all, lists them, picks their colour and links the picked thing to a board, a task or a note. A link shows when its
 /// thing is picked or its badge tapped; a far end is a tab to peek at or open.
 extension BoardController {
-    var deviceName: String {
-        let n = UserDefaults.standard.string(forKey: "sync.deviceName")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return n.isEmpty ? "iPad" : n
-    }
-
     func setUpLinks() {
         linkOverlay.frame = view.bounds
         linkOverlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
