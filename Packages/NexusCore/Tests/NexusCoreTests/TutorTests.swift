@@ -61,6 +61,12 @@ final class TutorTests: XCTestCase {
         let sys = TutorPrompt.iPadSystem(name: "Sam")
         XCTAssertTrue(sys.contains("Sam's study app") && sys.contains("tutor button") && sys.contains("<handwriting>"))
         XCTAssertEqual(TutorPrompt.iPadSystem(name: "Sam"), sys, "the same every turn, so it caches")
+        // questions only when they help (Nov 12: it asked too many, as if forced), on both devices
+        for p in [sys, TutorPrompt.system(name: "Sam")] {
+            XCTAssertFalse(p.contains("Check understanding sometimes") || p.contains("predict the next step"))
+            XCTAssertTrue(p.contains("Most answers end without a question") && p.contains("Hand them a step only when they are practising"))
+            XCTAssertTrue(p.contains("explain it all the way through: no yourturn"))
+        }
         XCTAssertTrue(TutorPrompt.system(name: "Sam").contains(TutorSteps.prompt), "the laptop's prompt carries the steps word for word")
     }
 
