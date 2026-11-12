@@ -165,6 +165,33 @@ public struct TutorSession: Equatable {
         }
     }
 
+    /// One turn of the iPad's tutor chat: the question, the sentences of its answer, what it asked them to write next (its yourturn
+    /// step), and whether the answer was stopped part way.
+    public struct ChatTurn: Equatable {
+        public let q: String
+        public let lines: [String]
+        public let yourTurn: String?
+        public let stopped: Bool
+    }
+
+    /// The chat: every turn, oldest first.
+    public func chat() -> [ChatTurn] {
+        turns.map { t in
+            let raw = reply(t)
+            let stopped = raw.range(of: #" \(stopped\)$"#, options: .regularExpression) != nil
+            let text = raw.replacingOccurrences(of: #" \(stopped\)$"#, with: "", options: .regularExpression)
+            var lines: [String] = []
+            var ask: String?
+            for e in TutorReader.read(text).events {
+                switch e {
+                case .say(let s, _): lines.append(s)
+                case .step(let st): if st.type == "yourturn", let a = st.ask, !a.isEmpty { ask = a }
+                }
+            }
+            return ChatTurn(q: you(t), lines: lines, yourTurn: ask, stopped: stopped)
+        }
+    }
+
     /// API mode: the earlier turns as messages (role, text), the newest `max`; the first is the user's.
     public func history(max: Int = TutorSession.historyTurns) -> [(role: String, text: String)] {
         turns.suffix(max).flatMap { t -> [(role: String, text: String)] in

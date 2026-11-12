@@ -11,23 +11,33 @@ import NexusCore
 @Observable
 final class BoardTutor {
     enum Phase { case idle, listening, thinking, speaking }
+    /// The ways of asking: a question, Check my work (the board's picture against what it asked), Try one (a practice problem), a hint
+    /// (one hints-only turn, even with Hints only off).
+    enum Kind { case normal, check, practice, hint }
 
     var phase: Phase = .idle
     var open = false
-    /// What was asked (live while listening).
+    /// Shrunk to a pill at the bottom right, so the whole board shows while it draws.
+    var compact = false
+    /// What was asked this turn (live while listening), and how.
     var asked = ""
-    /// What the tutor has said this turn.
+    var askedKind: Kind = .normal
+    /// What the tutor has said this turn, and the sentence being said now (an index into `said`; -1 before the first starts).
     var said: [String] = []
+    var speaking = -1
+    /// This turn shows as the chat's last turn until it is saved into `chat`.
+    var live = false
     var problem: String?
-    /// Whether the board's tutor.json has an explanation Replay can play again (the panel's Replay button).
+    /// Whether the board's tutor.json has an explanation Replay can play again.
     var canReplay = false
-    /// The strip's (the laptop's bar): paused; hints only; the answer ended with "your turn" (what to write, waiting for Check my work);
-    /// the session's earlier turns for the transcript.
+    /// The laptop's bar: paused; hints only; the answer ended with "your turn" (what to write, waiting for Check my work).
     var paused = false
     var hints = false
     var yourTurn: String?
-    var transcript: [TurnLines] = []
-    struct TurnLines: Identifiable { let id: Int; let q: String; let lines: [String] }
+    /// The session's turns (tutor.json), oldest first: the chat.
+    var chat: [TutorSession.ChatTurn] = []
+    /// The microphone was tapped, not held: it listens until it is tapped again.
+    var listenLocked = false
 
     unowned let board: BoardController
     let drawer: TutorDrawer
@@ -37,15 +47,40 @@ final class BoardTutor {
     @ObservationIgnored private var task: Task<Void, Never>?
     /// Each turn's number: a stopped or cut-off turn's late events are dropped (a new turn may already be running).
     @ObservationIgnored private var turnN = 0
+    /// The turn the chat shows as live (it stops being live once it is saved).
+    @ObservationIgnored private var liveTurn = 0
     /// The sentences of this answer the voice has started (told to the next turn if you cut in), and the cut-off answer's.
     @ObservationIgnored private var heard: [String] = []
     @ObservationIgnored private var cutoff: (said: String, at: Date)?
     @ObservationIgnored private var lastAsk: String?
     @ObservationIgnored private var pendingAsk: String?
+    /// The last question (Try again after a problem).
+    @ObservationIgnored private(set) var lastRequest: (words: String, kind: Kind)?
+    /// The microphone is being started (asking for permission); a release before it is up stops it as soon as it is.
+    @ObservationIgnored private var starting = false
+    @ObservationIgnored private var stopWanted = false
 
     static let model = "sonnet"
     static let focusSeconds: TimeInterval = 60
     static let cutoffSeconds: TimeInterval = 120
+
+    /// What the panel's buttons ask in words (they are the question in the chat and in tutor.json, as the laptop's bar asks).
+    static let checkWords = "Check my work."
+    static let hintWords = "Give me a hint."
+    static let nextHintWords = "Next hint, please."
+    static let practiceWords = "Give me a practice problem like this one."
+    static let showWords = "Show me how to do this step."
+    static let explainWords = "Explain what's on my board."
+
+    /// A saved question's kind, from its words (the chat marks the buttons' questions).
+    static func kind(of q: String) -> Kind {
+        switch q {
+        case checkWords: return .check
+        case hintWords, nextHintWords: return .hint
+        case practiceWords: return .practice
+        default: return .normal
+        }
+    }
 
     init(board: BoardController) {
         self.board = board
@@ -56,24 +91,37 @@ final class BoardTutor {
 
     // MARK: asking out loud
 
-    func startListening() {
-        guard phase == .idle || busy else { return }
-        if busy { stop() } // (talking over it cuts it off: the next turn is told how far you heard)
+    /// Hold (or tap) the microphone. Talking over the tutor cuts it off: the next turn is told how far you heard.
+    func startListening(locked: Bool = false) {
+        guard (phase == .idle || busy), !starting else { return }
+        if busy { stop() }
+        starting = true
+        stopWanted = false
+        listenLocked = locked
         Task {
-            if let why = await Listener.ask() { problem = why; return }
+            defer { starting = false }
+            if let why = await Listener.ask() { problem = why; listenLocked = false; return }
             problem = nil
             asked = ""
+            askedKind = .normal
             said = []
+            speaking = -1
+            yourTurn = nil
+            live = true
             open = true
             listener.onPartial = { [weak self] t in self?.asked = t }
-            if let why = listener.start() { problem = why; phase = .idle; return }
+            if let why = listener.start() { problem = why; phase = .idle; live = false; listenLocked = false; return }
             phase = .listening
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            if stopWanted { stopListening() }
         }
     }
 
+    /// Let go of the microphone (or tap it again): what you said is asked.
     func stopListening() {
+        if starting && phase != .listening { stopWanted = true; return }
         guard phase == .listening else { return }
+        listenLocked = false
         Task {
             let words = await listener.stop()
             asked = words
@@ -82,31 +130,47 @@ final class BoardTutor {
         }
     }
 
+    /// Stop listening without asking.
+    func cancelListening() {
+        stopWanted = false
+        listenLocked = false
+        guard phase == .listening else { return }
+        listener.cancel()
+        phase = .idle
+        live = false
+        asked = ""
+    }
+
     // MARK: one turn
 
-    enum Kind { case normal, check, practice }
-
     /// One question. Asked while it talks (typed or out loud), it cuts the answer off first. kind: Check my work (the board's picture
-    /// is checked against what the last turn asked) or Try one (a practice problem); hints only and what you selected or just circled
-    /// go with it too.
+    /// is checked against what the last turn asked), Try one (a practice problem) or a hint; hints only and what you selected or just
+    /// circled go with it too.
     func ask(_ words: String, kind: Kind = .normal) {
         guard !board.readOnly else { problem = "This board is read-only here, so the tutor can't draw on it."; return }
         if busy { stop() }
+        if phase == .listening { cancelListening() }
         let w = words.trimmingCharacters(in: .whitespacesAndNewlines)
-        var asking = TutorPrompt.Asking(hints: hints, practice: kind == .practice)
+        lastRequest = (w, kind)
+        var asking = TutorPrompt.Asking(hints: hints || kind == .hint, practice: kind == .practice)
         if let c = cutoff, Date().timeIntervalSince(c.at) < BoardTutor.cutoffSeconds { asking.interrupted = c.said }
         cutoff = nil
         if kind == .check { asking.check = lastAsk ?? yourTurn ?? "the next step" }
-        let focus = kind == .normal ? focusBox() : nil
+        let focus = kind == .normal || kind == .hint ? focusBox() : nil
+        checkReplay() // (the chat as saved now: this turn shows after it)
         asked = w
+        askedKind = kind
         said = []
+        speaking = -1
         heard = []
         problem = nil
         yourTurn = nil
+        live = true
         open = true
         phase = .thinking
         turnN += 1
         let me = turnN
+        liveTurn = me
         task = Task { await run(w, me: me, asking: asking, focus: focus) }
     }
 
@@ -115,13 +179,20 @@ final class BoardTutor {
         turnN += 1
         task?.cancel()
         listener.cancel()
+        listenLocked = false
         if paused { paused = false }
         Speaker.shared.stop()
         drawer.finishNow()
         if phase != .idle { phase = .idle }
     }
 
-    // MARK: the strip's buttons (the laptop's bar)
+    /// Ask the last question again (after a problem).
+    func retry() {
+        guard let r = lastRequest else { return }
+        ask(r.words, kind: r.kind)
+    }
+
+    // MARK: the panel's buttons (the laptop's bar)
 
     func pause(_ on: Bool) {
         guard busy || !on else { return }
@@ -131,15 +202,23 @@ final class BoardTutor {
     /// Back: the sentence before is said again, then this one. Next: on to the next sentence now (its drawing goes with it).
     func back() {
         if paused { pause(false) }
-        Speaker.shared.onAgain = { [weak self] s in self?.said.append(s) } // (said again: shown once more)
-        Speaker.shared.back()
+        Speaker.shared.onAgain = nil
+        if Speaker.shared.back(), speaking > 0 { speaking -= 1 }
     }
     func next() { if paused { pause(false) }; Speaker.shared.skip() }
-    func checkWork() { ask("Check my work.", kind: .check) }
-    func nextHint() { ask("Next hint, please.") }
-    func practice() { ask("Give me a practice problem like this one.", kind: .practice) }
-    /// A line of the transcript: replay the board from there.
+    func checkWork() { ask(BoardTutor.checkWords, kind: .check) }
+    /// One hint: the next one if the last turn was a hint too.
+    func hint() { ask(askedKind == .hint && !live ? BoardTutor.nextHintWords : BoardTutor.hintWords, kind: .hint) }
+    func nextHint() { ask(BoardTutor.nextHintWords, kind: .hint) }
+    func practice() { ask(BoardTutor.practiceWords, kind: .practice) }
+    func showMe() { ask(BoardTutor.showWords) }
+    /// A sentence of the chat: replay the board from there.
     func replay(from turn: Int, n: Int) { board.openTutorReplay(from: (turn, n)) }
+    /// Read an answer aloud again (the voice only).
+    func readAloud(_ lines: [String]) {
+        guard !busy else { return }
+        Speaker.shared.read(lines.joined(separator: " "))
+    }
 
     /// Point and ask: the block you selected, else the stroke you wrote in the last minute (a circle round something), once.
     private func focusBox() -> CGRect? {
@@ -157,12 +236,13 @@ final class BoardTutor {
         var s = loadSession()
         board.saveNow()
 
-        // what is on screen, and where this turn draws
-        let visible = board.visibleBoard
+        // what is on screen (less the bar and the open panel), and where this turn draws
+        let area = board.tutorArea
+        let visible = board.boardRect(ofView: area)
         let vis = TutorBox(visible.minX, visible.minY, visible.width, visible.height)
         let frame = TutorPrompt.frame(visible: vis, content: contentBoxes(in: visible))
         drawer.turn(at: frame)
-        let image = snapshot(visible: visible, frame: frame)
+        let image = snapshot(visible: visible, frame: frame, area: area)
         let strokes = board.content.strokes.filter { st in st.points.contains { visible.contains(CGPoint(x: $0[0], y: $0[1])) } }
         let lines: [HandwritingIndex.Line] = await Task.detached(priority: .userInitiated) { HandwritingIndex.Worker.handwrittenLines(strokes) }.value
         let rel = { (x: Double, y: Double, w: Double, h: Double) in TutorBox(x - frame[0], y - frame[1], w, h) }
@@ -197,9 +277,11 @@ final class BoardTutor {
                 switch e {
                 case .say(let sentence, let n):
                     self.said.append(sentence)
+                    let i = self.said.count - 1
                     if self.phase == .thinking { self.phase = .speaking }
-                    await Speaker.shared.say(sentence)
+                    if TutorDemo.active { await TutorDemo.pace(sentence) } else { await Speaker.shared.say(sentence) }
                     if self.turnN != me { continue }
+                    self.speaking = i
                     self.heard.append(sentence)
                     // the sentence has started: the gestures made while the one before was said go
                     self.drawer.spoken(n)
@@ -211,8 +293,11 @@ final class BoardTutor {
         }
         var reply: ClaudeReply?
         do {
-            reply = try await ClaudeClient.shared.stream(req) { piece in
+            let onText: (String) -> Void = { piece in
                 for e in reader.push(piece) { sink.yield(e) }
+            }
+            if TutorDemo.active { reply = await TutorDemo.stream(words, asking: asking, onText: onText) } else {
+                reply = try await ClaudeClient.shared.stream(req, onText: onText)
             }
         } catch {
             if turnN == me { problem = (error as? ClaudeError)?.message ?? error.localizedDescription }
@@ -229,9 +314,11 @@ final class BoardTutor {
             session = s
             saveSession(s)
             checkReplay()
+            if liveTurn == me, chat.count > 0 { live = false } // (saved: the chat has it now)
         }
         guard turnN == me else { return } // (stopped, or cut off by a new question: that one owns the panel now)
         if paused { paused = false }
+        speaking = said.count
         if let ask = pendingAsk {
             // your turn: the strip waits with Check my work, and the Pencil writes
             yourTurn = ask
@@ -262,9 +349,9 @@ final class BoardTutor {
     // MARK: the picture of the board
 
     /// The board on screen, with a faint grid of the turn's coordinates (every 100 units, numbered), as a JPEG at most 1568 px long.
-    private func snapshot(visible: CGRect, frame: [Double]) -> Data? {
+    private func snapshot(visible: CGRect, frame: [Double], area: CGRect) -> Data? {
         let v = board.view!
-        let bounds = board.canvas.frame
+        let bounds = area
         guard bounds.width > 0, bounds.height > 0 else { return nil }
         let hidden = board.tutorPanelView?.isHidden
         board.tutorPanelView?.isHidden = true
@@ -338,11 +425,13 @@ final class BoardTutor {
 
     var turnCount: Int { session?.turns.count ?? 0 }
 
-    /// Reads the session file again for `canReplay` (another device may have added turns).
+    /// Reads the session file again for the chat and `canReplay` (another device may have added turns).
     func checkReplay() {
         let p = TutorSession.parse(try? FolderAccess.read(sessionURL))
         canReplay = p.ok && !p.session.replayTurns().isEmpty
-        transcript = p.ok ? p.session.transcript().enumerated().map { TurnLines(id: $0.offset, q: $0.element.q, lines: $0.element.lines) } : []
+        chat = p.ok ? p.session.chat() : []
+        // a your turn from before (this board opened again): Check my work still checks it
+        if !busy, phase != .listening, !live, yourTurn == nil, let last = chat.last?.yourTurn { yourTurn = last; lastAsk = last }
     }
 }
 
@@ -389,33 +478,61 @@ extension BoardController {
         return b
     }
 
+    /// The bar's tutor button tapped: open the panel (or the pill, opened up), or close it.
     func toggleTutorPanel() {
-        // End typing first: hiding alone leaves the keyboard up, typing into a box nobody can see.
-        if let v = tutorPanelView, !v.isHidden { v.endEditing(true); v.isHidden = true; tutor.open = false } else { showTutorPanel() }
+        if let v = tutorPanelView, !v.isHidden, !tutor.compact { closeTutorPanel() } else { tutor.compact = false; showTutorPanel() }
+    }
+
+    /// Close the panel. End typing first: hiding alone leaves the keyboard up, typing into a box nobody can see. Listening stops;
+    /// an answer goes on (the bar's button opens it again).
+    func closeTutorPanel() {
+        guard let v = tutorPanelView else { return }
+        v.endEditing(true)
+        tutor.cancelListening()
+        v.isHidden = true
+        tutor.open = false
     }
 
     func showTutorPanel() {
         tutor.open = true
         tutor.checkReplay()
-        if let v = tutorPanelView { v.isHidden = false; view.bringSubviewToFront(v); return }
-        let host = UIHostingController(rootView: TutorPanel(tutor: tutor, onClose: { [weak self] in self?.toggleTutorPanel() },
-                                                    onReplay: { [weak self] in self?.openTutorReplay() }))
-        host.view.backgroundColor = .clear
-        host.sizingOptions = .intrinsicContentSize
+        if let host = objc_getAssociatedObject(self, &panelKey) as? TutorPanelHost {
+            host.view.isHidden = false
+            view.bringSubviewToFront(host.view)
+            host.place()
+            return
+        }
+        let host = TutorPanelHost(board: self)
         addChild(host)
         view.addSubview(host.view)
-        host.view.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            host.view.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
-            // Above the keyboard while it is up (the guide sits on the safe area's bottom when it is down).
-            host.view.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor, constant: -16),
-            host.view.topAnchor.constraint(greaterThanOrEqualTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
-            // 380 wide, or the screen's width less a margin on an iPhone
-            { () -> NSLayoutConstraint in let w = host.view.widthAnchor.constraint(equalToConstant: 380); w.priority = .defaultHigh; return w }(),
-            host.view.leadingAnchor.constraint(greaterThanOrEqualTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16),
-        ])
+        host.attach()
         host.didMove(toParent: self)
         objc_setAssociatedObject(self, &panelKey, host, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+    }
+
+    /// Keeps the panel under the bar as the board lays out (BoardController.viewDidLayoutSubviews).
+    func layOutTutorPanel() {
+        (objc_getAssociatedObject(self, &panelKey) as? TutorPanelHost)?.place()
+    }
+
+    /// Where the tutor looks and draws, in the view's points: the board on screen less the bar, and less the panel while it is open
+    /// (beside it on an iPad, above it on a narrow screen), so it never draws under the panel.
+    var tutorArea: CGRect {
+        var r = canvas.frame
+        let top = topInset
+        if r.minY < top { r.size.height -= top - r.minY; r.origin.y = top }
+        if let v = tutorPanelView, !v.isHidden, !tutor.compact, v.frame.width > 0 {
+            let p = v.frame
+            if p.width < r.width * 0.6 { r.size.width = max(240, p.minX - 8 - r.minX) } else { r.size.height = max(200, p.minY - 8 - r.minY) }
+        }
+        return r
+    }
+
+    /// A rectangle of the view (points) as board units.
+    func boardRect(ofView r: CGRect) -> CGRect {
+        let z = canvas.zoomScale
+        let vb = visibleBoard
+        return CGRect(x: vb.minX + (r.minX - canvas.frame.minX) / z, y: vb.minY + (r.minY - canvas.frame.minY) / z, width: r.width / z, height: r.height / z)
     }
 
     /// Leaving the board: stop talking and drawing.
@@ -453,159 +570,5 @@ final class TutorHoldButton: UIButton {
         timer?.invalidate()
         if holding { onHoldEnd?() }
         holding = false
-    }
-}
-
-/// The tutor's panel at the bottom right of a board: what you asked, what it says, hold to talk, type (also while it talks: that cuts
-/// in), and the laptop's bar: Back / Pause / Next / Stop while it talks, Hints only, the transcript (a line replays from there), and after
-/// an answer Check my work (your turn), Next hint and Try one. The Plan/API chip.
-struct TutorPanel: View {
-    @Bindable var tutor: BoardTutor
-    var onClose: () -> Void
-    var onReplay: () -> Void = {}
-    @State private var typed = ""
-    @State private var pressing = false
-    @State private var showTranscript = false
-    @FocusState private var typing: Bool
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Image(systemName: "graduationcap.fill").foregroundStyle(.tint)
-                Text("Tutor").font(.headline)
-                ClaudeModeChip()
-                Spacer()
-                Button { tutor.hints.toggle() } label: { Image(systemName: tutor.hints ? "lightbulb.fill" : "lightbulb") }
-                    .foregroundStyle(tutor.hints ? Color.yellow : Color.secondary)
-                    .accessibilityLabel(tutor.hints ? "Hints only: on" : "Hints only: off")
-                if !tutor.transcript.isEmpty {
-                    Button { showTranscript.toggle() } label: { Image(systemName: "list.bullet.rectangle") }
-                        .foregroundStyle(showTranscript ? Color.accentColor : Color.secondary)
-                        .accessibilityLabel("Transcript")
-                }
-                if tutor.canReplay && !tutor.busy && tutor.phase != .listening {
-                    Button(action: onReplay) { Label("Replay", systemImage: "play.fill").font(.callout) }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                        .accessibilityLabel("Replay the explanation, pointing and marks included")
-                }
-                Button(action: onClose) { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
-                    .accessibilityLabel("Close the tutor")
-            }
-            if showTranscript { transcriptList }
-            if !tutor.asked.isEmpty || tutor.phase == .listening {
-                Text(tutor.asked.isEmpty ? "Listening…" : tutor.asked)
-                    .font(.callout).foregroundStyle(.secondary)
-                    .lineLimit(4)
-            }
-            if !tutor.said.isEmpty {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        Text(tutor.said.joined(separator: " ")).font(.body).frame(maxWidth: .infinity, alignment: .leading).id("end")
-                    }
-                    .frame(maxHeight: 180)
-                    .onChange(of: tutor.said.count) { _, _ in proxy.scrollTo("end", anchor: .bottom) }
-                }
-            } else if tutor.phase == .thinking {
-                HStack(spacing: 8) { ProgressView(); Text(tutor.hints ? "Thinking (hints only)…" : "Thinking…").foregroundStyle(.secondary) }
-            }
-            if tutor.busy { controls }
-            if !tutor.busy && tutor.phase != .listening { afterAnswer }
-            if let p = tutor.problem { Text(p).font(.footnote).foregroundStyle(.red) }
-            HStack(spacing: 10) {
-                talkButton
-                TextField(tutor.busy ? "Type to cut in" : "Ask by typing", text: $typed, axis: .vertical)
-                    .lineLimit(1...4)
-                    .textFieldStyle(.roundedBorder)
-                    .focused($typing)
-                    .onSubmit(send)
-                if tutor.busy && typed.trimmingCharacters(in: .whitespaces).isEmpty {
-                    Button { tutor.stop() } label: { Image(systemName: "stop.circle.fill").font(.title2) }
-                        .accessibilityLabel("Stop")
-                } else {
-                    Button(action: send) { Image(systemName: "arrow.up.circle.fill").font(.title2) }
-                        .disabled(typed.trimmingCharacters(in: .whitespaces).isEmpty)
-                        .accessibilityLabel("Ask")
-                }
-            }
-        }
-        .padding(14)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
-    }
-
-    /// While it talks: the sentence before again, pause, the next sentence, stop.
-    private var controls: some View {
-        HStack(spacing: 18) {
-            Button { tutor.back() } label: { Image(systemName: "backward.end.fill") }.accessibilityLabel("Say that again")
-            Button { tutor.pause(!tutor.paused) } label: { Image(systemName: tutor.paused ? "play.fill" : "pause.fill") }
-                .accessibilityLabel(tutor.paused ? "Resume" : "Pause")
-            Button { tutor.next() } label: { Image(systemName: "forward.end.fill") }.accessibilityLabel("Next sentence")
-            Button { tutor.stop() } label: { Image(systemName: "stop.fill") }.accessibilityLabel("Stop")
-            if tutor.paused { Text("Paused").font(.footnote).foregroundStyle(.secondary) }
-        }
-        .font(.title3)
-        .buttonStyle(.borderless)
-    }
-
-    /// After an answer: your turn (Check my work), the next hint, a practice problem.
-    @ViewBuilder private var afterAnswer: some View {
-        if let ask = tutor.yourTurn {
-            HStack(spacing: 8) {
-                Image(systemName: "pencil.tip").foregroundStyle(.blue)
-                Text(ask.replacingOccurrences(of: #"^(?i)your turn:?\s*"#, with: "", options: .regularExpression))
-                    .font(.callout).lineLimit(3)
-            }
-        }
-        if tutor.yourTurn != nil || !tutor.said.isEmpty {
-            HStack(spacing: 8) {
-                if tutor.yourTurn != nil {
-                    Button { tutor.checkWork() } label: { Label("Check my work", systemImage: "checkmark.circle") }
-                        .buttonStyle(.borderedProminent)
-                }
-                if tutor.hints { Button { tutor.nextHint() } label: { Text("Next hint") }.buttonStyle(.bordered) }
-                if tutor.yourTurn == nil { Button { tutor.practice() } label: { Text("Try one") }.buttonStyle(.bordered) }
-            }
-            .controlSize(.small)
-        }
-    }
-
-    /// The session's turns, a line at a time: tap one to replay the board from there.
-    private var transcriptList: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Tap a line to replay the board from there.").font(.caption).foregroundStyle(.secondary)
-                ForEach(tutor.transcript) { t in
-                    if !t.q.isEmpty { Text("“\(t.q)”").font(.callout.italic()).foregroundStyle(.secondary) }
-                    ForEach(Array(t.lines.enumerated()), id: \.offset) { i, line in
-                        Button { tutor.replay(from: t.id, n: i) } label: {
-                            Text(line).font(.callout).frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    Divider()
-                }
-            }
-        }
-        .frame(maxHeight: 220)
-    }
-
-    private var talkButton: some View {
-        Image(systemName: tutor.phase == .listening ? "waveform.circle.fill" : "mic.circle.fill")
-            .font(.system(size: 34))
-            .foregroundStyle(tutor.phase == .listening ? Color.red : Color.accentColor)
-            .symbolEffect(.pulse, isActive: tutor.phase == .listening)
-            .gesture(DragGesture(minimumDistance: 0)
-                .onChanged { _ in if !pressing { pressing = true; tutor.startListening() } }
-                .onEnded { _ in pressing = false; tutor.stopListening() })
-            .accessibilityLabel("Hold to ask out loud (cuts in while it talks)")
-    }
-
-    private func send() {
-        let t = typed.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !t.isEmpty else { return }
-        typed = ""
-        typing = false
-        tutor.ask(t) // (while it talks: it stops and is told how far you had heard)
     }
 }

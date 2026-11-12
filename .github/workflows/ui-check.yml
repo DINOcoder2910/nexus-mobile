@@ -88,18 +88,23 @@ jobs:
           xcrun xcresulttool export attachments --path ui.xcresult --output-path shots 2>&1 | tail -n 5 || true
           ls shots | head -n 50
 
-      - name: Sidebar screenshot in the log (base64 JPEG, for a reader that can't download artifacts)
+      - name: Screenshots in the log (base64 JPEG, for a reader that can't download artifacts)
         if: always()
         run: |
-          F=$(python3 -c '
+          python3 -c '
           import json
           m=json.load(open("shots/manifest.json"))
-          print(next((a["exportedFileName"] for t in m for a in t.get("attachments",[]) if a.get("suggestedHumanReadableName","").startswith("sidebar")),""))' 2>/dev/null || true)
-          [ -n "$F" ] || { echo "no sidebar shot"; exit 0; }
-          sips -Z 1200 -s format jpeg -s formatOptions 55 "shots/$F" --out sidebar.jpg >/dev/null
-          echo "SHOT-BEGIN sidebar.jpg $(stat -f%z sidebar.jpg)"
-          base64 -i sidebar.jpg | fold -w 3000
-          echo "SHOT-END"
+          for t in m:
+              for a in t.get("attachments",[]):
+                  n=a.get("suggestedHumanReadableName","")
+                  if n.startswith("sidebar") or n.startswith("tutor-"): print(a["exportedFileName"] + "\t" + n.split("_")[0])' > wanted.txt 2>/dev/null || true
+          [ -s wanted.txt ] || { echo "no shots to print"; exit 0; }
+          while IFS="$(printf '\t')" read -r F N; do
+            sips -Z 1400 -s format jpeg -s formatOptions 60 "shots/$F" --out "$N.jpg" >/dev/null || continue
+            echo "SHOT-BEGIN $N.jpg $(stat -f%z "$N.jpg")"
+            base64 -i "$N.jpg" | fold -w 3000
+            echo "SHOT-END"
+          done < wanted.txt
 
       - uses: actions/upload-artifact@v4
         if: always()

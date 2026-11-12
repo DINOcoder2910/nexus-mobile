@@ -534,6 +534,17 @@ final class TutorTests: XCTestCase {
         XCTAssertEqual(t.map { $0.q }, ["q1", "thanks", "q3"])
         XCTAssertEqual(t[0].lines, ["First line.", "Second line."])
         XCTAssertEqual(t[1].lines, ["Just words."], "a stopped answer's mark is left out")
+        let chat = s.chat()
+        XCTAssertEqual(chat.map { $0.q }, ["q1", "thanks", "q3"])
+        XCTAssertEqual(chat.map { $0.lines }, t.map { $0.lines }, "the chat's sentences are the transcript's")
+        XCTAssertEqual(chat.map { $0.stopped }, [false, true, false])
+        XCTAssertNil(chat[0].yourTurn)
+        let yt = "Halve it.\n<step>{\"type\":\"yourturn\",\"ask\":\"Write the next line: divide both sides by 2.\"}</step>"
+        let one = JSONValue.object([("format", .string("nexus-tutor/1")), ("created", .string("2026-11-12T10:00:00Z")), ("title", .string("")), ("sessionId", .null),
+                                    ("turns", .array([.object([("at", .string("2026-11-12T10:00:00Z")), ("you", .string("Give me a hint.")), ("reply", .string(yt)), ("mode", .string("api"))])]))])
+        let c1 = TutorSession.parse(one.indented()).session.chat()
+        XCTAssertEqual(c1.first?.lines, ["Halve it."])
+        XCTAssertEqual(c1.first?.yourTurn, "Write the next line: divide both sides by 2.", "the chat keeps what it asked them to write")
         let r = s.replayFrom(turn: 2, n: 1)!
         XCTAssertEqual(r.turns.count, 2, "the turn that draws nothing is left out")
         XCTAssertEqual(r.start.turn, 1)
