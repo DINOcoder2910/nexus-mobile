@@ -91,7 +91,7 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
     /// Puts the current tool on the canvas; tools that don't draw turn the Pencil's drawing off (it scrolls, types or makes space).
     func applyTool() {
         let tools = BoardTools.shared
-        canvas.drawingPolicy = tools.fingersDraw ? .anyInput : .pencilOnly
+        canvas.drawingPolicy = Device.isPhone || tools.fingersDraw ? .anyInput : .pencilOnly // an iPhone has no Pencil
         if !readOnly, let pk = tools.pkTool(tools.tool, dark: boardIsDark) {
             canvas.tool = pk
             canvas.drawingGestureRecognizer.isEnabled = true
