@@ -247,9 +247,11 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
                 return false
             }
         }
-        if look.review, text != "\n", textView.markedTextRange == nil {
-            // Review mode: the change becomes a suggestion
-            apply(Review.type(self.text, range: range, with: text))
+        if look.review, textView.markedTextRange == nil {
+            // Review mode: the change becomes a suggestion (a deletion with the caret at its start is the Delete key)
+            let sel = textView.selectedRange
+            let forward = text.isEmpty && range.length > 0 && sel.length == 0 && sel.location == range.location
+            apply(Review.type(self.text, range: range, with: text, forward: forward))
             return false
         }
         if (text as NSString).length == 1, range.length == 0 { lastTyped = range.location + 1 }

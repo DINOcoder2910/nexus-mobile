@@ -118,7 +118,7 @@ extension BoardController {
             let lead = MarkdownEdit.listPrefix(text)
             r = NSRange(location: line.location + lead, length: max(0, line.length - lead - (text.hasSuffix("\n") ? 1 : 0)))
         }
-        let words = LiveMarkdown.visibleText(s.substring(with: r)).trimmingCharacters(in: .whitespacesAndNewlines)
+        let words = Cards.taskTitle(s.substring(with: r))
         let groups = store.snapshot.groups.sorted { $0.order < $1.order }
         var choices: [(id: String?, name: String)] = [(nil, "Inbox")]
         for g in groups {
@@ -129,7 +129,7 @@ extension BoardController {
         }
         let sheet = AddTaskSheet(title: words, choices: choices) { [weak self, weak store] title, ws in
             guard let self, let store, let id = store.add(title: title, workstream: ws) else { return }
-            let chip = "[\(title.replacingOccurrences(of: "]", with: ")"))](nexus-task:\(id))"
+            let chip = Cards.taskChip(title, id: id)
             if let w = self.session(for: blockId), w.key == key {
                 let now = w.text as NSString
                 let rr = NSIntersectionRange(r, NSRange(location: 0, length: now.length))

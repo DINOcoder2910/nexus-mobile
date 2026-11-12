@@ -22,10 +22,14 @@ public enum BoardMarks {
         if let at { f.append(("at", at.json)) }
         if let page { f.append(("page", .number(Double(page)))) }
         if let text { f.append(("text", .string(text))) }
+        if kind == "bubble" { f.append(("replies", .array([]))) }
         if let strokes { f.append(("strokes", .array(relative(strokes, x: x, y: y).map(\.json)))) }
         f += [("by", .string(by)), ("made", .string(iso(now))), ("done", .bool(false))]
-        return BoardItem(id: id, type: "mark", x: x.rounded(), y: y.rounded(), fields: f)
+        return BoardItem(id: id, type: "mark", x: r2(x), y: r2(y), fields: f)
     }
+
+    /// Positions as the laptop keeps them (two decimals).
+    static func r2(_ v: Double) -> Double { (v * 100).rounded() / 100 }
 
     static func relative(_ strokes: [BoardStroke], x: Double, y: Double) -> [BoardStroke] {
         strokes.map { s in
@@ -33,7 +37,7 @@ public enum BoardMarks {
             s.raw = nil
             s.points = s.points.map { p in
                 var q = p
-                if q.count >= 2 { q[0] -= x.rounded(); q[1] -= y.rounded() }
+                if q.count >= 2 { q[0] -= r2(x); q[1] -= r2(y) }
                 return q
             }
             return s

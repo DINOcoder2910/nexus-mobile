@@ -23,8 +23,10 @@ public struct BlockDraft: Equatable, Sendable {
     }
 
     var json: JSONValue {
-        var f: [(String, JSONValue)] = [("id", .string(id)), ("name", .string(name)), ("made", .string(made)), ("locked", .bool(locked))]
+        // as the laptop stores an entry: `locked` only while it is on
+        var f: [(String, JSONValue)] = [("id", .string(id)), ("name", .string(name)), ("made", .string(made))]
         if let from { f.append(("from", .string(from))) }
+        if locked { f.append(("locked", .bool(true))) }
         return .object(f)
     }
 }
@@ -102,12 +104,15 @@ public enum BlockDrafts {
         let cur = current(item) ?? drafts[0].id
         let source = from.flatMap { f in drafts.contains { $0.id == f } ? f : nil } ?? cur
         let sourceWords = words(c, id, source)
-        let ids = Set(drafts.map(\.id))
+        // the first free d<n> and "Draft <n>" from one past the count, each on its own (the laptop's newDraft)
+        let ids = Set(drafts.map(\.id)), names = Set(drafts.map(\.name))
         var n = drafts.count + 1
         while ids.contains("d\(n)") { n += 1 }
         let new = "d\(n)"
-        let clean = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        drafts.append(BlockDraft(id: new, name: clean.isEmpty ? "Draft \(n)" : clean, made: iso(now), from: source))
+        var clean = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        var k = drafts.count + 1
+        while clean.isEmpty { if !names.contains("Draft \(k)") { clean = "Draft \(k)" }; k += 1 }
+        drafts.append(BlockDraft(id: new, name: clean, made: iso(now), from: source))
         if lockOld, let i = drafts.firstIndex(where: { $0.id == source }) { drafts[i].locked = true }
         // the current draft's words move to their own file; the new one is current
         out.texts["\(id)~\(cur)"] = c.texts[id] ?? ""
@@ -206,17 +211,65 @@ public enum BlockDrafts {
     }
 
     /// Bring them over: the old draft's edits since the snapshot are merged into `draft` (three-way, by line), and the snapshot
-    /// moves on so the same edits aren't brought twice. Nil when a line was changed in both (nothing changes then).
-    public static func bringOver(_ c: BoardContent, id: String, into draft: String) -> BoardContent? {
+    /// moves on so the same edits aren't brought twice. A line both drafts changed differently stays as this draft has it, with the
+    /// old draft's version as a suggestion on it. Nil when the draft wasn't made from another.
+    public static func bringOver(_ c: BoardContent, id: String, into draft: String) -> (content: BoardContent, merged: Int, clashes: Int)? {
         guard let it = c.items.first(where: { $0.id == id }), let d = list(it).first(where: { $0.id == draft }),
               let from = d.from else { return nil }
         let snap = c.texts[snapKey(id, draft)] ?? ""
         let theirs = words(c, id, from)
-        let mine = words(c, id, draft)
-        guard let merged = LiveBoard.mergeLines(base: snap, hub: theirs, mine: mine) else { return nil }
+        let r = merge(snap: snap, old: theirs, new: words(c, id, draft))
         var out = c
-        out.texts[key(it, draft)] = merged
+        out.texts[key(it, draft)] = r.text
         out.texts[snapKey(id, draft)] = theirs
-        return out
+        return (out, r.merged, r.clashes)
+    }
+
+    /// The laptop's bringOver (renderer/src/board/drafts.js): base is the snapshot, `old` the old draft now, `new` this draft. A change on
+    /// one side only is taken (merged counts the old draft's edits brought over); the same change on both sides is taken once; a clash
+    /// (the same snapshot lines changed differently, or both adding at the same place) keeps this draft's lines with the old draft's as
+    /// a suggestion.
+    public static func merge(snap: String, old oldNow: String, new: String) -> (text: String, merged: Int, clashes: Int) {
+        let base = snap.components(separatedBy: "\n"), theirs = oldNow.components(separatedBy: "\n"), ours = new.components(separatedBy: "\n")
+        struct H { var side: Character; var bs: Int; var be: Int; var lines: [String] }
+        var hunks = Critic.lineHunks(base, theirs).map { H(side: "t", bs: $0.oldFrom, be: $0.oldTo, lines: Array(theirs[$0.newFrom..<$0.newTo])) }
+            + Critic.lineHunks(base, ours).map { H(side: "o", bs: $0.oldFrom, be: $0.oldTo, lines: Array(ours[$0.newFrom..<$0.newTo])) }
+        hunks.sort { x, y in
+            if x.bs != y.bs { return x.bs < y.bs }
+            if x.be != y.be { return x.be < y.be }
+            return x.side == "o" && y.side != "o"
+        }
+        // changes that touch the same snapshot lines (or add at the same place) go together
+        struct G { var start: Int; var end: Int; var items: [H] }
+        var groups: [G] = []
+        for h in hunks {
+            if var g = groups.last, h.bs < g.end || (h.bs == h.be && g.items.contains { $0.bs == $0.be && $0.bs == h.bs }) {
+                g.items.append(h); g.end = max(g.end, h.be)
+                groups[groups.count - 1] = g
+            } else { groups.append(G(start: h.bs, end: h.be, items: [h])) }
+        }
+        func sideLines(_ g: G, _ side: Character) -> [String] {
+            var out: [String] = []
+            var p = g.start
+            for h in g.items where h.side == side { out += base[min(p, h.bs)..<h.bs] + h.lines; p = h.be }
+            return out + base[min(p, g.end)..<g.end]
+        }
+        var parts: [Critic.Piece] = []
+        var p = 0, merged = 0, clashes = 0
+        for g in groups {
+            parts += base[min(p, g.start)..<g.start].map { Critic.Piece.line($0) }
+            let t = g.items.filter { $0.side == "t" }.count, o = g.items.count - t
+            if o == 0 { parts += sideLines(g, "t").map { Critic.Piece.line($0) }; merged += t }
+            else if t == 0 { parts += sideLines(g, "o").map { Critic.Piece.line($0) } }
+            else {
+                let mine = sideLines(g, "o"), old = sideLines(g, "t")
+                if mine == old { parts += mine.map { Critic.Piece.line($0) } } else { parts.append(.change(old: mine, new: old)); clashes += 1 }
+            }
+            p = g.end
+        }
+        parts += base[min(p, base.count)...].map { Critic.Piece.line($0) }
+        if clashes > 0 { return (Critic.withSuggestions(parts), merged, clashes) }
+        let text = parts.map { (p: Critic.Piece) -> String in if case .line(let l) = p { return l } else { return "" } }.joined(separator: "\n")
+        return (text, merged, clashes)
     }
 }
