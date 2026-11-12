@@ -104,9 +104,9 @@ extension BoardController {
 
 /// A board's gestures (two- and three-finger taps, the Pencil's double-tap and squeeze) and its tool switches (eraser and back, the
 /// last tool), for the actions Settings › Shortcuts puts on them. A two-finger double tap always shows everything on the board (the
-/// zoom pill's "Show everything"); the two-finger tap waits for it to fail. While both Pencil gestures are left to iPadOS, PencilKit does what
-/// Settings › Apple Pencil says; once one of them has a Nexus action, this board takes the Pencil's gestures and does iPadOS's choice
-/// itself for the other.
+/// zoom pill's "Show everything"); the two-finger tap waits for it to fail. While both Pencil gestures are left to iPadOS, PencilKit
+/// does what Settings › Apple Pencil says; once one of them has a Nexus action, this board takes the Pencil's gestures and does
+/// iPadOS's choice itself for the other. The board's quietCanvasMenus (BoardHoldMenu.swift) leaves these taps on.
 final class BoardGestures: NSObject, UIGestureRecognizerDelegate, UIPencilInteractionDelegate {
     weak var board: BoardController?
     let twoFingers = UITapGestureRecognizer()

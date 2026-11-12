@@ -4,7 +4,8 @@ import NexusCore
 
 /// Taps and holds on the board: a tap picks what is under it and does nothing on empty board; touching and holding something shows
 /// its menu (a block, a picture, a shape, a PDF, a comment, tape, or ink, which can be attached to the words beside it). PencilKit's
-/// own "Select All / Insert Space" callout is turned off, except with the Select tool, where it is the lasso's menu.
+/// own "Select All / Insert Space" callout is turned off: its taps are off except with the Select tool, where they give the lasso's
+/// menu, and even there a tap away from the ink with nothing lassoed is ours (the bar's Insert space is the one Insert space).
 private var holdMenuKey: UInt8 = 0
 private var holdSpotKey: UInt8 = 0
 
@@ -34,13 +35,32 @@ extension BoardController: UIEditMenuInteractionDelegate {
         let lasso = BoardTools.shared.tool == .lasso
         let skip: [UIView] = [world, overWorld]
         func walk(_ v: UIView) {
-            for g in v.gestureRecognizers ?? [] where g.delegate !== self && g !== canvas.drawingGestureRecognizer
-                && (g is UITapGestureRecognizer || g is UILongPressGestureRecognizer) {
+            for g in v.gestureRecognizers ?? [] where isCanvasMenuGesture(g) {
                 if g.isEnabled != lasso { g.isEnabled = lasso }
             }
             for s in v.subviews where !skip.contains(where: { $0 === s }) { walk(s) }
         }
         walk(canvas)
+    }
+
+    /// One of PencilKit's own taps or holds on the canvas: not the board's (this controller's, or the two- and three-finger taps of
+    /// BoardShortcuts.swift) and not its drawing.
+    func isCanvasMenuGesture(_ g: UIGestureRecognizer) -> Bool {
+        guard g is UITapGestureRecognizer || g is UILongPressGestureRecognizer, g !== canvas.drawingGestureRecognizer,
+              g.delegate !== self, (g.delegate as? BoardGestures) == nil, let v = g.view else { return false }
+        return v.isDescendant(of: canvas)
+    }
+
+    /// With the Select tool, PencilKit's tap would show "Select All / Insert Space" here: a tap away from the ink while nothing is
+    /// lassoed. A tap on or near ink, or while something is lassoed (it can be copied), stays PencilKit's: the lasso's own menu, or
+    /// putting the selection down.
+    func lassoTapIsEmpty(_ g: UIGestureRecognizer) -> Bool {
+        if canvas.canPerformAction(#selector(UIResponderStandardEditActions.copy(_:)), withSender: nil) { return false }
+        let z = max(canvas.zoomScale, 0.1)
+        let at = g.location(in: canvas)
+        let p = CGPoint(x: at.x / z, y: at.y / z) // the drawing's own units (board units plus `offset`)
+        let reach = 30 / z
+        return !canvas.drawing.strokes.contains { $0.renderBounds.insetBy(dx: -reach, dy: -reach).contains(p) }
     }
 
     /// Touch and hold: pick what is there and show its menu; nothing on empty board.
