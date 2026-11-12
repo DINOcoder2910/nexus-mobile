@@ -58,7 +58,7 @@ final class BoardViewController: UIViewController, PKCanvasViewDelegate {
         canvas.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         canvas.backgroundColor = .clear
         canvas.isOpaque = false
-        canvas.drawingPolicy = .pencilOnly
+        canvas.drawingPolicy = Device.isPhone ? .anyInput : .pencilOnly
         canvas.minimumZoomScale = 0.25
         canvas.maximumZoomScale = 4
         canvas.contentInsetAdjustmentBehavior = .never

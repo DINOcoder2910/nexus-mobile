@@ -401,13 +401,11 @@ extension BoardController {
             UIAction(title: "Peek", image: UIImage(systemName: "eye")) { [weak self] _ in self?.peek(e, from: l.id, side: side) },
             UIAction(title: openTitle(e), image: UIImage(systemName: "arrow.up.forward.app")) { [weak self] _ in self?.open(e) },
         ]
-        if BoardLinks.kind(e) == .board, let onSide, !isSidePane, let target = BoardLinks.board(of: e, from: path) {
+        if BoardLinks.kind(e) == .board, let split, !isSidePane, let target = BoardLinks.board(of: e, from: path) {
             items.append(UIAction(title: "Open beside", image: UIImage(systemName: "rectangle.split.2x1")) { [weak self] _ in
                 guard let self else { return }
                 self.saveNow()
-                var t = NexusStore.BoardTarget(path: target, focus: nil)
-                if e?["on"] != nil { t.focusEnd = BoardLinks.end(e, readOn: self.path, shownOn: target) }
-                onSide(.board(t))
+                split.showBoard(target, focusEnd: e?["on"] == nil ? nil : BoardLinks.end(e, readOn: self.path, shownOn: target))
             })
         }
         if !readOnly {

@@ -9,6 +9,9 @@ enum Theme {
     static let soon = dynamic(light: "#9A5600", dark: "#E8A95C")
     static let planned = dynamic(light: "#007F43", dark: "#73CE95")
     static let key = dynamic(light: "#B07A00", dark: "#F5C451")
+    /// Claude's colour (the laptop's --claude and --claude-tint): the API chip.
+    static let claude = dynamic(light: "#3B5BDB", dark: "#9FB1FF")
+    static let claudeTint = dynamic(light: "#E8EDFB", dark: "#1C2040")
 
     /// A workstream's colour; one without a colour gets a stable one from its id, as the laptop's Applications do.
     static func workstream(_ stored: String?, key: String) -> Color {

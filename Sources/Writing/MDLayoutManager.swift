@@ -217,4 +217,36 @@ final class BlockTextLayout {
     func taskLine(at point: CGPoint) -> Int? {
         manager.taskLine(at: CGPoint(x: point.x - padding.x, y: point.y - padding.y))
     }
+
+    /// The box round a run of characters (inside the padding: add `padding` for block coordinates); null when it shows nothing.
+    func rect(of range: NSRange) -> CGRect {
+        let r = NSIntersectionRange(range, NSRange(location: 0, length: storage.length))
+        guard r.length > 0 || (range.length == 0 && range.location <= storage.length) else { return .null }
+        let g = manager.glyphRange(forCharacterRange: r.length > 0 ? r : NSRange(location: max(0, min(r.location, storage.length - 1)), length: storage.length > 0 ? 1 : 0),
+                                   actualCharacterRange: nil)
+        guard g.length > 0 else { return .null }
+        return manager.boundingRect(forGlyphRange: g, in: container)
+    }
+
+    /// The character nearest a point (inside the padding).
+    func characterIndex(at p: CGPoint) -> Int {
+        guard storage.length > 0 else { return 0 }
+        var fraction: CGFloat = 0
+        let i = manager.characterIndex(for: p, in: container, fractionOfDistanceBetweenInsertionPoints: &fraction)
+        return min(storage.length, i + (fraction > 0.5 ? 1 : 0))
+    }
+
+    /// A soft underline under each range (comments' words), drawn behind the words.
+    func drawMarked(_ ranges: [NSRange], in ctx: CGContext) {
+        guard !ranges.isEmpty else { return }
+        ctx.setFillColor(UIColor(red: 1, green: 0.78, blue: 0.2, alpha: 0.28).cgColor)
+        for range in ranges {
+            let r = NSIntersectionRange(range, NSRange(location: 0, length: storage.length))
+            guard r.length > 0 else { continue }
+            let g = manager.glyphRange(forCharacterRange: r, actualCharacterRange: nil)
+            manager.enumerateEnclosingRects(forGlyphRange: g, withinSelectedGlyphRange: NSRange(location: NSNotFound, length: 0), in: container) { rect, _ in
+                ctx.fill(rect.offsetBy(dx: self.padding.x, dy: self.padding.y))
+            }
+        }
+    }
 }

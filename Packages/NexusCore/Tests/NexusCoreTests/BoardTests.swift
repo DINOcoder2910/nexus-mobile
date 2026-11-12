@@ -187,9 +187,9 @@ final class BoardTests: XCTestCase {
     }
 
     func testUnknownFeaturesAreReadOnly() throws {
-        try write("F.board/board.json", "{\"format\":\"nexus-board/1\",\"features\":[\"tape\",\"links\",\"tape\"],\"paper\":{\"kind\":\"dots\"}}")
+        try write("F.board/board.json", "{\"format\":\"nexus-board/1\",\"features\":[\"hologram\",\"links\",\"x\",\"hologram\"],\"paper\":{\"kind\":\"dots\"}}")
         let c = try BoardFiles.load(dir.appendingPathComponent("F.board"))
-        XCTAssertEqual(c.readOnly, "This board uses tape from a newer Nexus. Update the iPad app to edit it.")
+        XCTAssertEqual(c.readOnly, "This board uses hologram, x from a newer Nexus. Update the iPad app to edit it.")
         var wrote = false
         _ = try BoardFiles.save(c, to: dir.appendingPathComponent("F.board"), write: { _, _ in wrote = true })
         XCTAssertFalse(wrote)
@@ -300,9 +300,37 @@ final class BoardTests: XCTestCase {
         XCTAssertEqual(nbs.map(\.name), ["Chem", "Spanish"])
         let chem = nbs[0]
         XCTAssertEqual(chem.boards.map(\.name), ["Loose"])
-        XCTAssertEqual(chem.sections.map(\.name), ["R1 energy", "R3 redox"])
-        XCTAssertEqual(chem.sections[1].boards.map(\.name), ["Lesson 1", "Lesson 2", "Lesson 10"])
-        XCTAssertEqual(chem.sections[1].boards[0].path, "notebooks/Chem/R3 redox/Lesson 1.board")
+        XCTAssertEqual(chem.notebooks.map(\.name), ["R1 energy", "R3 redox"])
+        XCTAssertEqual(chem.notebooks[1].boards.map(\.name), ["Lesson 1", "Lesson 2", "Lesson 10"])
+        XCTAssertEqual(chem.notebooks[1].boards[0].path, "notebooks/Chem/R3 redox/Lesson 1.board")
+        XCTAssertEqual(chem.notebooks[1].depth, 1)
         XCTAssertEqual(nbs[1].boards.map(\.path), ["notebooks/Spanish/Verbs.board"])
+    }
+
+    func testNotebooksNestToAnyDepth() throws {
+        for p in ["notebooks/School/Chem/R3/Week 1/Lesson 1.board", "notebooks/School/Chem/Intro.board", "notebooks/School/Chem/R3/Notes.board"] {
+            try FileManager.default.createDirectory(at: dir.appendingPathComponent(p), withIntermediateDirectories: true)
+        }
+        let nbs = Notebook.list(dir)
+        XCTAssertEqual(nbs.map(\.name), ["School"])
+        let week = Notebook.find(nbs, "notebooks/School/Chem/R3/Week 1")
+        XCTAssertEqual(week?.depth, 3)
+        XCTAssertEqual(week?.boards.map(\.name), ["Lesson 1"])
+        XCTAssertEqual(nbs[0].allBoards.map(\.place), ["School › Chem", "School › Chem › R3", "School › Chem › R3 › Week 1"])
+        XCTAssertEqual(nbs[0].allNotebooks.map(\.name), ["School", "Chem", "R3", "Week 1"])
+        XCTAssertTrue(Notebook.canMove("notebooks/School/Chem/Intro.board", into: "notebooks/School"))
+        XCTAssertFalse(Notebook.canMove("notebooks/School/Chem/Intro.board", into: "notebooks/School/Chem"))
+        XCTAssertFalse(Notebook.canMove("notebooks/School/Chem", into: "notebooks/School/Chem/R3"))
+        XCTAssertFalse(Notebook.canMove("notebooks/School/Chem", into: "notebooks/School/Chem"))
+    }
+
+    func testNotebookColour() {
+        XCTAssertEqual(NotebookMeta.json(nil, color: "#2769B7"), "{\n  \"format\": \"nexus-notebook/1\",\n  \"color\": \"#2769B7\"\n}\n")
+        let old = "{\"color\":\"#007F43\",\"format\":\"nexus-notebook/1\",\"pinned\":true}"
+        XCTAssertEqual(NotebookMeta.color(old), "#007F43")
+        XCTAssertEqual(NotebookMeta.json(old, color: "#9A5600"), "{\n  \"color\": \"#9A5600\",\n  \"format\": \"nexus-notebook/1\",\n  \"pinned\": true\n}\n")
+        XCTAssertEqual(NotebookMeta.json(old, color: nil), "{\n  \"format\": \"nexus-notebook/1\",\n  \"pinned\": true\n}\n")
+        XCTAssertNil(NotebookMeta.color("{\"color\":\"blue\"}"))
+        XCTAssertNil(NotebookMeta.color(nil))
     }
 }

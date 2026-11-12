@@ -70,7 +70,7 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
     /// The item under a board point, top layer first (typed text, shapes, images, then PDF printouts if asked).
     func hitItem(_ p: CGPoint, pdf: Bool) -> BoardItem? {
         let z = canvas.zoomScale
-        let order = ["text": 0, "shape": 1, "image": 2, "pdf": 3]
+        let order = ["text": 0, "shape": 1, "image": 2, "tool": 2, "pdf": 3]
         let items = content.items.filter { !BoardLinks.isLink($0) && (pdf || $0.type != "pdf") }.sorted { (order[$0.type] ?? 9, $1.id) < (order[$1.type] ?? 9, $0.id) }
         return items.first { box(of: $0).insetBy(dx: -6 / z, dy: -6 / z).contains(p) }
     }
@@ -79,17 +79,24 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
         // a tap away from the block being typed in closes it
         if writing != nil { endWriting(); return }
         let p = boardPoint(g)
+        if recordingTap(p) { return }
         if links.mode { linkTapped(p); return }
         guard let it = hitItem(p, pdf: false) else { selected = nil; return }
+        if it.type == "mark" { selected = nil; openMark(it.id); return }
+        if it.type == "tape", selected != it.id { togglePeek(it.id); return }
         if it.type == "text", !readOnly {
             if let v = itemViews[it.id] as? TextBlockView,
                let line = v.taskLine(at: CGPoint(x: p.x - it.x, y: p.y - it.y)),
-               let md = TextLook.toggleTask(content.texts[it.id] ?? "", line: line) {
-                changeItems("Tick") { $0.texts[it.id] = md }
+               let md = TextLook.toggleTask(content.texts[shownKey(it.id)] ?? "", line: line) {
+                if blockLocked(it.id) { tellLocked(it.id); return }
+                let key = shownKey(it.id)
+                changeItems("Tick") { $0.texts[key] = md }
                 return
             }
             if selected == it.id { beginWriting(it, at: p); return }
         }
+        // a picked tool card, tapped again: use it in the Tools panel
+        if it.type == "tool", selected == it.id { useToolCard(it.id); return }
         selected = it.id
     }
 
@@ -118,6 +125,7 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
             let t = g.translation(in: canvas)
             let dx = Double(t.x / z), dy = Double(t.y / z)
             content.items[i] = d.resize ? resized(d, dx, dy) : d.start.with("x", .number(d.start.x + dx)).with("y", .number(d.start.y + dy))
+            if !d.resize, d.start.type == "pdf" { movePageBlocks(of: d.id, from: d.before.0, dx: dx, dy: dy) }
             rebuildItems()
         case .ended, .cancelled, .failed:
             guard let d = drag else { return }
@@ -129,6 +137,7 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
             }
             registerItemsUndo(d.before, d.resize ? "Resize" : "Move")
             rebuildItems()
+            followInkMarks() // ink attached to the block's words moves with it
             growIfNeeded()
             changed()
         default:
@@ -152,6 +161,9 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
         case "text":
             let w0 = it.w ?? Double(d.startSize.width)
             return it.with("w", .number(max(60, (w0 + dx).rounded())))
+        case "tool":
+            let w0 = Double(d.startSize.width), h0 = Double(d.startSize.height)
+            return it.with("w", .number(max(ToolCatalog.minW, (w0 + dx).rounded()))).with("h", .number(max(ToolCatalog.minH, (h0 + dy).rounded())))
         default:
             return it
         }

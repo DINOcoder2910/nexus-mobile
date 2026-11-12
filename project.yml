@@ -15,7 +15,11 @@ targets:
   NexusMobile:
     type: application
     platform: iOS
-    sources: [Sources]
+    sources:
+      - Sources
+      # the laptop's maths and chemistry renderers (tools/render/build.mjs), kept as a folder so render.html finds its fonts
+      - path: Resources/Render
+        type: folder
     dependencies:
       - package: NexusCore
     info:
@@ -30,17 +34,36 @@ targets:
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
         NSLocalNetworkUsageDescription: Nexus syncs your notes with your home hub.
+        # the commit this build was made from (the cloud build sets NEXUS_BUILD): told to the hub, so the laptop can say when the iPad is behind
+        NexusBuild: $(NEXUS_BUILD)
+        NSCameraUsageDescription: Nexus scans pages into a new board.
+        NSPhotoLibraryUsageDescription: Nexus puts a photo on a new board.
+        NSMicrophoneUsageDescription: Nexus listens while you hold the tutor button, and records a class when you ask it to.
+        NSSpeechRecognitionUsageDescription: Nexus turns what you ask the tutor into words, on the iPad.
+        # a class keeps recording when the screen locks or you switch apps
+        UIBackgroundModes:
+          - audio
         UISupportedInterfaceOrientations~ipad:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
+        # the iPhone: upright and both landscapes (not upside down, as Apple's own apps)
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        # the Calendar reads the device's own calendars (Google, school, iCloud) through EventKit; the event sheets may show invitees
+        NSCalendarsFullAccessUsageDescription: Nexus shows your calendars beside your planned tasks, and lets you add and edit events.
+        NSContactsUsageDescription: Nexus shows who is invited to an event.
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.nexus.mobile
-        TARGETED_DEVICE_FAMILY: "2"
+        # 1 = iPhone, 2 = iPad: one app for both
+        TARGETED_DEVICE_FAMILY: "1,2"
         MARKETING_VERSION: "0.2"
         CURRENT_PROJECT_VERSION: "1"
+        NEXUS_BUILD: dev
         SWIFT_VERSION: "5.0"
         CODE_SIGNING_ALLOWED: "NO"
         CODE_SIGNING_REQUIRED: "NO"

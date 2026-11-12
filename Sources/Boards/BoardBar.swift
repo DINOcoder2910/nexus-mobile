@@ -304,6 +304,7 @@ final class BoardBar: UIView {
             if it.type == "text" {
                 rightStack.addArrangedSubview(textButton("Type", "character.cursor.ibeam") { [weak b] in b?.editSelected() })
             }
+            if it.type == "tool" { b.toolCardButtons(it).forEach { rightStack.addArrangedSubview($0) } }
             rightStack.addArrangedSubview(textButton("Delete", "trash") { [weak b] in b?.deleteSelected() })
             rightStack.addArrangedSubview(divider())
         }

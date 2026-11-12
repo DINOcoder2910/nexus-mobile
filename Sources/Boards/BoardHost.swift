@@ -4,29 +4,31 @@ import NexusCore
 
 /// A data-folder board, full screen, in its own navigation bar (PencilKit lives in UIKit).
 struct BoardHost: UIViewControllerRepresentable {
-    @Environment(NexusStore.self) private var store
     let target: NexusStore.BoardTarget
     let root: URL
+    let store: NexusStore
     let onClose: () -> Void
     let onSaved: (String) -> Void
     /// The board in the side pane (its close button closes the pane).
     var isSide = false
     var onSidebar: (() -> Void)?
-    var onSide: ((BoardController.SideRequest) -> Void)?
 
-    func makeUIViewController(context: Context) -> UINavigationController {
+    func makeUIViewController(context: Context) -> BoardSplitController {
         let vc = BoardController(root: root, path: target.path, focus: target.focus)
         vc.onClose = onClose
         vc.onSaved = onSaved
+        vc.store = store
         vc.isSidePane = isSide
         vc.onSidebar = onSidebar
-        vc.onSide = onSide
-        vc.store = store
         vc.focusEnd = target.focusEnd
-        return UINavigationController(rootViewController: vc)
+        // the board in its own navigation, with room for a second pane beside it (Side by side)
+        let split = BoardSplitController(board: vc, root: root)
+        split.store = store
+        split.onSaved = onSaved
+        return split
     }
 
-    func updateUIViewController(_ controller: UINavigationController, context: Context) {}
+    func updateUIViewController(_ controller: BoardSplitController, context: Context) {}
 }
 
 /// The ink test's boards (Documents/Boards) copied once into the data folder as boards in the laptop's format, in the notebook

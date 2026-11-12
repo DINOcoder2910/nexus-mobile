@@ -1,5 +1,6 @@
 import UIKit
 import PencilKit
+import PDFKit
 import NexusCore
 
 /// Typing on the board (piece 4 of the board redesign): a block opens in place, over the board, with the formatting row; its words
@@ -23,6 +24,7 @@ extension BoardController {
         }
         guard let current = content.items.first(where: { $0.id == it.id }) else { return }
         selected = nil
+        loadDraftFiles(it.id)
         let session = WritingSession(board: self, item: current)
         syncStrokes()
         session.beforeStrokes = content.strokes
@@ -54,6 +56,7 @@ extension BoardController {
         writing = nil
         w.textView.resignFirstResponder()
         w.textView.removeFromSuperview()
+        w.tabs.removeFromSuperview()
         finish(w)
         if !readOnly { canvas.becomeFirstResponder() }
         updateBar()
@@ -62,7 +65,11 @@ extension BoardController {
     /// The typing in a block is over (on the board or in the Writing view): keep it as one undo step.
     func finish(_ w: WritingSession) {
         let id = w.id
+        let key = w.key
         let text = w.text
+        if writingFull === w { writingFull = nil }
+        w.stopTimers()
+        tellTyping(nil)
         itemViews[id]?.alpha = 1
         let pushed = (pushedBy[id] ?? 0) > 0.5
         pushedBy[id] = nil
@@ -70,8 +77,9 @@ extension BoardController {
         func undoStep(_ name: String) {
             if pushed { registerBoardUndo(strokes: w.beforeStrokes, items: w.before, name) } else { registerItemsUndo(w.before, name) }
         }
-        if content.items.contains(where: { $0.id == id }) {
-            if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if let it = content.items.first(where: { $0.id == id }) {
+            // a block with drafts is never removed for being empty: another draft may hold its words
+            if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, BlockDrafts.list(it).isEmpty {
                 content.items.removeAll { $0.id == id }
                 content.texts[id] = nil
                 // a new block left empty just goes, as on the laptop
@@ -79,7 +87,7 @@ extension BoardController {
                 rebuildItems()
                 changed()
             } else if text != w.startText {
-                content.texts[id] = text
+                content.texts[key] = text
                 undoStep("Typing")
                 rebuildItems()
                 changed()
@@ -87,21 +95,24 @@ extension BoardController {
                 rebuildItems()
             }
         }
+        if content.items.contains(where: { $0.id == id }), key == id { marksAfterTyping(id) } else { followInkMarks() }
+        rebuildItems()
         saveNow()
     }
 
     /// The open block's words changed: keep them in the board's content, saved shortly (the laptop saves about every half second).
-    func typed(_ id: String, _ text: String) {
-        content.texts[id] = text
+    func typed(_ id: String, key: String, _ text: String) {
+        logTyping(id, text) // the version history's keystrokes (BoardController+History.swift)
+        recordingTyped(id, old: content.texts[key] ?? "", new: text)
+        content.texts[key] = text
         changed()
         pushBelow(id)
     }
 
-    /// Drafts can lock a block (piece 4's drafts); nothing is locked yet.
+    /// The draft shown here is locked (its Lock button): typing in it is blocked until it is unlocked.
     func blockLocked(_ id: String) -> Bool {
         guard let it = content.items.first(where: { $0.id == id }) else { return false }
-        guard let current = it.string("draft"), let drafts = it.json["drafts"]?.array else { return false }
-        return drafts.contains { $0["id"]?.string == current && $0["locked"]?.bool == true }
+        return BlockDrafts.isLocked(it, viewingDraft[id])
     }
 
     // MARK: the block's fields
@@ -246,7 +257,9 @@ extension BoardController {
     func openWritingView(_ id: String) {
         endWriting()
         guard let it = content.items.first(where: { $0.id == id }) else { return }
+        loadDraftFiles(id)
         let session = WritingSession(board: self, item: it, fullscreen: true)
+        writingFull = session
         syncStrokes()
         session.beforeStrokes = content.strokes
         let vc = WritingViewController(session: session)
@@ -258,5 +271,58 @@ extension BoardController {
         let vc = FindReplaceController(board: self)
         vc.modalPresentationStyle = .formSheet
         present(vc, animated: true)
+    }
+}
+
+// MARK: a new block where you tap (typing on a PDF page too)
+
+extension BoardController {
+    /// A new, empty text item at a board point. On a PDF page it is typed on that page (docs/board-writing.md "Typing on a PDF
+    /// page"): `on` and `page`, a white fill, as wide as the rest of the page, and the size of the page's own words nearest the tap.
+    func newTextBlockItem(at p: CGPoint) -> BoardItem {
+        let id = BoardFormat.newId(taken: allIds)
+        let x = Double((p.x - 4).rounded()), y = Double((p.y - 14).rounded())
+        for (pid, pdf) in pdfs {
+            guard let i = pdf.frames.firstIndex(where: { $0.contains(p) }) else { continue }
+            let f = pdf.frames[i]
+            var fields: [(String, JSONValue)] = [("on", .string(pid)), ("page", .number(Double(i + 1))), ("fill", .string("#FFFFFF")),
+                                                 ("w", .number(max(60, Double(f.maxX - p.x - 8).rounded())))]
+            if let size = pdfWordSize(pdf, page: i, frame: f, at: p) { fields.append(("size", .number(size))) }
+            addFeature("writing")
+            return BoardItem(id: id, type: "text", x: x - 10, y: y + 4, fields: fields)
+        }
+        return BoardItem(id: id, type: "text", x: x, y: y)
+    }
+
+    /// The size (board units) of the PDF's own words nearest a point on page `i`, or nil when the page has no text layer there.
+    func pdfWordSize(_ pdf: PdfPrintout, page i: Int, frame f: CGRect, at p: CGPoint) -> Double? {
+        guard let page = pdf.doc.page(at: i) else { return nil }
+        let bounds = page.bounds(for: .cropBox)
+        guard bounds.width > 0, f.width > 0 else { return nil }
+        let k = bounds.width / f.width
+        let pt = CGPoint(x: bounds.minX + (p.x - f.minX) * k, y: bounds.maxY - (p.y - f.minY) * k)
+        // the word under the tap, else the nearest line within a few lines up or down
+        var sel = page.selectionForWord(at: pt)
+        if sel?.string?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true {
+            for dy in stride(from: 6.0, through: 60.0, by: 6.0) {
+                for q in [CGPoint(x: pt.x, y: pt.y + dy), CGPoint(x: pt.x, y: pt.y - dy)] {
+                    if let s = page.selectionForLine(at: q), !(s.string?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) { sel = s; break }
+                }
+                if sel?.string?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false { break }
+            }
+        }
+        guard let a = sel?.attributedString, a.length > 0, let font = a.attribute(.font, at: 0, effectiveRange: nil) as? UIFont else { return nil }
+        let size = (Double(font.pointSize) / Double(k)).rounded()
+        return size >= 8 && size <= 200 ? size : nil
+    }
+}
+
+extension BoardController {
+    /// Blocks typed on a PDF's pages move with it (from where they were when the drag began).
+    func movePageBlocks(of pdfId: String, from start: [BoardItem], dx: Double, dy: Double) {
+        for old in start where old.type == "text" && old.string("on") == pdfId {
+            guard let k = content.items.firstIndex(where: { $0.id == old.id }) else { continue }
+            content.items[k] = old.with("x", .number((old.x + dx).rounded())).with("y", .number((old.y + dy).rounded()))
+        }
     }
 }

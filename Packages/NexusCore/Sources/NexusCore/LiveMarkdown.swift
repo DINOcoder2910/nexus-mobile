@@ -749,13 +749,8 @@ public enum LiveMarkdown {
     }
 
     /// Words and characters (newlines not counted) as they read, like a word processor's count.
+    /// Words and characters as the laptop counts them (BlockFacts: no markdown, no taken-out suggestions).
     public static func count(_ text: String) -> (words: Int, characters: Int) {
-        let v = visibleText(text)
-        var words = 0
-        for token in v.split(whereSeparator: { $0.isWhitespace }) {
-            if token.contains(where: { $0.isLetter || $0.isNumber }) { words += 1 }
-        }
-        let characters = v.filter { $0 != "\n" && $0 != "\r" }.count
-        return (words, characters)
+        (BlockFacts.wordCount(text), BlockFacts.charCount(text))
     }
 }

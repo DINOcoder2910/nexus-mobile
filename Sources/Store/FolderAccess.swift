@@ -61,6 +61,25 @@ enum FolderAccess {
         try result.get()
     }
 
+    /// Coordinated append (a board's history log: each device only ever adds lines to its own file). Makes the file when missing.
+    static func append(_ url: URL, _ text: String) throws {
+        var result: Result<Void, Error> = .success(())
+        var coordError: NSError?
+        NSFileCoordinator().coordinate(writingItemAt: url, options: [], error: &coordError) { u in
+            result = Result {
+                let fm = FileManager.default
+                try fm.createDirectory(at: u.deletingLastPathComponent(), withIntermediateDirectories: true)
+                if !fm.fileExists(atPath: u.path) { try Data(text.utf8).write(to: u); return }
+                let h = try FileHandle(forWritingTo: u)
+                defer { try? h.close() }
+                _ = try h.seekToEnd()
+                try h.write(contentsOf: Data(text.utf8))
+            }
+        }
+        if let coordError { throw coordError }
+        try result.get()
+    }
+
     /// Coordinated, atomic write of bytes (an image or a PDF put on a board).
     static func writeData(_ url: URL, _ data: Data) throws {
         var result: Result<Void, Error> = .success(())

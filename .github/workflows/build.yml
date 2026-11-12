@@ -1,7 +1,7 @@
 name: Build iPad app
 
 # Every push builds on a GitHub-hosted Mac: the NexusCore tests and the unsigned app, side by side.
-# main publishes the "latest" download; any other branch publishes "preview", so a branch can be tried on the iPad before it lands.
+# main publishes the "latest" download; any other branch publishes its own "preview-<branch>", so a branch can be tried on the iPad before it lands.
 on:
   push:
     branches: [main, "claude/**"]
@@ -45,7 +45,7 @@ jobs:
           set -o pipefail
           xcodebuild -project NexusMobile.xcodeproj -scheme NexusMobile -configuration Release \
             -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath DerivedData \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" NEXUS_BUILD="${GITHUB_SHA::7}" \
             build 2>&1 | grep -E "error:|warning: unre|BUILD|\*\*" | head -n 150
 
       - name: Package the .ipa
@@ -73,7 +73,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: |
-          if [ "$GITHUB_REF_NAME" = "main" ]; then TAG=latest; TITLE="Latest build"; FLAG=""; else TAG=preview; TITLE="Preview build ($GITHUB_REF_NAME)"; FLAG="--prerelease"; fi
+          # each branch has its own preview (preview-<branch>), so one branch's build doesn't replace another's
+          if [ "$GITHUB_REF_NAME" = "main" ]; then TAG=latest; TITLE="Latest build"; FLAG=""; else TAG="preview-${GITHUB_REF_NAME##*/}"; TITLE="Preview build ($GITHUB_REF_NAME)"; FLAG="--prerelease"; fi
           gh release delete "$TAG" --yes --cleanup-tag || true
           gh release create "$TAG" NexusMobile.ipa --title "$TITLE" $FLAG \
             --notes "Built from ${GITHUB_SHA::7} on $GITHUB_REF_NAME. Download NexusMobile.ipa and install it with Sideloadly." --target "$GITHUB_SHA"
