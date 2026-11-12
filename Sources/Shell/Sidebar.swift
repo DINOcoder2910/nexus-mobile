@@ -39,7 +39,6 @@ struct Sidebar: View {
                     Button { notebookActions.ask(.notebook, in: BoardFormat.notebooks) } label: { Label("New notebook", systemImage: "folder.badge.plus") }
                 }
             }
-            ToolbarItem(placement: .topBarLeading) { NewWindowButton() }
         }
         .refreshable { store.reload() }
         // the study decks: read with the folder (their due count is the Study row's number)
