@@ -16,14 +16,19 @@ extension BoardController {
                 UIAction(title: "English", state: lang == "en" ? .on : .off) { [weak self] _ in self?.setBlockField(id, "lang", .string("en")) },
                 UIAction(title: "Spanish", state: lang == "es" ? .on : .off) { [weak self] _ in self?.setBlockField(id, "lang", .string("es")) },
             ]),
-            UIAction(title: "Check Spanish", image: UIImage(systemName: "checkmark.seal"), attributes: practicing ? .disabled : []) { [weak self] _ in
+            UIAction(title: practicing ? "Check it now (ends practice)" : "Check Spanish", image: UIImage(systemName: "checkmark.seal")) { [weak self] _ in
+                if practicing { self?.endPractice(id) }
                 self?.openSpanishCheck(id)
+            },
+            UIAction(title: "Check my Spanish", subtitle: "Spelling while you type", state: it.json["check"]?.bool == false ? .off : .on) { [weak self] _ in
+                self?.setBlockField(id, "check", it.json["check"]?.bool == false ? nil : .bool(false))
+                self?.writing?.applyPractice()
             },
         ]
         if practicing {
             out.append(UIAction(title: "End practice", image: UIImage(systemName: "stop.circle")) { [weak self] _ in self?.endPractice(id) })
         } else {
-            out.append(UIMenu(title: "Practice mode", subtitle: "No checks, with a timer", image: UIImage(systemName: "timer"), children: [15, 30, 45, 60, 90].map { m in
+            out.append(UIMenu(title: "Practice mode", subtitle: "No checks, with a timer", image: UIImage(systemName: "timer"), children: Practice.choices.map { m in
                 UIAction(title: "\(m) minutes") { [weak self] _ in self?.startPractice(id, minutes: Double(m)) }
             }))
         }
@@ -53,6 +58,39 @@ extension BoardController {
         let nav = UINavigationController(rootViewController: vc)
         nav.modalPresentationStyle = .formSheet
         presentOver(nav)
+    }
+
+    /// Correct this (the laptop's rule): a new draft, Review mode on, and every fix written as a suggestion on it. Not while the block
+    /// still has suggestions.
+    func correctAsDraft(_ id: String, fixes: [(range: NSRange, fix: String)]) -> Bool {
+        if blockLocked(id) { tellLocked(id); return false }
+        commitTyping(id)
+        let md = content.texts[shownKey(id)] ?? ""
+        if !Critic.parse(md).isEmpty {
+            tell("This block still has suggestions. Apply or reject them first.", brief: false)
+            return false
+        }
+        let s = NSMutableString(string: md)
+        for f in fixes.sorted(by: { $0.range.location > $1.range.location }) where NSMaxRange(f.range) <= s.length {
+            s.replaceCharacters(in: f.range, with: f.fix)
+        }
+        let fixed = s as String
+        guard fixed != md else { return false }
+        let from = shownDraft(id)
+        var made: String?
+        _ = changeDrafts(id, "Correct this") { c in
+            guard let r = BlockDrafts.make(c, id: id, from: from, name: "Corrected") else { return nil }
+            made = r.draft
+            var out = r.content
+            out.texts[id] = Critic.diff(md, fixed)
+            if let k = out.items.firstIndex(where: { $0.id == id }) { out.items[k] = out.items[k].with("review", .bool(true)) }
+            return out
+        }
+        guard made != nil else { return false }
+        viewingDraft[id] = nil
+        afterDrafts(id)
+        tell("Made a corrected draft with \(fixes.count == 1 ? "one fix" : "\(fixes.count) fixes") as suggestions to Apply or Reject.", brief: true)
+        return true
     }
 
     /// Puts a correction into a block's words: as a Review suggestion ({~~old~>new~~}) or straight in.
@@ -96,6 +134,7 @@ final class SpanishCheckController: UITableViewController {
         super.viewDidLoad()
         title = "Check Spanish"
         navigationItem.rightBarButtonItem = UIBarButtonItem(systemItem: .done, primaryAction: UIAction { [weak self] _ in self?.dismiss(animated: true) })
+        navigationItem.leftBarButtonItem = UIBarButtonItem(title: "Correct this", primaryAction: UIAction { [weak self] _ in self?.correctAll() })
         reload()
     }
 
@@ -135,6 +174,13 @@ final class SpanishCheckController: UITableViewController {
             issues.append((r, ns.substring(with: r), Array(guesses.prefix(5))))
         }
         tableView.reloadData()
+    }
+
+    /// Every word with a guess, fixed with its first guess, in a new draft as suggestions.
+    private func correctAll() {
+        let fixes = issues.compactMap { i in i.guesses.first.map { (range: i.range, fix: $0) } }
+        guard !fixes.isEmpty else { board?.tell("Nothing to correct.", brief: true); return }
+        if board?.correctAsDraft(id, fixes: fixes) == true { dismiss(animated: true) }
     }
 
     override func numberOfSections(in tableView: UITableView) -> Int { 1 + max(issues.count, 1) }

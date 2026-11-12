@@ -291,7 +291,7 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
         if applying { return }
         board?.tellTyping(id)
         edited()
-        if look.chem, let caret = lastTyped {
+        if look.chem, !practicing, let caret = lastTyped {
             lastTyped = nil
             // a moment later, so undo takes the formula back on its own
             DispatchQueue.main.async { [weak self] in self?.convertChemistry(caret: caret) }
@@ -487,7 +487,10 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
     /// Practice mode turns every check off: spelling, autocorrect, predictions and Writing Tools; it is back on when practice ends.
     func applyPractice() {
         let on = practicing
-        textView.spellCheckingType = on ? .no : .default
+        // a Spanish block is spellchecked only with a Spanish dictionary (an English one would flag every word), and never with `check: false`
+        let spanishOff = isSpanish && (item?.json["check"]?.bool == false
+            || !UITextInputMode.activeInputModes.contains { $0.primaryLanguage?.hasPrefix("es") == true })
+        textView.spellCheckingType = on || spanishOff ? .no : .default
         textView.autocorrectionType = on ? .no : .default
         textView.inlinePredictionType = on ? .no : .default
         if #available(iOS 18.0, *) { textView.writingToolsBehavior = on ? .none : .default }
