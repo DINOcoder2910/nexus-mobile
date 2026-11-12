@@ -284,7 +284,11 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
     }
 
     func zoomMenu() -> UIMenu {
-        var items: [UIMenuElement] = []
+        var items: [UIMenuElement] = [
+            UIAction(title: "Show everything", image: UIImage(systemName: "arrow.down.right.and.arrow.up.left")) { [weak self] _ in
+                self?.showEverything()
+            },
+        ]
         if let p = nearestPrintout {
             items.append(UIAction(title: "Fit the page width") { [weak self] _ in
                 guard let self else { return }
@@ -309,6 +313,27 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
         scroll(toBoard: CGPoint(x: mid.x - canvas.bounds.width / 2 / z, y: mid.y - canvas.bounds.height / 2 / z))
         sharpenText()
         writing?.rescale()
+        bar.refresh()
+    }
+
+    /// Everything on the board on screen, with a margin, below the bar (NexusCore BoardFit); an empty board: 100%, at the top left.
+    func showEverything() {
+        let top = topInset, W = view.bounds.width, H = view.bounds.height - top
+        if let b = contentBounds(), W > 0, H > 0 {
+            let fit = BoardFit.fit(minX: Double(b.minX), minY: Double(b.minY), maxX: Double(b.maxX), maxY: Double(b.maxY),
+                                   width: Double(W), height: Double(H), minZoom: Double(canvas.minimumZoomScale), maxZoom: Double(canvas.maximumZoomScale))
+            let z = CGFloat(fit.zoom)
+            canvas.zoomScale = z
+            updateContentSize()
+            scroll(toBoard: CGPoint(x: CGFloat(fit.x), y: CGFloat(fit.y) - top / z))
+        } else {
+            canvas.zoomScale = 1
+            updateContentSize()
+            scroll(toBoard: CGPoint(x: -60, y: -60 - top))
+        }
+        sharpenText()
+        writing?.rescale()
+        showSelection()
         bar.refresh()
     }
 
