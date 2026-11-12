@@ -1,16 +1,17 @@
 import UIKit
 import NexusCore
 
-/// The Writing view (nexus board redesign, picture w5): one block full screen, as a page. Across the top: back to the board, the
-/// board's and block's names, the word count, Comment, Comments (shows or hides them here and on the board), the block's drafts and
-/// Done. Down the left: the outline (the heading you're in marked) and the block's comments; tap one to go to it. Beside the page:
-/// each comment as a card next to its words, with Reply and Resolve. It is the same block on the same board: the words go to the
-/// board as you type, and Done (or ⌘↩, Esc) puts you back where you were. It follows the board's light or dark look.
+/// The Writing view (nexus board redesign, picture w5; the laptop's docs/board-writing.md "The Writing view"): one block full
+/// screen, as a page. Across the top: back to the board, the board's name › the block's title, the word count, Comments n (shows or
+/// hides them here and on the board), History, the block's drafts and Done. Down the left: the outline (the heading you're in
+/// marked) and the block's comments; tap one to go to it; the column is left out when there are neither. In the page's right
+/// margin: each comment as a card level with its words, with a reply box, Resolve and Delete (a ghost's: Re-pin and Remove). It is
+/// the same block on the same board: the words go to the board as you type, and Done (or ⌘↩, Esc) puts you back where you were.
+/// Its colours follow the board: a white page on warm grey, or a dark page on a darker grey.
 final class WritingViewController: UIViewController, UITableViewDataSource, UITableViewDelegate {
     let session: WritingSession
     private let top = UIView()
     private let titleLabel = UILabel()
-    private let subLabel = UILabel()
     private let count = UILabel()
     private let commentsButton = UIButton(configuration: .gray())
     private let draftsButton = UIButton(configuration: .gray())
@@ -20,7 +21,9 @@ final class WritingViewController: UIViewController, UITableViewDataSource, UITa
     private var headings: [(title: String, level: Int, at: Int)] = []
     private var comments: [BoardItem] = []
     private var sideWidth: NSLayoutConstraint?
-    private var cardsWidth: NSLayoutConstraint?
+    private var pageWidth: NSLayoutConstraint?
+    private static let margin: CGFloat = 64
+    private static let cardWidth: CGFloat = 250
     private var timer: Timer?
     private var scrollWatch: NSKeyValueObservation?
     private var lastCaretHeading = -1
@@ -38,7 +41,8 @@ final class WritingViewController: UIViewController, UITableViewDataSource, UITa
     override func viewDidLoad() {
         super.viewDidLoad()
         overrideUserInterfaceStyle = dark ? .dark : .light
-        view.backgroundColor = dark ? UIColor(white: 0.07, alpha: 1) : UIColor(red: 0.953, green: 0.949, blue: 0.937, alpha: 1)
+        view.backgroundColor = dark ? UIColor(red: 0x12 / 255, green: 0x12 / 255, blue: 0x14 / 255, alpha: 1)
+            : UIColor(red: 0xF1 / 255, green: 0xF0 / 255, blue: 0xEC / 255, alpha: 1)
 
         // the top bar
         top.translatesAutoresizingMaskIntoConstraints = false
@@ -49,19 +53,14 @@ final class WritingViewController: UIViewController, UITableViewDataSource, UITa
         back.imagePadding = 4
         let backButton = UIButton(configuration: back, primaryAction: UIAction { [weak self] _ in self?.close() })
         titleLabel.font = .systemFont(ofSize: 15, weight: .semibold)
-        subLabel.font = .systemFont(ofSize: 12)
-        subLabel.textColor = .secondaryLabel
-        let names = UIStackView(arrangedSubviews: [titleLabel, subLabel])
-        names.axis = .vertical
-        names.spacing = 1
+        titleLabel.lineBreakMode = .byTruncatingMiddle
         count.font = .monospacedDigitSystemFont(ofSize: 13, weight: .regular)
         count.textColor = .secondaryLabel
-        var commentConf = UIButton.Configuration.plain()
-        commentConf.image = UIImage(systemName: "text.bubble")
-        commentConf.title = "Comment"
-        commentConf.imagePadding = 4
-        let commentButton = UIButton(configuration: commentConf, primaryAction: UIAction { [weak self] _ in self?.commentHere() })
-        commentButton.isHidden = board?.readOnly ?? true
+        var historyConf = UIButton.Configuration.plain()
+        historyConf.image = UIImage(systemName: "clock.arrow.circlepath")
+        historyConf.title = "History"
+        historyConf.imagePadding = 4
+        let historyButton = UIButton(configuration: historyConf, primaryAction: UIAction { [weak self] _ in self?.openHistory() })
         commentsButton.addAction(UIAction { [weak self] _ in self?.toggleComments() }, for: .touchUpInside)
         draftsButton.configuration?.image = UIImage(systemName: "square.stack")
         draftsButton.showsMenuAsPrimaryAction = true
@@ -71,10 +70,10 @@ final class WritingViewController: UIViewController, UITableViewDataSource, UITa
         }])
         let done = UIButton(configuration: .filled(), primaryAction: UIAction { [weak self] _ in self?.close() })
         done.configuration?.title = "Done"
-        let left = UIStackView(arrangedSubviews: [backButton, names])
+        let left = UIStackView(arrangedSubviews: [backButton, titleLabel])
         left.spacing = 8
         left.alignment = .center
-        let right = UIStackView(arrangedSubviews: [count, commentButton, commentsButton, draftsButton, done])
+        let right = UIStackView(arrangedSubviews: [count, commentsButton, historyButton, draftsButton, done])
         right.spacing = 10
         right.alignment = .center
         for v in [left, right] as [UIView] { v.translatesAutoresizingMaskIntoConstraints = false; top.addSubview(v) }
@@ -85,7 +84,7 @@ final class WritingViewController: UIViewController, UITableViewDataSource, UITa
 
         // the page
         page.translatesAutoresizingMaskIntoConstraints = false
-        page.backgroundColor = dark ? UIColor(white: 0.13, alpha: 1) : .white
+        page.backgroundColor = dark ? UIColor(red: 0x1C / 255, green: 0x1C / 255, blue: 0x1E / 255, alpha: 1) : .white
         if let fill = session.look.fill { page.backgroundColor = fill }
         page.layer.cornerRadius = 8
         page.layer.shadowColor = UIColor.black.cgColor
@@ -95,7 +94,7 @@ final class WritingViewController: UIViewController, UITableViewDataSource, UITa
         view.addSubview(page)
         let tv = session.textView
         tv.translatesAutoresizingMaskIntoConstraints = false
-        tv.textContainerInset = UIEdgeInsets(top: 56, left: 64, bottom: 280, right: 64)
+        tv.textContainerInset = UIEdgeInsets(top: 56, left: Self.margin, bottom: 280, right: Self.margin)
         tv.alwaysBounceVertical = true
         tv.backgroundColor = .clear
         page.addSubview(tv)
@@ -109,18 +108,17 @@ final class WritingViewController: UIViewController, UITableViewDataSource, UITa
         side.register(UITableViewCell.self, forCellReuseIdentifier: "row")
         view.addSubview(side)
 
-        // comment cards beside the page
+        // comment cards in the page's right margin (over the text view, which leaves the margin empty)
         cards.translatesAutoresizingMaskIntoConstraints = false
         cards.clipsToBounds = true
-        view.addSubview(cards)
+        page.addSubview(cards)
 
         let g = view.safeAreaLayoutGuide
-        let pageWidth = page.widthAnchor.constraint(equalToConstant: 780)
-        pageWidth.priority = .defaultHigh
+        let pw = page.widthAnchor.constraint(equalToConstant: 780)
+        pw.priority = .defaultHigh
+        pageWidth = pw
         let sw = side.widthAnchor.constraint(equalToConstant: 230)
-        let cw = cards.widthAnchor.constraint(equalToConstant: 280)
         sideWidth = sw
-        cardsWidth = cw
         let centred = page.centerXAnchor.constraint(equalTo: view.centerXAnchor)
         centred.priority = .defaultLow
         NSLayoutConstraint.activate([
@@ -145,12 +143,12 @@ final class WritingViewController: UIViewController, UITableViewDataSource, UITa
             page.topAnchor.constraint(equalTo: top.bottomAnchor, constant: 16),
             page.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: 8),
             page.leadingAnchor.constraint(greaterThanOrEqualTo: side.trailingAnchor, constant: 16),
-            page.trailingAnchor.constraint(lessThanOrEqualTo: cards.leadingAnchor, constant: -16),
-            pageWidth, centred,
+            page.trailingAnchor.constraint(lessThanOrEqualTo: g.trailingAnchor, constant: -16),
+            pw, centred,
             cards.topAnchor.constraint(equalTo: page.topAnchor),
-            cards.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            cards.trailingAnchor.constraint(equalTo: g.trailingAnchor, constant: -12),
-            cw,
+            cards.bottomAnchor.constraint(equalTo: page.bottomAnchor),
+            cards.trailingAnchor.constraint(equalTo: page.trailingAnchor, constant: -20),
+            cards.widthAnchor.constraint(equalToConstant: Self.cardWidth),
             tv.topAnchor.constraint(equalTo: page.topAnchor),
             tv.bottomAnchor.constraint(equalTo: page.bottomAnchor),
             tv.leadingAnchor.constraint(equalTo: page.leadingAnchor),
@@ -174,12 +172,16 @@ final class WritingViewController: UIViewController, UITableViewDataSource, UITa
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        // narrow screens (split view, portrait): the side columns give way to the page
+        // narrow screens (split view, portrait): the left column gives way to the page; cards need a page wide enough for a margin
         let w = view.bounds.width
-        let showCards = (board?.marksShown ?? true) && !comments.isEmpty && w >= 1100
-        sideWidth?.constant = w >= 900 ? 230 : 0
-        side.isHidden = w < 900
-        cardsWidth?.constant = showCards ? 280 : 0
+        let showSide = w >= 900 && !(headings.isEmpty && comments.isEmpty)
+        sideWidth?.constant = showSide ? 230 : 0
+        side.isHidden = !showSide
+        let showCards = (board?.marksShown ?? true) && !comments.isEmpty && w >= 1000
+        let right = showCards ? Self.cardWidth + 40 : Self.margin
+        pageWidth?.constant = showCards ? 780 + right - Self.margin : 780
+        let tv = session.textView
+        if tv.textContainerInset.right != right { tv.textContainerInset.right = right }
         cards.isHidden = !showCards
         placeCards()
     }
@@ -207,8 +209,7 @@ final class WritingViewController: UIViewController, UITableViewDataSource, UITa
         if changed { side.reloadData(); buildCards() }
         let c = LiveMarkdown.count(text)
         count.text = "\(c.words) words"
-        titleLabel.text = hs.first?.title ?? firstLine(text)
-        subLabel.text = board?.boardName
+        titleLabel.text = [board?.boardName ?? "", hs.first?.title ?? firstLine(text)].filter { !$0.isEmpty }.joined(separator: " › ")
         let shown = board?.marksShown ?? true
         commentsButton.configuration = shown && !list.isEmpty ? .filled() : .gray()
         commentsButton.configuration?.image = UIImage(systemName: shown ? "text.bubble.fill" : "text.bubble")
@@ -236,9 +237,11 @@ final class WritingViewController: UIViewController, UITableViewDataSource, UITa
 
     // MARK: comments
 
-    private func commentHere() {
-        guard let b = board else { return }
-        b.addComment(on: session.id, range: session.textView.selectedRange)
+    /// The board's history player: the writing view closes first (it is the board's history, not the block's).
+    private func openHistory() {
+        let b = board
+        close()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { b?.openHistory() }
     }
 
     private func toggleComments() {
@@ -300,8 +303,8 @@ final class WritingViewController: UIViewController, UITableViewDataSource, UITa
             let r = UILabel()
             r.font = .systemFont(ofSize: 13)
             r.textColor = .secondaryLabel
-            r.numberOfLines = 3
-            r.text = replies.count == 1 ? "\(replies[0].by): \(replies[0].text ?? "(written)")" : "\(replies.count) replies"
+            r.numberOfLines = 8
+            r.text = replies.map { "\($0.by): \($0.text ?? "(written)")" }.joined(separator: "\n")
             rows.append(r)
         }
         let id = m.id
@@ -313,12 +316,28 @@ final class WritingViewController: UIViewController, UITableViewDataSource, UITa
             return UIButton(configuration: c, primaryAction: UIAction { _ in act() })
         }
         if !(board?.readOnly ?? true) {
-            let actions = UIStackView(arrangedSubviews: [
-                link("Reply") { [weak self] in self?.board?.openMark(id) },
-                link("Resolve") { [weak self] in
-                    self?.board?.changeMark(id, "Resolve") { $0.with("done", .bool(true)) }
-                    self?.refresh()
-                },
+            let ghost = range(of: m) == nil
+            if !ghost {
+                let field = UITextField()
+                field.placeholder = "Reply"
+                field.font = .systemFont(ofSize: 14)
+                field.borderStyle = .roundedRect
+                field.returnKeyType = .send
+                field.addAction(UIAction { [weak self, weak field] _ in
+                    guard let self, let b = self.board, let t = field?.text?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty else { return }
+                    b.changeMark(id, "Reply") { BoardMarks.reply($0, text: t, by: b.deviceName) }
+                    field?.text = ""
+                    self.rebuildSoon()
+                }, for: .editingDidEndOnExit)
+                rows.append(field)
+            }
+            let actions = UIStackView(arrangedSubviews: ghost ? [
+                link("Re-pin") { [weak self] in self?.board?.repin(id); self?.rebuildSoon() },
+                link("Remove") { [weak self] in self?.board?.changeMark(id, "Remove comment") { _ in nil }; self?.rebuildSoon() },
+                UIView(),
+            ] : [
+                link("Resolve") { [weak self] in self?.board?.changeMark(id, "Resolve") { $0.with("done", .bool(true)) }; self?.rebuildSoon() },
+                link("Delete") { [weak self] in self?.board?.changeMark(id, "Delete comment") { _ in nil }; self?.rebuildSoon() },
                 UIView(),
             ])
             actions.spacing = 14
@@ -340,6 +359,16 @@ final class WritingViewController: UIViewController, UITableViewDataSource, UITa
         return box
     }
 
+    /// After a card's action: the list and cards again, once the change is in.
+    private func rebuildSoon() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.comments = []
+            self.refresh()
+            self.session.restyle()
+        }
+    }
+
     @objc private func cardTapped(_ g: UITapGestureRecognizer) {
         guard let id = g.view?.accessibilityIdentifier, let m = comments.first(where: { $0.id == id }) else { return }
         if let r = range(of: m) { go(to: r) } else { board?.openMark(id) }
@@ -356,7 +385,7 @@ final class WritingViewController: UIViewController, UITableViewDataSource, UITa
             var want: CGFloat = y
             if let r = range(of: m), NSMaxRange(r) <= (session.text as NSString).length {
                 let rect = lm.boundingRect(forGlyphRange: lm.glyphRange(forCharacterRange: NSRange(location: r.location, length: max(1, r.length)), actualCharacterRange: nil), in: tv.textContainer)
-                want = rect.minY + tv.textContainerInset.top - tv.contentOffset.y
+                want = rect.minY + tv.textContainerInset.top - tv.contentOffset.y - 4
             }
             let size = v.systemLayoutSizeFitting(CGSize(width: cards.bounds.width, height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel)
             let at = max(want, y)
