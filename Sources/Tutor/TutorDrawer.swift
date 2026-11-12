@@ -794,3 +794,16 @@ extension TutorDrawer {
         return found
     }
 }
+
+extension BoardController {
+    /// Scrolls smoothly so this board point is at the top-left of the screen.
+    func glide(toBoard p: CGPoint) {
+        growIfNeeded()
+        updateContentSize()
+        let z = canvas.zoomScale
+        let target = CGPoint(x: max(0, (p.x + offset.x) * z), y: max(0, (p.y + offset.y) * z))
+        UIView.animate(withDuration: 0.36, delay: 0, options: [.curveEaseOut, .allowUserInteraction]) {
+            self.canvas.contentOffset = target
+        } completion: { _ in self.syncWorld() }
+    }
+}

@@ -46,7 +46,7 @@ public enum TutorSteps {
         }
     }
     /// JavaScript's Math.round (halves go up).
-    static func jsRound(_ v: Double) -> Double { (v + 0.5).rounded(.down) }
+    public static func jsRound(_ v: Double) -> Double { (v + 0.5).rounded(.down) }
     static func r2(_ v: Double) -> Double { jsRound(max(-maxCoord, min(maxCoord, v)) * 100) / 100 }
     static func str(_ v: JSONValue?, _ maxLen: Int) -> String? {
         guard let s = v?.string, !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
