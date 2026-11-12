@@ -199,8 +199,8 @@ final class SyncService {
 
     /// iOS woke the app in the background: one cycle, so reminders see what changed on the laptop.
     /// (The client takes one cycle at a time, so this waits for the loop's own if one is running.)
-    func backgroundCycle(_ store: NexusStore) async {
-        if self.store == nil { attach(store) } // launched straight into the background: no window attached it yet
+    func backgroundCycle(_ shared: NexusStore) async {
+        if store == nil { attach(shared) } // launched straight into the background: no window attached it yet
         guard enabled, let client else { return }
         if case .synced(let r)? = try? await client.cycle() {
             lastSynced = Date()
