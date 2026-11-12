@@ -308,7 +308,7 @@ public enum TutorSteps {
         }
     }
     public static func resolve(_ p: TutorPos, _ lookup: (String) -> TutorBox?, frame: [Double] = [0, 0], toward: [Double]? = nil) -> [Double]? {
-        resolve(p, TutorLookup(get: lookup), frame: frame, toward: toward)
+        withoutActuallyEscaping(lookup) { f in resolve(p, TutorLookup(get: f), frame: frame, toward: toward) }
     }
     /// An arrow's or a line's two ends: an id end (or the words inside a block) aims at the other end (its centre, or its point).
     public static func resolveEnds(_ s: TutorStep, _ lookup: TutorLookup, frame: [Double] = [0, 0]) -> ([Double], [Double])? {
@@ -331,7 +331,7 @@ public enum TutorSteps {
         return (a, b)
     }
     public static func resolveEnds(_ s: TutorStep, _ lookup: (String) -> TutorBox?, frame: [Double] = [0, 0]) -> ([Double], [Double])? {
-        resolveEnds(s, TutorLookup(get: lookup), frame: frame)
+        withoutActuallyEscaping(lookup) { f in resolveEnds(s, TutorLookup(get: f), frame: frame) }
     }
     public static func resolveTarget(_ t: TutorTarget, _ lookup: TutorLookup, frame: [Double] = [0, 0]) -> TutorBox? {
         switch t {
@@ -344,7 +344,7 @@ public enum TutorSteps {
         }
     }
     public static func resolveTarget(_ t: TutorTarget, _ lookup: (String) -> TutorBox?, frame: [Double] = [0, 0]) -> TutorBox? {
-        resolveTarget(t, TutorLookup(get: lookup), frame: frame)
+        withoutActuallyEscaping(lookup) { f in resolveTarget(t, TutorLookup(get: f), frame: frame) }
     }
     /// A block's top-left. size: [w, h]; flow: where the next block goes when `at` is left out (the left edge and the bottom of the
     /// last block, frame included).
