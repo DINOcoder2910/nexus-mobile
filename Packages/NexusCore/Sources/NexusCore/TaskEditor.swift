@@ -9,6 +9,10 @@ public struct Change {
     public var message: String
     /// After a tick: the parent whose last open subtask this was, so the screen can offer to tick it too.
     public var offerParent: String?
+
+    public init(file: String, before: String, after: String, message: String, offerParent: String? = nil) {
+        self.file = file; self.before = before; self.after = after; self.message = message; self.offerParent = offerParent
+    }
 }
 
 /// The edits the iPad makes, each a line-level patch of one file, checked by parsing the result before it is written.

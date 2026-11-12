@@ -29,7 +29,7 @@ One app for the iPad and the iPhone. On the iPhone the sidebar is the first scre
 
 ## The data folder
 
-The app reads `On My iPad › Nexus › nexus-data` (or a folder picked from Files) in the laptop's format (`docs/data-format.md` in the Nexus repo). Reading never writes. Every change is a line-level edit of one `tasks.yaml` or `inbox.yaml`, checked by parsing the result before it is saved, so comments, order and formatting stay and the laptop sees a one-line change. A file that doesn't parse, a task without an id, and a folder in another format version are read-only. The app looks for changes every few seconds and when it comes back to the front, so sync can write underneath it.
+The app reads `On My iPad › Nexus › nexus-data` (or a folder picked from Files) in the laptop's format (`docs/data-format.md` in the Nexus repo). Reading never writes. Every task change (waiting on, repeats, tags and the note included) is a line-level edit of one `tasks.yaml` or `inbox.yaml`, checked by parsing the result before it is saved, so comments, order and formatting stay and the laptop sees a one-line change. A workstream's `notes.md` is edited as plain text and saved whole. A file that doesn't parse, a task without an id, and a folder in another format version are read-only. The app looks for changes every few seconds and when it comes back to the front, so sync can write underneath it.
 
 The pure part is the `NexusCore` package (`Packages/NexusCore`): the folder, the YAML edits, the planning model, the board files, shape snapping and capture parsing, with tests on a copy of the laptop's `dev/fixtures/data-vault` and the laptop's own board and shape tests.
 

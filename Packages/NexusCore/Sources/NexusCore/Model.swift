@@ -22,6 +22,10 @@ public struct Repeat: Hashable {
     public var on: [String]
     public var until: String?
 
+    public init(freq: String, on: [String] = [], until: String? = nil) {
+        self.freq = freq; self.on = on; self.until = until
+    }
+
     /// The weekdays it falls on (0 = Sunday), nil for every day; `nil` result when the shape is unknown.
     public func days(anchor: String?) -> [Int]?? {
         switch freq.lowercased() {

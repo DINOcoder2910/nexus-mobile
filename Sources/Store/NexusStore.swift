@@ -158,6 +158,10 @@ final class NexusStore {
     func setSomeday(_ t: NexusTask, _ on: Bool) { perform { try $0.setSomeday(t, on, in: $1) } }
     func setTitle(_ t: NexusTask, _ title: String) { perform { try $0.setTitle(t, title, in: $1) } }
     func setEstimate(_ t: NexusTask, _ est: String?) { perform { try $0.setEstimate(t, est, in: $1) } }
+    func setWaiting(_ t: NexusTask, on who: String?, since: String?) { perform { try $0.setWaiting(t, on: who, since: since, in: $1) } }
+    func setRepeat(_ t: NexusTask, _ r: NexusCore.Repeat?) { perform { try $0.setRepeat(t, r, in: $1) } }
+    func setTags(_ t: NexusTask, _ tags: [String]) { perform { try $0.setTags(t, tags, in: $1) } }
+    func setNote(_ t: NexusTask, _ note: String?) { perform { try $0.setNote(t, note, in: $1) } }
 
     /// Adds a task to a workstream (nil = the Inbox) or under `parent`. Returns its id.
     @discardableResult
@@ -172,6 +176,22 @@ final class NexusStore {
         } catch {
             problem = "\(error)"
             return nil
+        }
+    }
+
+    /// Writes a whole text file of the data folder (a workstream's notes.md), with Undo on the bar.
+    func writeText(_ rel: String, _ text: String, message: String) {
+        guard snapshot.readOnlyReason == nil else { problem = snapshot.readOnlyReason; return }
+        let url = folder.appendingPathComponent(rel)
+        let before = (try? FolderAccess.read(url)) ?? ""
+        guard text != before else { return }
+        do {
+            try FolderAccess.write(url, text)
+            reload()
+            onWrite?()
+            toast = Toast(message: message, change: Change(file: rel, before: before, after: text, message: message))
+        } catch {
+            problem = "Couldn't save \(rel): \(error.localizedDescription)"
         }
     }
 
