@@ -92,7 +92,8 @@ extension BoardController {
     }
 
     /// The board drawn 480 x 360 from the top left of what is on it (BoardThumb.frame): white paper, the items as they are on screen
-    /// (PDF pages drawn where they are drawn), then the ink.
+    /// (PDF pages drawn where they are drawn), then the ink. Always drawn as on a light board: on a dark board the ink and words show
+    /// white, which vanished on the picture's white paper.
     func thumbPNG() -> Data? {
         let empty = content.items.isEmpty && canvas.drawing.strokes.isEmpty
         let b = empty ? nil : contentBounds()
@@ -106,20 +107,41 @@ extension BoardController {
         let hid = selection.isHidden
         selection.isHidden = true
         defer { selection.isHidden = hid }
-        let img = UIGraphicsImageRenderer(size: size, format: format).image { ctx in
-            UIColor.white.setFill()
-            ctx.fill(CGRect(origin: .zero, size: size))
-            let cg = ctx.cgContext
-            cg.saveGState()
-            cg.scaleBy(x: k, y: k)
-            cg.translateBy(x: -rect.minX, y: -rect.minY)
-            world.layer.render(in: cg)
-            cg.restoreGState()
-            if !canvas.drawing.strokes.isEmpty {
-                canvas.drawing.image(from: rect, scale: min(2, max(0.5, k * 2))).draw(in: CGRect(origin: .zero, size: size))
+        // text blocks and shapes resolve their colours from their own traits: lend them light ones while drawing (all within this turn,
+        // so the screen never shows them light)
+        let lent = overrideUserInterfaceStyle == .dark ? itemViews.values.filter { $0 is TextBlockView || $0 is ShapeItemView } : []
+        setItemsLight(lent, true)
+        defer { setItemsLight(lent, false) }
+        var img: UIImage?
+        // PencilKit draws ink for the current appearance (black turns white in dark): ask for light
+        UITraitCollection(userInterfaceStyle: .light).performAsCurrent {
+            img = UIGraphicsImageRenderer(size: size, format: format).image { ctx in
+                UIColor.white.setFill()
+                ctx.fill(CGRect(origin: .zero, size: size))
+                let cg = ctx.cgContext
+                cg.saveGState()
+                cg.scaleBy(x: k, y: k)
+                cg.translateBy(x: -rect.minX, y: -rect.minY)
+                world.layer.render(in: cg)
+                cg.restoreGState()
+                if !canvas.drawing.strokes.isEmpty {
+                    canvas.drawing.image(from: rect, scale: min(2, max(0.5, k * 2))).draw(in: CGRect(origin: .zero, size: size))
+                }
             }
         }
-        return img.pngData()
+        return img?.pngData()
+    }
+
+    /// Gives `views` (text blocks and shapes) light traits and redraws them now (`light`), or hands them back the board's own.
+    private func setItemsLight(_ views: [UIView], _ light: Bool) {
+        guard !views.isEmpty else { return }
+        for v in views {
+            v.overrideUserInterfaceStyle = light ? .light : .unspecified
+            v.updateTraitsIfNeeded() // a text block refills and asks to redraw (its trait handler)
+        }
+        // a shape works out its colours when it is updated
+        for it in content.items where it.type == "shape" { (itemViews[it.id] as? ShapeItemView)?.update(it, offset: offset) }
+        if light { for v in views { v.layer.displayIfNeeded() } }
     }
 
     // MARK: History

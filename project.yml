@@ -30,6 +30,9 @@ targets:
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
         UIRequiresFullScreen: false
+        # the iPad can have several Nexus windows (side by side, Stage Manager); each has its own task panel, add sheet and Undo
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
         # Sync talks plain HTTP to the hub on the G14 (over Tailscale or the home network); the app is sideloaded, not on the App Store.
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
@@ -43,6 +46,10 @@ targets:
         # a class keeps recording when the screen locks or you switch apps
         UIBackgroundModes:
           - audio
+          # reminders: iOS wakes the app now and then to sync and schedule them again
+          - fetch
+        BGTaskSchedulerPermittedIdentifiers:
+          - app.nexus.mobile.refresh
         UISupportedInterfaceOrientations~ipad:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationPortraitUpsideDown

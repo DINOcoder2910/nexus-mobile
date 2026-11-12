@@ -303,7 +303,8 @@ extension BoardController {
     }
 
     func toggleTutorPanel() {
-        if let v = tutorPanelView, !v.isHidden { v.isHidden = true; tutor.open = false } else { showTutorPanel() }
+        // End typing first: hiding alone leaves the keyboard up, typing into a box nobody can see.
+        if let v = tutorPanelView, !v.isHidden { v.endEditing(true); v.isHidden = true; tutor.open = false } else { showTutorPanel() }
     }
 
     func showTutorPanel() {
@@ -317,7 +318,9 @@ extension BoardController {
         host.view.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             host.view.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
-            host.view.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
+            // Above the keyboard while it is up (the guide sits on the safe area's bottom when it is down).
+            host.view.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor, constant: -16),
+            host.view.topAnchor.constraint(greaterThanOrEqualTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
             // 380 wide, or the screen's width less a margin on an iPhone
             { () -> NSLayoutConstraint in let w = host.view.widthAnchor.constraint(equalToConstant: 380); w.priority = .defaultHigh; return w }(),
             host.view.leadingAnchor.constraint(greaterThanOrEqualTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16),

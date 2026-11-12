@@ -2,16 +2,55 @@ import SwiftUI
 import NexusCore
 
 /// The sidebar, the laptop's in iPad form: the places, the workstreams by group (Inbox and Someday last), the notebooks, Settings.
+/// On the iPhone the same list is the More tab (`pushes`: its rows push onto the tab's stack) and, cut to the notebooks, the
+/// Notebooks tab (`notebooksOnly`).
 struct Sidebar: View {
     @Environment(NexusStore.self) private var store
     @Binding var selection: Screen?
+    var pushes = false
+    var notebooksOnly = false
+    var title = "Nexus"
     @AppStorage("closedGroups") private var closedGroups = ""
     @State private var notebookActions = NotebookActions()
 
     var body: some View {
+        let s = store.snapshot
+        Group {
+            if pushes {
+                List { sections }.listStyle(.insetGrouped)
+            } else {
+                List(selection: $selection) { sections }.listStyle(.sidebar)
+            }
+        }
+        .notebookPrompts(notebookActions, store: store)
+        .onChange(of: ShortcutCenter.shared.notebookRequest) { _, _ in
+            if s.isDataFolder && !pushes { notebookActions.ask(.notebook, in: BoardFormat.notebooks) }
+        }
+        .onChange(of: store.openBoard?.path) { _, p in if let p { RecentBoards.add(p) } }
+        .navigationTitle(title)
+        .toolbar {
+            if !notebooksOnly {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { store.capture = .init(workstream: nil, parent: nil, plan: nil) } label: { Label("New task", systemImage: "square.and.pencil") }
+                        .disabled(!s.isDataFolder)
+                }
+            } else if s.isDataFolder {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { notebookActions.ask(.notebook, in: BoardFormat.notebooks) } label: { Label("New notebook", systemImage: "folder.badge.plus") }
+                }
+            }
+            ToolbarItem(placement: .topBarLeading) { NewWindowButton() }
+        }
+        .refreshable { store.reload() }
+        // the study decks: read with the folder (their due count is the Study row's number)
+        .task(id: store.snapshot.loadedAt) { StudyLibrary.shared.refreshIfChanged(store) }
+    }
+
+    @ViewBuilder
+    private var sections: some View {
         let p = store.planning
         let s = store.snapshot
-        List(selection: $selection) {
+        if !notebooksOnly {
             Section {
                 row(.today, "Today", "sun.max", count: p.planned(on: store.today).count)
                 row(.planner, "Planner", "rectangle.split.3x1", count: nil)
@@ -45,6 +84,7 @@ struct Sidebar: View {
                     row(.someday, "Someday", "moon.zzz", count: nil)
                 }
             }
+        }
 
             if s.isDataFolder {
                 let recent = RecentBoards.list(store.folder)
@@ -64,28 +104,13 @@ struct Sidebar: View {
                 row(.boardSearch, "Search boards", "text.magnifyingglass", count: nil)
             }
 
-            Section {
-                row(.settings, "Settings", "gearshape", count: nil)
-            } footer: {
-                if s.readOnlyReason != nil { Label("Read-only", systemImage: "lock").font(.caption) }
+            if !notebooksOnly {
+                Section {
+                    row(.settings, "Settings", "gearshape", count: nil)
+                } footer: {
+                    if s.readOnlyReason != nil { Label("Read-only", systemImage: "lock").font(.caption) }
+                }
             }
-        }
-        .listStyle(.sidebar)
-        .notebookPrompts(notebookActions, store: store)
-        .onChange(of: ShortcutCenter.shared.notebookRequest) { _, _ in
-            if s.isDataFolder { notebookActions.ask(.notebook, in: BoardFormat.notebooks) }
-        }
-        .onChange(of: store.openBoard?.path) { _, p in if let p { RecentBoards.add(p) } }
-        .navigationTitle("Nexus")
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button { store.capture = .init(workstream: nil, parent: nil, plan: nil) } label: { Label("New task", systemImage: "square.and.pencil") }
-                    .disabled(!s.isDataFolder)
-            }
-        }
-        .refreshable { store.reload() }
-        // the study decks: read with the folder (their due count is the Study row's number)
-        .task(id: store.snapshot.loadedAt) { StudyLibrary.shared.refreshIfChanged(store) }
     }
 
     private func row(_ screen: Screen, _ title: String, _ icon: String, count: Int?) -> some View {

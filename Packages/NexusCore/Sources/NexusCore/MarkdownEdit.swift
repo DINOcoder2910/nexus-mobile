@@ -111,6 +111,47 @@ public enum MarkdownEdit {
         return MDEdit(m as String, NSRange(location: sel.location + (words as NSString).length + 3, length: 0))
     }
 
+    /// The word the caret is in or touches (letters, digits and _), or nil when there is none on either side.
+    public static func wordRange(_ text: String, at caret: Int) -> NSRange? {
+        let t = ns(text)
+        let c = min(max(0, caret), t.length)
+        func isWord(_ r: NSRange) -> Bool {
+            guard let u = t.substring(with: r).unicodeScalars.first else { return false }
+            return u == "_" || CharacterSet.alphanumerics.contains(u)
+        }
+        var from = c
+        while from > 0 {
+            let r = t.rangeOfComposedCharacterSequence(at: from - 1)
+            guard isWord(r) else { break }
+            from = r.location
+        }
+        var to = c
+        while to < t.length {
+            let r = t.rangeOfComposedCharacterSequence(at: to)
+            guard isWord(r) else { break }
+            to = r.location + r.length
+        }
+        return to > from ? NSRange(location: from, length: to - from) : nil
+    }
+
+    /// The bar's Link button: the selection, or with none the word at the caret, as `[words]()` with the caret in the address.
+    /// Nil when nothing is selected and the caret is in no word (the bar then asks for the address).
+    public static func linkWords(_ text: String, _ sel: NSRange) -> MDEdit? {
+        if sel.length > 0 { return link(text, sel) }
+        guard let w = wordRange(text, at: sel.location) else { return nil }
+        return link(text, w)
+    }
+
+    /// An address typed in the Link box: `[address](address)` in place of the selection, the caret after it. Nil for a blank one.
+    public static func linkAddress(_ text: String, _ sel: NSRange, _ address: String) -> MDEdit? {
+        let a = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !a.isEmpty else { return nil }
+        let md = "[\(a)](\(a))"
+        let m = NSMutableString(string: text)
+        m.replaceCharacters(in: sel, with: md)
+        return MDEdit(m as String, NSRange(location: sel.location + (md as NSString).length, length: 0))
+    }
+
     static func lineStart(_ t: NSString, _ i: Int) -> Int {
         var p = min(max(0, i), t.length)
         while p > 0, t.character(at: p - 1) != 10 { p -= 1 }
