@@ -446,6 +446,29 @@ final class TutorTests: XCTestCase {
         XCTAssertEqual(JSONValue.object([("a", .array([])), ("b", .object([]))]).indented(), "{\n \"a\": [],\n \"b\": {}\n}")
     }
 
+    /// Replay: the laptop's suite 191 case (a turn with a block, a point and a brief underline); a turn that draws nothing is left out.
+    func testReplayTurns() {
+        let reply = "Here is the equation.\n<step>{\"type\":\"math\",\"id\":\"e\",\"tex\":\"x^2-1=(x-1)(x+1)\"}</step>\nThis factor gives x equals one.\n<step>{\"type\":\"point\",\"target\":{\"in\":\"e\",\"part\":\"(x-1)\"}}</step>\n<step>{\"type\":\"underline\",\"target\":\"e\",\"brief\":true}</step>"
+        let file = JSONValue.object([("format", .string("nexus-tutor/1")), ("created", .string("2026-11-12T10:00:00Z")), ("title", .string("")), ("sessionId", .null),
+                                     ("turns", .array([.object([("at", .string("2026-11-12T10:00:00Z")), ("you", .string("factor it")), ("reply", .string(reply)), ("mode", .string("api"))]),
+                                                       .object([("at", .string("2026-11-12T10:01:00Z")), ("you", .string("thanks")), ("reply", .string("Just words, nothing drawn.")), ("mode", .string("api"))]),
+                                                       .object([("at", .string("2026-11-12T10:02:00Z")), ("you", .string("show me")), ("reply", .string("Here. <step>{\"type\":\"circle\",\"on\":\"screen\",\"target\":[1,2]}</step> <step>{\"type\":\"box\",\"target\":\"e\"}</step>")), ("mode", .string("api"))])]))])
+        let p = TutorSession.parse(file.indented())
+        XCTAssertTrue(p.ok)
+        let turns = p.session.replayTurns()
+        XCTAssertEqual(turns.count, 2, "a turn that draws nothing is not replayed")
+        func show(_ e: TutorEvent) -> String {
+            switch e {
+            case .say(let s, let n): return "say \(n) " + s
+            case .step(let s): return "step " + s.type + (s.brief ? " brief" : "")
+            }
+        }
+        XCTAssertEqual(turns[0].map(show), ["say 0 Here is the equation.", "step math", "say 1 This factor gives x equals one.", "step point brief", "step underline brief"])
+        if case .step(let pt) = turns[0][3] { XCTAssertEqual(pt.target, .inside(TutorInside(id: "e", part: "(x-1)"))) } else { XCTFail("the point") }
+        XCTAssertEqual(turns[1].map(show), ["say 0 Here.", "step box"], "marks on the screen are left out")
+        XCTAssertTrue(TutorSession(at: Date()).replayTurns().isEmpty)
+    }
+
     func testIPadTurn() {
         let t = TutorPrompt.iPadTurn(words: "is this right?", board: "e1 math \"x\"", view: TutorBox(-600, -40, 1100, 800),
                                      handwriting: [.init(text: "2H2 + O2", box: TutorBox(-500.4, 10, 220, 40))], typed: [.init(text: "Notes", box: TutorBox(-500, -30, 80, 20))])

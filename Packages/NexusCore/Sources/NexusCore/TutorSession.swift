@@ -125,6 +125,16 @@ public struct TutorSession: Equatable {
     public func you(_ t: JSONValue) -> String { t["you"]?.string ?? "" }
     public func reply(_ t: JSONValue) -> String { t["reply"]?.string ?? "" }
 
+    /// What Replay plays again (the laptop's tutorboard.js `replay`): each turn whose reply draws something, read again into its
+    /// sentences and steps in order, gestures included (they are never saved on the board); marks on the screen left out.
+    public func replayTurns() -> [[TutorEvent]] {
+        turns.compactMap { t -> [TutorEvent]? in
+            let r = TutorReader.read(reply(t))
+            guard !r.steps.isEmpty else { return nil }
+            return r.events.filter { e in if case .step(let s) = e { return s.on != "screen" }; return true }
+        }
+    }
+
     /// API mode: the earlier turns as messages (role, text), the newest `max`; the first is the user's.
     public func history(max: Int = TutorSession.historyTurns) -> [(role: String, text: String)] {
         turns.suffix(max).flatMap { t -> [(role: String, text: String)] in

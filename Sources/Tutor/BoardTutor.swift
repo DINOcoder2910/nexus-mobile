@@ -19,6 +19,8 @@ final class BoardTutor {
     /// What the tutor has said this turn.
     var said: [String] = []
     var problem: String?
+    /// Whether the board's tutor.json has an explanation Replay can play again (the panel's Replay button).
+    var canReplay = false
 
     unowned let board: BoardController
     let drawer: TutorDrawer
@@ -162,6 +164,7 @@ final class BoardTutor {
                         ms: reply.msToFirstText, sessionId: reply.sessionId))
             session = s
             saveSession(s)
+            checkReplay()
         }
         if phase != .idle { phase = .idle }
     }
@@ -262,6 +265,12 @@ final class BoardTutor {
     }
 
     var turnCount: Int { session?.turns.count ?? 0 }
+
+    /// Reads the session file again for `canReplay` (another device may have added turns).
+    func checkReplay() {
+        let p = TutorSession.parse(try? FolderAccess.read(sessionURL))
+        canReplay = p.ok && !p.session.replayTurns().isEmpty
+    }
 }
 
 /// TutorReader behind a lock: the reply's pieces may arrive on any thread.
@@ -311,8 +320,10 @@ extension BoardController {
 
     func showTutorPanel() {
         tutor.open = true
+        tutor.checkReplay()
         if let v = tutorPanelView { v.isHidden = false; view.bringSubviewToFront(v); return }
-        let host = UIHostingController(rootView: TutorPanel(tutor: tutor, onClose: { [weak self] in self?.toggleTutorPanel() }))
+        let host = UIHostingController(rootView: TutorPanel(tutor: tutor, onClose: { [weak self] in self?.toggleTutorPanel() },
+                                                    onReplay: { [weak self] in self?.openTutorReplay() }))
         host.view.backgroundColor = .clear
         host.sizingOptions = .intrinsicContentSize
         addChild(host)
@@ -373,6 +384,7 @@ final class TutorHoldButton: UIButton {
 struct TutorPanel: View {
     @Bindable var tutor: BoardTutor
     var onClose: () -> Void
+    var onReplay: () -> Void = {}
     @State private var typed = ""
     @State private var pressing = false
     @FocusState private var typing: Bool
@@ -384,6 +396,12 @@ struct TutorPanel: View {
                 Text("Tutor").font(.headline)
                 ClaudeModeChip()
                 Spacer()
+                if tutor.canReplay && !tutor.busy && tutor.phase != .listening {
+                    Button(action: onReplay) { Label("Replay", systemImage: "play.fill").font(.callout) }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .accessibilityLabel("Replay the explanation, pointing and marks included")
+                }
                 Button(action: onClose) { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
                     .accessibilityLabel("Close the tutor")
             }
