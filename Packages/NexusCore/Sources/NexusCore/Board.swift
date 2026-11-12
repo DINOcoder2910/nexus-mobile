@@ -446,24 +446,37 @@ public enum BoardFiles {
     }
 }
 
-/// The notebooks: `notebooks/<notebook>/<section>/<board>.board`, a board may also sit straight in a notebook.
+/// The notebooks, as the laptop's `notebookTree` (nexus docs/data-format.md "The board redesign's additions", Notebooks): every plain
+/// folder under `notebooks/` is a notebook, to any depth; a `<name>.board` folder in one is a board. Each list is by name.
 public struct Notebook: Identifiable, Hashable {
-    public struct Section: Identifiable, Hashable {
-        public var name: String
-        public var path: String
-        public var boards: [BoardRef]
-        public var id: String { path }
-    }
     public struct BoardRef: Identifiable, Hashable {
         public var name: String
         public var path: String
         public var id: String { path }
+        public init(name: String, path: String) { self.name = name; self.path = path }
     }
     public var name: String
     public var path: String
+    /// 0 for a top-level notebook.
+    public var depth: Int
+    /// Its colour from `notebook.json` (`#RRGGBB`), or nil.
+    public var color: String?
     public var boards: [BoardRef]
-    public var sections: [Section]
+    public var notebooks: [Notebook]
     public var id: String { path }
+
+    /// Every board in it and in the notebooks inside it (any depth), with where each sits ("Chem › R3").
+    public var allBoards: [(board: BoardRef, place: String)] {
+        boards.map { ($0, name) } + notebooks.flatMap { nb in nb.allBoards.map { ($0.board, name + " › " + $0.place) } }
+    }
+    /// Itself and every notebook inside it, depth first.
+    public var allNotebooks: [Notebook] { [self] + notebooks.flatMap(\.allNotebooks) }
+
+    /// The notebook at `path` in a tree, or nil.
+    public static func find(_ tree: [Notebook], _ path: String) -> Notebook? {
+        for nb in tree { if nb.path == path { return nb }; if let f = find(nb.notebooks, path) { return f } }
+        return nil
+    }
 
     /// Reads `notebooks/` of a data folder.
     public static func list(_ root: URL) -> [Notebook] {
@@ -474,16 +487,46 @@ public struct Notebook: Identifiable, Hashable {
             return items.filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }.map(\.lastPathComponent)
                 .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
         }
-        func boards(_ rel: String) -> [BoardRef] {
-            dirs(rel).filter { $0.lowercased().hasSuffix(".board") }.map { BoardRef(name: String($0.dropLast(6)), path: rel + "/" + $0) }
+        func node(_ rel: String, _ depth: Int) -> Notebook {
+            let kids = dirs(rel)
+            let meta = try? String(contentsOf: root.appendingPathComponent(rel).appendingPathComponent(NotebookMeta.file), encoding: .utf8)
+            return Notebook(name: (rel as NSString).lastPathComponent, path: rel, depth: depth, color: NotebookMeta.color(meta),
+                            boards: kids.filter { $0.lowercased().hasSuffix(".board") }.map { BoardRef(name: String($0.dropLast(6)), path: rel + "/" + $0) },
+                            notebooks: kids.filter { !$0.lowercased().hasSuffix(".board") }.map { node(rel + "/" + $0, depth + 1) })
         }
         let base = BoardFormat.notebooks
-        return dirs(base).filter { !$0.lowercased().hasSuffix(".board") }.map { nb in
-            let p = base + "/" + nb
-            return Notebook(name: nb, path: p, boards: boards(p),
-                            sections: dirs(p).filter { !$0.lowercased().hasSuffix(".board") }.map { s in
-                                Section(name: s, path: p + "/" + s, boards: boards(p + "/" + s))
-                            })
-        }
+        return dirs(base).filter { !$0.lowercased().hasSuffix(".board") }.map { node(base + "/" + $0, 0) }
+    }
+
+    /// May `from` (a notebook or a board) move into the notebook `to`? Not into itself, below itself, or where it already is.
+    public static func canMove(_ from: String, into to: String) -> Bool {
+        let parent = (from as NSString).deletingLastPathComponent
+        return !from.isEmpty && to != parent && to != from && !to.hasPrefix(from + "/")
+    }
+}
+
+/// `notebook.json` in a notebook folder: `{"format": "nexus-notebook/1", "color": "#RRGGBB"}` (the colour shows for top-level
+/// notebooks; other fields are kept).
+public enum NotebookMeta {
+    public static let format = "nexus-notebook/1"
+    public static let file = "notebook.json"
+    /// The ten colours the laptop offers for workstreams and notebooks (its light values), in its order.
+    public static let colors: [(name: String, hex: String)] = [
+        ("Blue", "#2769B7"), ("Amber", "#9A5600"), ("Green", "#007F43"), ("Rose", "#A14174"), ("Violet", "#6A57B3"),
+        ("Olive", "#6F6E00"), ("Teal", "#007F88"), ("Coral", "#AA442B"), ("Pink", "#94468F"), ("Slate", "#556B82"),
+    ]
+
+    public static func color(_ text: String?) -> String? {
+        guard let text, let v = try? JSONValue.parse(text), let c = v["color"]?.string,
+              c.range(of: #"^#[0-9a-fA-F]{6}$"#, options: .regularExpression) != nil else { return nil }
+        return c
+    }
+
+    /// The file's text with `color` set (nil removes it), keeping the other fields; as the laptop writes it (2-space JSON).
+    public static func json(_ old: String?, color: String?) -> String {
+        var v: JSONValue = .object((old.flatMap { try? JSONValue.parse($0) }?.object) ?? [])
+        v = v.setting("format", .string(format)).setting("color", color.map { .string($0) })
+        let body = (v.object ?? []).map { "  " + JSONValue.string($0.0).text + ": " + $0.1.text }.joined(separator: ",\n")
+        return "{\n" + body + "\n}\n"
     }
 }

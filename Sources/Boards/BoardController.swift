@@ -27,6 +27,10 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     var dirty = false
     var loadProblem: String?
     var stamps: [String: String] = [:]
+    /// The version history log and the board's picture (BoardController+History.swift).
+    let log = BoardLog()
+    /// A board shown inside the History view: never saved, nothing drawn on it (BoardController+History.swift).
+    var replay = false
 
     // views
     let canvas = PKCanvasView()
@@ -98,7 +102,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    var readOnly: Bool { content.readOnly != nil || loadProblem != nil }
+    var readOnly: Bool { content.readOnly != nil || loadProblem != nil || replay }
 
     // MARK: setup
 
@@ -185,6 +189,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         rememberPlace()
         saveNow()
         poll?.invalidate()
+        boardClosing()
     }
 
     // MARK: reading
@@ -208,6 +213,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         paperView.paper = paper
         rebuildItems()
         dirty = false
+        if !replay { log.loaded(content, board: boardURL) }
     }
 
     /// Everything on the board (board units): the ink and the items.
@@ -447,6 +453,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
             stamps = stampsAfterSave(wrote: wrote)
             afterReconcile(merged)
             NotificationCenter.default.post(name: BoardController.savedNote, object: self, userInfo: ["path": path])
+            afterSave()
             onSaved?(path)
         } catch {
             tell("Couldn't save the board: \(error.localizedDescription)")

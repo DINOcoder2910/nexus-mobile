@@ -43,10 +43,22 @@ struct Sidebar: View {
                 }
             }
 
+            if s.isDataFolder {
+                let recent = RecentBoards.list(store.folder)
+                if !recent.isEmpty {
+                    Section("Recent") {
+                        ForEach(recent, id: \.self) { p in
+                            Button { store.openBoard = .init(path: p, focus: nil) } label: {
+                                Label(HandwritingIndex.nameAndPlace(p).name, systemImage: "scribble").foregroundStyle(.primary)
+                            }
+                        }
+                    }
+                }
+            }
+
             Section("Notebooks") {
                 if s.isDataFolder { NotebooksList(actions: notebookActions) }
                 row(.boardSearch, "Search boards", "text.magnifyingglass", count: nil)
-                row(.boards, "Ink test boards", "scribble.variable", count: nil)
             }
 
             Section {
@@ -60,6 +72,7 @@ struct Sidebar: View {
         .onChange(of: ShortcutCenter.shared.notebookRequest) { _, _ in
             if s.isDataFolder { notebookActions.ask(.notebook, in: BoardFormat.notebooks) }
         }
+        .onChange(of: store.openBoard?.path) { _, p in if let p { RecentBoards.add(p) } }
         .navigationTitle("Nexus")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {

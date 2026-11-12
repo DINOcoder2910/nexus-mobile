@@ -233,7 +233,9 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
                 self.showContents(from: self.bar.pagePill)
             })
         }
-        // (Earlier versions, from the version history, goes here.)
+        if !replay {
+            items.append(UIAction(title: "Earlier versions", image: UIImage(systemName: "clock.arrow.circlepath")) { [weak self] _ in self?.openHistory() })
+        }
         items.append(UIAction(title: "Hide the bars", image: UIImage(systemName: "rectangle.expand.vertical")) { [weak self] _ in
             self?.setBarsHidden(true)
         })

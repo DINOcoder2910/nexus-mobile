@@ -32,6 +32,8 @@ targets:
         NSLocalNetworkUsageDescription: Nexus syncs your notes with your home hub.
         # the commit this build was made from (the cloud build sets NEXUS_BUILD): told to the hub, so the laptop can say when the iPad is behind
         NexusBuild: $(NEXUS_BUILD)
+        NSCameraUsageDescription: Nexus scans pages into a new board.
+        NSPhotoLibraryUsageDescription: Nexus puts a photo on a new board.
         UISupportedInterfaceOrientations~ipad:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationPortraitUpsideDown

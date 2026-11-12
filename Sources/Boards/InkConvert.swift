@@ -86,6 +86,10 @@ final class InkLedger {
     private struct Seen { var id: String; var part: Int? }
     private var known: [String: Seen] = [:]
     private var stored: [String: BoardStroke] = [:]
+    /// When each stroke new since the last `takeBorn()` was begun (PencilKit's creation date, ms), for the history log.
+    private var born: [String: Double] = [:]
+
+    func takeBorn() -> [String: Double] { defer { born = [:] }; return born }
 
     /// The drawing for these strokes (in drawing order), remembering which canvas stroke is which.
     func drawing(_ strokes: [BoardStroke], offset: CGPoint) -> PKDrawing {
@@ -114,17 +118,17 @@ final class InkLedger {
         var taken = taken.union(stored.keys)
         // first pass: which parts of split strokes are still there
         var partsLeft: [String: Set<Int>] = [:]
-        var converted: [(BoardStroke, Seen?)] = []
+        var converted: [(BoardStroke, Seen?, Date)] = []
         for k in drawing.strokes {
             let c = InkConvert.boardStroke(k, offset: offset, id: "")
             let seen = known[InkConvert.fingerprint(c)]
             if let seen, let part = seen.part { partsLeft[seen.id, default: []].insert(part) }
-            converted.append((c, seen))
+            converted.append((c, seen, k.path.creationDate))
         }
         var out: [BoardStroke] = []
         var nextKnown: [String: Seen] = [:]
         var nextStored: [String: BoardStroke] = [:]
-        for (c, seen) in converted {
+        for (c, seen, made) in converted {
             if let seen, !used.contains(seen.id), var s = stored[seen.id] {
                 used.insert(seen.id)
                 if seen.part != nil {
@@ -152,6 +156,7 @@ final class InkLedger {
                 s.id = BoardFormat.newId(taken: taken)
                 taken.insert(s.id)
                 used.insert(s.id)
+                born[s.id] = (made.timeIntervalSince1970 * 1000).rounded()
                 nextKnown[InkConvert.fingerprint(c)] = Seen(id: s.id, part: nil)
                 nextStored[s.id] = s
                 out.append(s)

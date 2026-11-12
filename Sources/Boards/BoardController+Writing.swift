@@ -102,6 +102,7 @@ extension BoardController {
 
     /// The open block's words changed: keep them in the board's content, saved shortly (the laptop saves about every half second).
     func typed(_ id: String, key: String, _ text: String) {
+        logTyping(id, text) // the version history's keystrokes (BoardController+History.swift)
         content.texts[key] = text
         changed()
         pushBelow(id)
