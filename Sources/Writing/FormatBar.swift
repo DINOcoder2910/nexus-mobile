@@ -12,11 +12,20 @@ final class FormatBar: UIInputView {
     private var countLabel = UILabel()
     /// á é í ó ú ñ ü ¿ ¡, shown for a Spanish block.
     private let accentStack = UIStackView()
+    /// A solid backing: on iPadOS 26 a `.keyboard` input view draws nothing behind its buttons, so the board showed through.
+    private let backdrop = UIView()
+    private let hairline = UIView()
 
     init(session: WritingSession) {
         self.session = session
         super.init(frame: CGRect(x: 0, y: 0, width: 800, height: 50), inputViewStyle: .keyboard)
         autoresizingMask = [.flexibleWidth]
+        backdrop.backgroundColor = .secondarySystemBackground
+        backdrop.translatesAutoresizingMaskIntoConstraints = false
+        hairline.backgroundColor = .separator
+        hairline.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(backdrop)
+        addSubview(hairline)
         scroll.showsHorizontalScrollIndicator = false
         scroll.translatesAutoresizingMaskIntoConstraints = false
         stack.axis = .horizontal
@@ -26,6 +35,14 @@ final class FormatBar: UIInputView {
         addSubview(scroll)
         scroll.addSubview(stack)
         NSLayoutConstraint.activate([
+            backdrop.leadingAnchor.constraint(equalTo: leadingAnchor),
+            backdrop.trailingAnchor.constraint(equalTo: trailingAnchor),
+            backdrop.topAnchor.constraint(equalTo: topAnchor),
+            backdrop.bottomAnchor.constraint(equalTo: bottomAnchor),
+            hairline.leadingAnchor.constraint(equalTo: leadingAnchor),
+            hairline.trailingAnchor.constraint(equalTo: trailingAnchor),
+            hairline.topAnchor.constraint(equalTo: topAnchor),
+            hairline.heightAnchor.constraint(equalToConstant: 1 / UIScreen.main.scale),
             scroll.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
             scroll.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
             scroll.topAnchor.constraint(equalTo: topAnchor),
