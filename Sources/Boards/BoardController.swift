@@ -157,6 +157,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
 
         NotificationCenter.default.addObserver(self, selector: #selector(saveNowSelector), name: UIApplication.willResignActiveNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(otherPaneSaved(_:)), name: BoardController.savedNote, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(mathDrawn), name: BlockStyler.mathReady, object: nil)
         poll = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.checkOutside() }
         setUpLive()
     }

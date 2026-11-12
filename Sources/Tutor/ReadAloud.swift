@@ -129,7 +129,7 @@ extension BoardController {
     }
 
     func readBlock(_ id: String) {
-        let md = content.texts[id] ?? ""
+        let md = content.texts[shownKey(id)] ?? ""
         showReadBar()
         ReadAloud.shared.read(md.components(separatedBy: "\n").map { HandwritingIndex.Worker.plain($0) }.joined(separator: "\n"))
     }

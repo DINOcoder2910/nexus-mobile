@@ -325,4 +325,19 @@ extension BoardController {
             content.items[k] = old.with("x", .number((old.x + dx).rounded())).with("y", .number((old.y + dy).rounded()))
         }
     }
+
+    /// A formula's picture is ready: lay the blocks out again (once for a burst of them).
+    @objc func mathDrawn() {
+        NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(relayMaths), object: nil)
+        perform(#selector(relayMaths), with: nil, afterDelay: 0.05)
+    }
+
+    @objc private func relayMaths() {
+        rebuildItems()
+        if let w = writing {
+            w.restyle()
+            w.measure()
+            w.place()
+        }
+    }
 }

@@ -374,6 +374,13 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
         var extra: [UIMenuElement] = [
             UIAction(title: "Comment", image: UIImage(systemName: "text.bubble")) { [weak b] _ in b?.addComment(on: id, range: range) },
         ]
+        if range.length > 0 {
+            let said = BlockFacts.plainText((textView.text as NSString).substring(with: range))
+            extra.append(UIAction(title: "Read aloud", image: UIImage(systemName: "speaker.wave.2")) { [weak b] _ in
+                b?.showReadBar()
+                ReadAloud.shared.read(said)
+            })
+        }
         extra.append(UIAction(title: "Make a flashcard", image: UIImage(systemName: "rectangle.on.rectangle.angled")) { [weak b] _ in
             b?.makeFlashcard(from: id, range: range)
         })

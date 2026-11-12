@@ -21,6 +21,42 @@ enum BlockStyler {
     static let faint = BlockLook.muted.withAlphaComponent(0.55)
     /// The line's own text colour (UIColor), for what MDLayoutManager draws on it (a bullet).
     static let textColorKey = NSAttributedString.Key("nexusLineColor")
+    /// On the first character of a $maths$ span drawn by KaTeX (a MathBox); the rest of the span hides. MDLayoutManager makes that
+    /// character take the picture's width and draws the picture there.
+    static let mathKey = NSAttributedString.Key("nexusMath")
+    /// Posted when a formula's picture has been drawn, so blocks showing its TeX lay out again.
+    static let mathReady = Notification.Name("nexusMathReady")
+
+    /// A formula's picture and the size it takes at the line's font size.
+    final class MathBox: NSObject, @unchecked Sendable {
+        let image: UIImage
+        let size: CGSize
+        init(image: UIImage, size: CGSize) { self.image = image; self.size = size }
+    }
+
+    /// Pictures are drawn this many times the font size and shrunk, so they stay sharp when the board is zoomed in.
+    static let mathDetail: CGFloat = 3
+
+    /// The picture for `tex` at a font size (points at this layout's scale), or nil while it is being drawn (it is asked for then, and
+    /// `mathReady` is posted when it is ready) or when KaTeX can't read it (the TeX shows).
+    static func mathBox(_ tex: String, display: Bool, size: CGFloat, color: UIColor) -> MathBox? {
+        guard Thread.isMainThread, size > 0 else { return nil }
+        return MainActor.assumeIsolated { () -> MathBox? in
+            let ask = min(240, size * mathDetail)
+            let render = MathRender.shared
+            if let img = render.cached(tex: tex, display: display, size: ask, color: color) {
+                let k = size / MathRender.step(ask)
+                return MathBox(image: img, size: CGSize(width: ceil(img.size.width * k), height: ceil(img.size.height * k)))
+            }
+            if render.cannotRead(tex: tex, display: display) { return nil }
+            Task { @MainActor in
+                if await render.image(tex: tex, display: display, size: ask, color: color) != nil {
+                    NotificationCenter.default.post(name: mathReady, object: nil)
+                }
+            }
+            return nil
+        }
+    }
 
     struct Result {
         var lines: [MDLine]
@@ -112,6 +148,22 @@ enum BlockStyler {
             // inline spans
             for span in line.spans { applySpan(storage, span, look: look, size: size) }
 
+            // maths as the laptop draws it, while the caret is not on its line
+            var tallest: CGFloat = 0
+            let lineOn = selection.map { $0.location <= line.range.location + line.range.length && $0.location + $0.length >= line.range.location } ?? false
+            if !lineOn {
+                for span in line.spans {
+                    guard case .math(let display) = span.kind else { continue }
+                    let open = display ? 2 : 1
+                    guard span.range.length > 2 * open, NSMaxRange(span.range) <= ns.length else { continue }
+                    let tex = ns.substring(with: NSRange(location: span.range.location + open, length: span.range.length - 2 * open))
+                    guard let box = mathBox(tex, display: display, size: size, color: st.color) else { continue }
+                    storage.addAttribute(hiddenKey, value: true, range: NSRange(location: span.range.location + 1, length: span.range.length - 1))
+                    storage.addAttribute(mathKey, value: box, range: NSRange(location: span.range.location, length: 1))
+                    tallest = max(tallest, box.size.height)
+                }
+            }
+
             // the paragraph: indents (quotes, lists), line height, spacing
             let ps = NSMutableParagraphStyle()
             let q = CGFloat(line.quote) * quoteStep
@@ -135,6 +187,12 @@ enum BlockStyler {
             ps.defaultTabInterval = size * 2
             let natural = font.lineHeight
             ps.lineSpacing = max(0, size * st.line - natural)
+            if tallest > 0 {
+                // a tall formula sits centred on the words' middle: room above the line, and below it
+                let above = tallest / 2 + font.xHeight / 2, below = tallest / 2 - font.xHeight / 2
+                ps.minimumLineHeight = max(natural, above - font.descender)
+                ps.lineSpacing += max(0, below + font.descender)
+            }
             if index > 0 { ps.paragraphSpacingBefore = st.before * s }
             // body, quote and code space after a paragraph (the laptop's `p`), not after every line of it; headings after themselves
             var after = st.after * s
