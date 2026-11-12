@@ -354,6 +354,7 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
     }
 
     func setBarsHidden(_ hidden: Bool) {
+        placeRecordingBar(barsHidden: hidden)
         UIView.animate(withDuration: 0.2) {
             self.bar.alpha = hidden ? 0 : 1
             self.showBarsButton.alpha = hidden ? 1 : 0

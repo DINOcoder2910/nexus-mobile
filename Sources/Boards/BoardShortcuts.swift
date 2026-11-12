@@ -129,6 +129,10 @@ final class BoardGestures: NSObject, UIGestureRecognizerDelegate, UIPencilIntera
             board.canvas.addGestureRecognizer(g)
         }
         twoFingers.require(toFail: twoFingersTwice)
+        // a quick pinch is never a tap: a pinch read as a two-finger tap ran Undo (the Nov 12 crash came through this way)
+        if let pinch = board.canvas.pinchGestureRecognizer {
+            for g in [twoFingers, threeFingers, twoFingersTwice] { g.require(toFail: pinch) }
+        }
         pencil.delegate = self
         board.canvas.addInteraction(pencil)
         observer = NotificationCenter.default.addObserver(forName: ShortcutCenter.changed, object: nil, queue: .main) { [weak self] _ in self?.refresh() }
