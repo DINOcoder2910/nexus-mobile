@@ -75,7 +75,8 @@ final class StudyTests: XCTestCase {
     func testGoldenRandom() {
         for row in golden["rng"] as? [[Any]] ?? [] {
             let r = StudyDeck.rng(row[0] as! String)
-            XCTAssertEqual((0..<5).map { _ in r() }, (row[1] as! [NSNumber]).map(\.doubleValue), "rng \(row[0])")
+            // (each is a whole number over 2^32; compared as that number, since JSONSerialization can read the last digit of a double off by one)
+            XCTAssertEqual((0..<5).map { _ in UInt32(r() * 4_294_967_296) }, (row[1] as! [NSNumber]).map { UInt32(($0.doubleValue * 4_294_967_296).rounded()) }, "rng \(row[0])")
         }
     }
 
