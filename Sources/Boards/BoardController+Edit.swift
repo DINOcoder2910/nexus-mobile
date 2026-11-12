@@ -78,6 +78,7 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
         // a tap away from the block being typed in closes it
         if writing != nil { endWriting(); return }
         let p = boardPoint(g)
+        if recordingTap(p) { return }
         guard let it = hitItem(p, pdf: false) else { selected = nil; return }
         if it.type == "mark" { selected = nil; openMark(it.id); return }
         if it.type == "tape", selected != it.id { togglePeek(it.id); return }

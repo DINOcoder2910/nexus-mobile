@@ -30,7 +30,10 @@ final class MDLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
         for i in 0..<glyphRange.length {
             let ci = charIndexes[i]
             var p = props[i]
-            if ci < storage.length, storage.attribute(BlockStyler.hiddenKey, at: ci, effectiveRange: nil) != nil {
+            if ci < storage.length, storage.attribute(BlockStyler.mathKey, at: ci, effectiveRange: nil) != nil {
+                p = .controlCharacter
+                changed = true
+            } else if ci < storage.length, storage.attribute(BlockStyler.hiddenKey, at: ci, effectiveRange: nil) != nil {
                 p = .null
                 changed = true
             }
@@ -43,6 +46,42 @@ final class MDLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
             }
         }
         return glyphRange.length
+    }
+
+    // MARK: maths: one character takes the formula's width, and the picture is drawn there
+
+    func layoutManager(_ layoutManager: NSLayoutManager, shouldUse action: NSLayoutManager.ControlCharacterAction,
+                       forControlCharacterAt charIndex: Int) -> NSLayoutManager.ControlCharacterAction {
+        if let storage = textStorage, charIndex < storage.length, storage.attribute(BlockStyler.mathKey, at: charIndex, effectiveRange: nil) != nil {
+            return .whitespace
+        }
+        return action
+    }
+
+    func layoutManager(_ layoutManager: NSLayoutManager, boundingBoxForControlGlyphAt glyphIndex: Int, for textContainer: NSTextContainer,
+                       proposedLineFragment proposedRect: CGRect, glyphPosition: CGPoint, characterIndex charIndex: Int) -> CGRect {
+        guard let storage = textStorage, charIndex < storage.length,
+              let box = storage.attribute(BlockStyler.mathKey, at: charIndex, effectiveRange: nil) as? BlockStyler.MathBox
+        else { return CGRect(origin: glyphPosition, size: .zero) }
+        return CGRect(x: glyphPosition.x, y: glyphPosition.y, width: box.size.width, height: 0)
+    }
+
+    override func drawGlyphs(forGlyphRange glyphsToShow: NSRange, at origin: CGPoint) {
+        super.drawGlyphs(forGlyphRange: glyphsToShow, at: origin)
+        guard let storage = textStorage else { return }
+        let chars = characterRange(forGlyphRange: glyphsToShow, actualGlyphRange: nil)
+        storage.enumerateAttribute(BlockStyler.mathKey, in: chars, options: []) { value, range, _ in
+            guard let box = value as? BlockStyler.MathBox else { return }
+            let g = glyphIndexForCharacter(at: range.location)
+            guard g < numberOfGlyphs else { return }
+            let frag = lineFragmentRect(forGlyphAt: g, effectiveRange: nil)
+            let at = location(forGlyphAt: g)
+            let font = (storage.attribute(.font, at: range.location, effectiveRange: nil) as? UIFont) ?? UIFont.systemFont(ofSize: 16)
+            let baseline = frag.minY + at.y
+            let r = CGRect(x: origin.x + frag.minX + at.x, y: origin.y + baseline - font.xHeight / 2 - box.size.height / 2,
+                           width: box.size.width, height: box.size.height)
+            box.image.draw(in: r)
+        }
     }
 
     // MARK: drawing what marks stand for

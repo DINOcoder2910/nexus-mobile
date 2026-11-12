@@ -102,6 +102,7 @@ extension BoardController {
 
     /// The open block's words changed: keep them in the board's content, saved shortly (the laptop saves about every half second).
     func typed(_ id: String, key: String, _ text: String) {
+        recordingTyped(id, old: content.texts[key] ?? "", new: text)
         content.texts[key] = text
         changed()
         pushBelow(id)
@@ -321,6 +322,21 @@ extension BoardController {
         for old in start where old.type == "text" && old.string("on") == pdfId {
             guard let k = content.items.firstIndex(where: { $0.id == old.id }) else { continue }
             content.items[k] = old.with("x", .number((old.x + dx).rounded())).with("y", .number((old.y + dy).rounded()))
+        }
+    }
+
+    /// A formula's picture is ready: lay the blocks out again (once for a burst of them).
+    @objc func mathDrawn() {
+        NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(relayMaths), object: nil)
+        perform(#selector(relayMaths), with: nil, afterDelay: 0.05)
+    }
+
+    @objc private func relayMaths() {
+        rebuildItems()
+        if let w = writing {
+            w.restyle()
+            w.measure()
+            w.place()
         }
     }
 }
