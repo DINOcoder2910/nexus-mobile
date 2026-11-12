@@ -12,6 +12,7 @@ struct WorkstreamView: View {
     @State private var allDone = false
     @State private var allFiles = false
     @State private var notes: String?
+    @State private var editingNotes: String?
     @State private var files: [FileItem] = []
 
     struct FileItem: Identifiable {
@@ -49,6 +50,14 @@ struct WorkstreamView: View {
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { store.reload() }
         .task(id: "\(workstreamId ?? "")|\(store.snapshot.loadedAt.timeIntervalSince1970)") { load() }
+        .sheet(isPresented: Binding(get: { editingNotes != nil }, set: { if !$0 { editingNotes = nil } })) {
+            if let w = ws {
+                NotesEditor(title: "\(w.name) notes", text: editingNotes ?? "") { new in
+                    store.writeText(w.folder + "/notes.md", new, message: "Notes saved: \(w.name)")
+                    load()
+                }
+            }
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button(action: add) { Label("Add a task", systemImage: "plus") }
@@ -181,11 +190,26 @@ struct WorkstreamView: View {
 
     @ViewBuilder
     private var notesSection: some View {
-        if let text = notes, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            Section {
-                NoteText(text: text).padding(.vertical, 6)
-            } header: {
-                SectionTitle(title: "Notes", count: nil)
+        if ws != nil {
+            let text = notes ?? ""
+            let empty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let editable = store.snapshot.readOnlyReason == nil
+            if !empty || editable {
+                Section {
+                    if empty {
+                        Button { editingNotes = "" } label: { Label("Add notes", systemImage: "square.and.pencil") }
+                    } else {
+                        NoteText(text: text).padding(.vertical, 6)
+                    }
+                } header: {
+                    HStack {
+                        SectionTitle(title: "Notes", count: nil)
+                        Spacer()
+                        if editable && !empty {
+                            Button("Edit") { editingNotes = text }.font(.callout).textCase(nil)
+                        }
+                    }
+                }
             }
         }
     }
@@ -268,7 +292,36 @@ struct WorkstreamView: View {
     }
 }
 
-/// notes.md, read-only: headings bold, bullets and checkboxes as marks, code fences in mono, inline markdown kept.
+/// notes.md as plain markdown text, saved whole when Save is pressed (Undo on the bar).
+private struct NotesEditor: View {
+    let title: String
+    @State var text: String
+    let save: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            TextEditor(text: $text)
+                .font(.body)
+                .padding(.horizontal, 12)
+                .navigationTitle(title)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Save") {
+                            var t = text.replacingOccurrences(of: "\r\n", with: "\n")
+                            if !t.isEmpty && !t.hasSuffix("\n") { t += "\n" }
+                            save(t)
+                            dismiss()
+                        }
+                    }
+                }
+        }
+    }
+}
+
+/// notes.md, shown: headings bold, bullets and checkboxes as marks, code fences in mono, inline markdown kept.
 private struct NoteText: View {
     let text: String
     @State private var full = false

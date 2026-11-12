@@ -1,20 +1,131 @@
 import SwiftUI
+import CoreSpotlight
 import NexusCore
 
 @main
 struct NexusMobileApp: App {
-    @State private var store = NexusStore()
-    @State private var sync = SyncService()
-    @State private var calendar = CalendarStore()
+    // shared by every window, also reached by Siri and Shortcuts (AppServices); each window has its own NexusStore (WindowRoot)
+    @State private var sync = AppServices.sync
+    @State private var calendar = AppServices.calendar
+    @State private var reminders = AppServices.reminders
+    @State private var router = WindowRouter.shared
+    /// The app as a whole (all its windows): sync runs while any window is in front.
+    @Environment(\.scenePhase) private var phase
 
     var body: some Scene {
-        WindowGroup {
-            RootView()
-                .environment(store)
+        // one kind of window, opened plain or on a board ("Open in a new window"); on the iPad there can be several
+        WindowGroup(for: WindowStart.self) { $start in
+            WindowRoot(start: start)
                 .environment(sync)
                 .environment(calendar)
+                .environment(reminders)
+                .environment(router)
                 .tint(Theme.accent)
         }
+        .onChange(of: phase) { _, now in appPhase(now) }
+        // iOS wakes the app now and then: sync once, read the folder, and give iOS the reminders again
+        .backgroundTask(.appRefresh(ReminderCenter.refreshId)) { await refreshInBackground() }
+    }
+
+    @MainActor
+    private func appPhase(_ now: ScenePhase) {
+        switch now {
+        case .active:
+            AppServices.start()
+            AppServices.store.reloadIfChanged()
+            calendar.refreshStatus()
+            sync.becameActive()
+            Task { await reminders.refreshStatus() }
+        case .background:
+            sync.enteredBackground()
+            ReminderCenter.scheduleRefresh()
+        default:
+            break
+        }
+    }
+
+    @MainActor
+    private func refreshInBackground() async {
+        ReminderCenter.scheduleRefresh()
+        AppServices.start()
+        await sync.backgroundCycle(AppServices.store)
+        AppServices.store.reloadIfChanged()
+        reminders.reschedule()
+    }
+}
+
+/// The app's services, made once. The windows get them through the environment; an App Intent (Siri, Shortcuts, the Action
+/// button) runs in the same process and reaches them here. `store` is the shared store: sync, reminders and Spotlight follow it,
+/// and each window's own store keeps in step with it (NexusStore's notices).
+@MainActor
+enum AppServices {
+    static let store = NexusStore()
+    static let sync = SyncService()
+    static let calendar = CalendarStore()
+    static let reminders = ReminderCenter()
+    private static var started = false
+
+    /// Wires them together once (the first window, or a launch straight into the background).
+    static func start() {
+        guard !started else { return }
+        started = true
+        sync.attach(store)
+        reminders.attach(store, calendar)
+        SpotlightIndex.update(store)
+        store.onReload = {
+            reminders.reschedule()
+            SpotlightIndex.update(store)
+        }
+    }
+}
+
+/// What a new window opens on: Today (each its own, so a second ask opens another), or a board (asking again brings that one forward).
+enum WindowStart: Hashable, Codable {
+    case plain(UUID)
+    case board(String)
+
+    /// A plain window asked for again gets a new id, so it is a new window.
+    var fresh: WindowStart {
+        if case .plain = self { return .plain(UUID()) }
+        return self
+    }
+}
+
+/// "New window" and "Open in a new window", where there can be several windows (the iPad; nothing on the iPhone).
+struct NewWindowButton: View {
+    var start: WindowStart = .plain(UUID())
+    var label = "New window"
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.supportsMultipleWindows) private var multiple
+
+    var body: some View {
+        if multiple {
+            Button { openWindow(value: start.fresh) } label: { Label(label, systemImage: "macwindow.badge.plus") }
+        }
+    }
+}
+
+/// Asks from outside a window (a tapped reminder, Siri's "New Nexus task") that one window should answer: the one in front last.
+@MainActor
+@Observable
+final class WindowRouter {
+    static let shared = WindowRouter()
+    /// The window used last.
+    var front: UUID?
+    /// A task to open.
+    var openTask: String?
+    /// The add sheet is asked for.
+    var addSheet = false
+}
+
+/// One window: its own store (its task panel, add sheet, Undo and open board), on the shared data folder.
+struct WindowRoot: View {
+    let start: WindowStart?
+    @State private var store = NexusStore()
+
+    var body: some View {
+        RootView(start: start)
+            .environment(store)
     }
 }
 
@@ -27,14 +138,20 @@ enum Screen: Hashable {
 
 /// The shell: the sidebar on the left (where you go), the screen on the right, and the task panel, add sheet and undo bar over both.
 struct RootView: View {
+    var start: WindowStart? = nil
     @Environment(NexusStore.self) private var store
     @Environment(SyncService.self) private var sync
     @Environment(CalendarStore.self) private var calendar
+    @Environment(ReminderCenter.self) private var reminders
+    @Environment(WindowRouter.self) private var router
+    /// This window's phase.
     @Environment(\.scenePhase) private var phase
     @State private var screen: Screen? = .today
     @State private var columns = NavigationSplitViewVisibility.all
     /// On the iPhone the sidebar and the screen are one stack: it opens on the screen (Today), with the sidebar one step back.
     @State private var compactColumn = NavigationSplitViewColumn.detail
+    /// This window, for the asks that only one window should answer.
+    @State private var windowId = UUID()
 
     var body: some View {
         @Bindable var store = store
@@ -69,27 +186,55 @@ struct RootView: View {
             Button("OK", role: .cancel) {}
         } message: { Text(store.problem ?? "") }
         .onChange(of: phase) { _, now in
-            switch now {
-            case .active:
+            if now == .active {
+                router.front = windowId
                 store.reloadIfChanged()
-                calendar.refreshStatus()
-                sync.becameActive()
-            case .background:
-                sync.enteredBackground()
-            default:
-                break
+                answerRouter()
             }
         }
-        .onChange(of: store.folder) { _, _ in sync.restart() }
+        // a Spotlight result: a task, a workstream or a board
+        .onContinueUserActivity(CSSearchableItemActionType) { activity in
+            guard let hit = SpotlightIndex.target(activity) else { return }
+            let value = hit.value
+            switch hit.kind {
+            case "task": if store.task(value) != nil { store.openTaskId = value }
+            case "ws": screen = .workstream(value)
+            case "board": store.openBoard = .init(path: value)
+            default: break
+            }
+        }
+        // the reminders follow the calendars too (the files: AppServices.start)
+        .onChange(of: calendar.version) { _, _ in reminders.reschedule() }
+        .onChange(of: router.openTask) { _, _ in answerRouter() }
+        .onChange(of: router.addSheet) { _, _ in answerRouter() }
         .task {
-            sync.attach(store)
+            AppServices.start()
+            if router.front == nil { router.front = windowId }
+            if case .board(let path)? = start { store.openBoard = .init(path: path) }
+            answerRouter()
             InkBoardMove.runIfNeeded(store)
             // Another writer (sync, the Files app) can change the folder at any time: look every few seconds while open,
-            // and let sync send what changed.
+            // and tell the other stores (and sync) what changed.
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(3))
-                if phase == .active, store.reloadIfChanged() { sync.wake() }
+                if phase == .active, store.reloadIfChanged() {
+                    NotificationCenter.default.post(name: NexusStore.readAgain, object: store)
+                    sync.wake()
+                }
             }
+        }
+    }
+
+    /// A reminder tapped or Siri's add sheet: the window in front answers.
+    private func answerRouter() {
+        guard router.front == windowId || router.front == nil else { return }
+        if let id = router.openTask {
+            router.openTask = nil
+            if store.task(id) != nil { store.openTaskId = id }
+        }
+        if router.addSheet {
+            router.addSheet = false
+            store.capture = .init(workstream: nil, parent: nil, plan: nil)
         }
     }
 
