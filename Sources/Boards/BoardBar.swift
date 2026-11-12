@@ -1,4 +1,5 @@
 import UIKit
+import PencilKit
 import NexusCore
 
 /// The board's bar (the redesign's Option B): a top row with the way back, where the board is, the tools, undo and redo, the
@@ -171,7 +172,9 @@ final class BoardBar: UIView {
         b.heightAnchor.constraint(equalToConstant: 30).isActive = true
         let dot = UIView(frame: CGRect(x: 5, y: 5, width: 20, height: 20))
         dot.isUserInteractionEnabled = false
-        dot.backgroundColor = InkConvert.color(hex)
+        // On a dark board, show the colour the ink will show (PencilKit draws black as white there); the stored colour stays the light one.
+        let c = InkConvert.color(hex)
+        dot.backgroundColor = dark ? PKInkingTool.convertColor(c, from: .light, to: .dark) : c
         dot.layer.cornerRadius = 10
         dot.layer.borderWidth = 1
         dot.layer.borderColor = UIColor.label.withAlphaComponent(0.15).cgColor
