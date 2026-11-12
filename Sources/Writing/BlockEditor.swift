@@ -597,7 +597,9 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
         let margin: CGFloat = 40
         var dy: CGFloat = 0
         if caret.maxY > bottom - margin { dy = caret.maxY - (bottom - margin) }
-        if caret.minY < b.view.safeAreaInsets.top + margin { dy = caret.minY - (b.view.safeAreaInsets.top + margin) }
+        // the board's bar covers topInset (the safe area and the bar), not just the safe area
+        let top = b.topInset + 16
+        if caret.minY < top { dy = caret.minY - top }
         guard abs(dy) > 1 else { return }
         var o = b.canvas.contentOffset
         o.y = max(0, o.y + dy)
