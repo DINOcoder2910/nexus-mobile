@@ -8,19 +8,32 @@ final class BoardBar: UIView {
     static let topHeight: CGFloat = 52
     static let rowHeight: CGFloat = 44
     static var height: CGFloat { topHeight + rowHeight }
+    /// This bar's height under the safe area: a third row (the tools) when it is narrow.
+    var height: CGFloat { compact ? BoardBar.height + BoardBar.rowHeight : BoardBar.height }
+    /// Narrow (an iPhone, or a narrow pane on the iPad): the tools get their own row, the rest goes in the ⋯ menu.
+    var compact = false {
+        didSet {
+            guard compact != oldValue else { return }
+            middleHeight.constant = compact ? BoardBar.rowHeight : 0
+            refresh()
+        }
+    }
+    private lazy var middleHeight = middleRow.heightAnchor.constraint(equalToConstant: 0)
 
     weak var board: BoardController?
     var dark = false { didSet { if dark != oldValue { refresh() } } }
 
     private let back = UIVisualEffectView(effect: UIBlurEffect(style: .systemChromeMaterial))
-    private let topRow = UIStackView()
-    private let toolRow = UIStackView()
-    private let toolsScroll = UIScrollView()
-    private let toolsStack = UIStackView()
-    private let rowScroll = UIScrollView()
-    private let rowStack = UIStackView()
-    private let rightStack = UIStackView()
-    private let titleButton = UIButton(type: .system)
+    let topRow = UIStackView()
+    /// The tools' own row on a narrow screen (an iPhone, a narrow pane): BoardBar+Compact.swift.
+    let middleRow = UIStackView()
+    let toolRow = UIStackView()
+    let toolsScroll = UIScrollView()
+    let toolsStack = UIStackView()
+    let rowScroll = UIScrollView()
+    let rowStack = UIStackView()
+    let rightStack = UIStackView()
+    let titleButton = UIButton(type: .system)
     let pagePill = UIButton(type: .system)
     let zoomPill = UIButton(type: .system)
     private let line = UIView()
@@ -33,7 +46,7 @@ final class BoardBar: UIView {
         line.translatesAutoresizingMaskIntoConstraints = false
         addSubview(line)
 
-        for s in [topRow, toolRow] {
+        for s in [topRow, middleRow, toolRow] {
             s.axis = .horizontal
             s.alignment = .center
             s.spacing = 4
@@ -92,7 +105,11 @@ final class BoardBar: UIView {
             topRow.heightAnchor.constraint(equalToConstant: BoardBar.topHeight),
             toolRow.leadingAnchor.constraint(equalTo: safeAreaLayoutGuide.leadingAnchor, constant: 12),
             toolRow.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor, constant: -12),
-            toolRow.topAnchor.constraint(equalTo: topRow.bottomAnchor),
+            middleRow.leadingAnchor.constraint(equalTo: safeAreaLayoutGuide.leadingAnchor, constant: 8),
+            middleRow.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor, constant: -8),
+            middleRow.topAnchor.constraint(equalTo: topRow.bottomAnchor),
+            middleHeight,
+            toolRow.topAnchor.constraint(equalTo: middleRow.bottomAnchor),
             toolRow.heightAnchor.constraint(equalToConstant: BoardBar.rowHeight),
             toolsStack.leadingAnchor.constraint(equalTo: toolsScroll.contentLayoutGuide.leadingAnchor),
             toolsStack.trailingAnchor.constraint(equalTo: toolsScroll.contentLayoutGuide.trailingAnchor),
@@ -123,7 +140,7 @@ final class BoardBar: UIView {
 
     // MARK: building
 
-    private func icon(_ symbol: String, _ label: String, selected: Bool = false, size: CGFloat = 17, action: @escaping () -> Void) -> UIButton {
+    func icon(_ symbol: String, _ label: String, selected: Bool = false, size: CGFloat = 17, action: @escaping () -> Void) -> UIButton {
         var c = selected ? UIButton.Configuration.tinted() : UIButton.Configuration.plain()
         c.image = UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: size, weight: .regular))
         c.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 9, bottom: 8, trailing: 9)
@@ -135,7 +152,7 @@ final class BoardBar: UIView {
         return b
     }
 
-    private func menuButton(_ symbol: String, _ label: String, _ menu: UIMenu) -> UIButton {
+    func menuButton(_ symbol: String, _ label: String, _ menu: UIMenu) -> UIButton {
         var c = UIButton.Configuration.plain()
         c.image = UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .regular))
         c.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 9, bottom: 8, trailing: 9)
@@ -148,7 +165,7 @@ final class BoardBar: UIView {
         return b
     }
 
-    private func spacer() -> UIView {
+    func spacer() -> UIView {
         let v = UIView()
         v.setContentHuggingPriority(.init(1), for: .horizontal)
         v.setContentCompressionResistancePriority(.init(1), for: .horizontal)
@@ -208,7 +225,7 @@ final class BoardBar: UIView {
         return b
     }
 
-    private func label(_ text: String) -> UILabel {
+    func label(_ text: String) -> UILabel {
         let l = UILabel()
         l.text = text
         l.font = .systemFont(ofSize: 13)
@@ -216,7 +233,7 @@ final class BoardBar: UIView {
         return l
     }
 
-    private func textButton(_ title: String, _ symbol: String?, action: @escaping () -> Void) -> UIButton {
+    func textButton(_ title: String, _ symbol: String?, action: @escaping () -> Void) -> UIButton {
         var c = UIButton.Configuration.gray()
         c.title = title
         c.image = symbol.flatMap { UIImage(systemName: $0) }
@@ -226,6 +243,29 @@ final class BoardBar: UIView {
         return UIButton(configuration: c, primaryAction: UIAction { _ in action() })
     }
 
+    /// A pill that shows an option's choice (`show` words it); its menu, titled with the option, picks another.
+    private func choice<T: Equatable>(_ option: String, _ choices: [(String, T)], _ current: T, show: ((String) -> String)? = nil,
+                                      set: @escaping (T) -> Void) -> UIButton {
+        let now = choices.first { $0.1 == current }?.0 ?? choices.first?.0 ?? ""
+        var c = UIButton.Configuration.gray()
+        c.title = show?(now) ?? now
+        c.image = UIImage(systemName: "chevron.down", withConfiguration: UIImage.SymbolConfiguration(pointSize: 10, weight: .semibold))
+        c.imagePlacement = .trailing
+        c.imagePadding = 4
+        c.cornerStyle = .capsule
+        c.buttonSize = .small
+        let b = UIButton(configuration: c)
+        b.menu = UIMenu(title: option, children: choices.map { name, value in
+            UIAction(title: name, state: value == current ? .on : .off) { [weak self] _ in
+                set(value)
+                self?.refresh()
+            }
+        })
+        b.showsMenuAsPrimaryAction = true
+        b.accessibilityLabel = option + ": " + now
+        return b
+    }
+
     private func segmented(_ items: [String], selected: Int, action: @escaping (Int) -> Void) -> UISegmentedControl {
         let s = UISegmentedControl(items: items)
         s.selectedSegmentIndex = selected
@@ -233,13 +273,15 @@ final class BoardBar: UIView {
         return s
     }
 
-    private func clear(_ s: UIStackView) {
+    func clear(_ s: UIStackView) {
         for v in s.arrangedSubviews { s.removeArrangedSubview(v); v.removeFromSuperview() }
     }
 
     /// Builds both rows again from the board's state (a tool, colour or selection changed).
     func refresh() {
         guard let b = board else { return }
+        if compact { refreshCompact(b); return } // BoardBar+Compact.swift
+        middleRow.isHidden = true
         let tools = BoardTools.shared
         let readOnly = b.readOnly
         HoldTarget.shared.actions.removeAll()
@@ -321,7 +363,7 @@ final class BoardBar: UIView {
         updatePills()
     }
 
-    private func fillToolRow(_ b: BoardController) {
+    func fillToolRow(_ b: BoardController) {
         let tools = BoardTools.shared
         let t = tools.tool
         if t.inks {
@@ -378,18 +420,29 @@ final class BoardBar: UIView {
                 }
             }
         } else if t == .space {
-            rowStack.addArrangedSubview(label("Drag down where you want room, up to take empty space away."))
-            if !b.pdfs.isEmpty {
-                rowStack.addArrangedSubview(segmented(["Open up the page", "Move the whole page"], selected: tools.spaceOpensPage ? 0 : 1) { i in
-                    tools.spaceOpensPage = i == 0
-                })
-            }
+            rowStack.addArrangedSubview(label(tools.spaceDirection == .follow ? "Drag down or right for room, back to close it." : "Drag down for room, up to close it."))
+            // each option a pill showing its choice; its menu names the option and offers the others (defaults as approved)
+            rowStack.addArrangedSubview(choice("What moves", [("Everything below", InsertSpace.Moves.everything), ("Only this column", .column)],
+                                               tools.spaceMoves) { tools.spaceMoves = $0 })
+            rowStack.addArrangedSubview(choice("On a PDF page", [("Open up the page", true), ("Between pages only", false)],
+                                               tools.spaceOpensPage) { tools.spaceOpensPage = $0 })
+            rowStack.addArrangedSubview(choice("Direction", [("Follow my drag", InsertSpace.Direction.follow), ("Down only", .down)],
+                                               tools.spaceDirection) { tools.spaceDirection = $0 })
+            rowStack.addArrangedSubview(choice("Size", [("Snap to the background", InsertSpace.Size.snap), ("Free", .free)],
+                                               tools.spaceSize) { tools.spaceSize = $0 })
+            rowStack.addArrangedSubview(choice("Closing space", [("Stop at content", InsertSpace.Closing.stopAtContent), ("Free", .free)],
+                                               tools.spaceClosing, show: { "Closing: " + $0 }) { tools.spaceClosing = $0 })
+            rowStack.addArrangedSubview(choice("Tap without dragging", [("Half a screen", InsertSpace.Tap.half), ("Three lines", .threeLines),
+                                                                         ("A full screen", .full), ("Nothing", .nothing)],
+                                               tools.spaceTap, show: { "Tap: " + $0.lowercased() }) { tools.spaceTap = $0 })
+            rowStack.addArrangedSubview(choice("After one use", [("Back to the pen", InsertSpace.After.pen), ("Stay on Insert space", .stay)],
+                                               tools.spaceAfter) { tools.spaceAfter = $0 })
         } else if t == .text {
             rowStack.addArrangedSubview(label("Tap where you want to type."))
         } else if t == .lasso {
-            rowStack.addArrangedSubview(label("Circle ink to move it. Tap a block, picture or shape to pick it."))
+            rowStack.addArrangedSubview(label("Circle ink to move it. Touch and hold ink to attach it to the words beside it."))
         } else if t == .hand {
-            rowStack.addArrangedSubview(label("The Pencil scrolls and picks things; nothing is drawn."))
+            rowStack.addArrangedSubview(label(Device.isPhone ? "Your finger scrolls and picks things; nothing is drawn." : "The Pencil scrolls and picks things; nothing is drawn."))
         }
     }
 
