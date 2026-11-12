@@ -75,7 +75,8 @@ public final class RichWords: @unchecked Sendable {
 
     /// A .jsonl's words, as the block holds them; nil when it can't be read.
     public func words(_ jsonl: String) -> String? {
-        guard let r = call("words", [jsonl]), r["ok"] as? Bool == true else { return nil }
+        // only a doc: its first line is the header object (a stray plain file under the name is not read as one)
+        guard header(jsonl)?["format"]?.string != nil, let r = call("words", [jsonl]), r["ok"] as? Bool == true else { return nil }
         return r["md"] as? String
     }
 
