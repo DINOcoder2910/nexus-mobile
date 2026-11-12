@@ -56,6 +56,8 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     var poll: Timer?
     let live = LiveState()
     var strokeCount = 0
+    /// The stroke you wrote last (board coordinates) and when: the tutor's point and ask (circle something, then ask about "this").
+    var lastStroke: (box: CGRect, at: Date, asked: Bool)?
     var drag: Drag?
     // typing (BoardController+Writing.swift)
     var writing: WritingSession?
@@ -460,7 +462,10 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
         if shifting { return }
         let n = canvas.drawing.strokes.count
-        if n == strokeCount + 1 { strokeLanded() }
+        if n == strokeCount + 1 {
+            strokeLanded()
+            if !tutorIsBusy, let k = canvas.drawing.strokes.last { lastStroke = (k.renderBounds.offsetBy(dx: -offset.x, dy: -offset.y), Date(), false) }
+        }
         strokeCount = canvas.drawing.strokes.count
         recordingDrawingChanged()
         if selected != nil { selected = nil }

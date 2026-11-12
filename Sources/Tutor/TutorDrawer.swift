@@ -133,8 +133,15 @@ final class TutorDrawer {
 
     // MARK: one step
 
-    func draw(_ s: TutorStep) async {
-        guard s.on != "screen", !board.readOnly else { return }
+    func draw(_ raw: TutorStep) async {
+        guard raw.on != "screen", !board.readOnly else { return }
+        // your turn (the laptop's tutorboard.js): what to do, written in blue where the next line would go; the student writes under it
+        var s = raw
+        if raw.type == "yourturn" {
+            let ask = (raw.ask ?? "").replacingOccurrences(of: #"^(?i)your turn:?\s*"#, with: "", options: .regularExpression)
+            guard let note = TutorSteps.normalize(.object([("type", .string("text")), ("text", .string("✎ **Your turn:** " + ask)), ("color", .string("blue"))])) else { return }
+            s = note
+        }
         steps.append(s)
         var res: Drawn?
         switch s.type {
