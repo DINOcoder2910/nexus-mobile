@@ -10,13 +10,23 @@ import { MOL_CSS } from 'nexus/app/studymolpage.js';
 import { h } from 'nexus/ui.js';
 
 // ---- maths: KaTeX into #out, its box measured for the app's snapshot
-window.nexusMath = async (tex, display, size, color) => {
+// maxW, maxH: the part of the page the app can photograph (on screen). A formula bigger than that is laid out smaller to fit, and `k` says
+// by how much, so the app scales the photograph back up to the size asked for.
+window.nexusMath = async (tex, display, size, color, maxW, maxH) => {
   const out = document.getElementById('out');
-  out.style.fontSize = size + 'px'; out.style.color = color || '#000';
+  out.style.color = color || '#000';
+  const lay = async (px) => {
+    out.style.fontSize = px + 'px';
+    await document.fonts.ready; // the fonts this formula uses load now; measure once they're in
+    return out.getBoundingClientRect();
+  };
   try { out.innerHTML = katex.renderToString(String(tex), { displayMode: !!display, throwOnError: true, strict: 'ignore' }); } catch (e) { out.innerHTML = ''; return { ok: false, error: String(e && e.message || e) }; }
-  await document.fonts.ready; // the fonts this formula uses load now; measure once they're in
-  const r = out.getBoundingClientRect();
-  return { ok: true, x: r.left, y: r.top, w: Math.ceil(r.width), h: Math.ceil(r.height) };
+  let r = await lay(size), k = 1;
+  if (maxW > 0 && maxH > 0 && (r.width > maxW || r.height > maxH)) {
+    k = Math.min(maxW / r.width, maxH / r.height) * 0.98;
+    r = await lay(size * k);
+  }
+  return { ok: true, x: r.left, y: r.top, w: Math.ceil(r.width), h: Math.ceil(r.height), k };
 };
 window.nexusFontsReady = () => document.fonts.ready.then(() => true);
 

@@ -36,6 +36,9 @@ final class WebRender: NSObject, WKNavigationDelegate {
             w.backgroundColor = .clear
             w.scrollView.backgroundColor = .clear
             w.scrollView.isScrollEnabled = false
+            // the page starts at the view's top left: no room kept for the status bar, or the photograph's rect misses the formula's bottom
+            w.scrollView.contentInsetAdjustmentBehavior = .never
+            w.scrollView.contentInset = .zero
             w.isUserInteractionEnabled = false
             w.accessibilityElementsHidden = true
             w.navigationDelegate = self
@@ -46,12 +49,22 @@ final class WebRender: NSObject, WKNavigationDelegate {
         return await withCheckedContinuation { waiting.append($0) }
     }
 
-    /// The web view only paints inside a window: it sits behind everything in the key window, covered by the app.
+    /// The web view only paints inside a window: it sits behind everything in the key window, covered by the app, the window's size.
     private func host(_ w: WKWebView) {
-        guard w.window == nil else { return }
+        if let win = w.window {
+            if w.frame != win.bounds { w.frame = win.bounds }
+            return
+        }
         let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
         guard let win = scenes.flatMap(\.windows).first(where: \.isKeyWindow) ?? scenes.first?.windows.first else { return }
+        w.frame = win.bounds
         win.insertSubview(w, at: 0)
+    }
+
+    /// The room a formula has in the web view (its on-screen part, less a margin).
+    func room(_ w: WKWebView) -> CGSize {
+        let b = w.window.map { w.convert(w.bounds, to: $0).intersection($0.bounds) } ?? w.bounds
+        return CGSize(width: max(100, b.width - 16), height: max(100, b.height - 16))
     }
 
     nonisolated func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -104,8 +117,11 @@ final class MathRender {
         let pt = MathRender.step(size), css = MathRender.css(color)
         let t = Task { @MainActor () -> UIImage? in
             await WebRender.shared.run { (web: WKWebView) -> UIImage? in
-                guard let r = try? await web.callAsyncJavaScript("return await window.nexusMath(tex, display, size, color)",
-                                                               arguments: ["tex": tex, "display": display, "size": Double(pt), "color": css],
+                // only what is on screen is painted, so the formula must fit the web view's part of the window
+                let room = WebRender.shared.room(web)
+                guard let r = try? await web.callAsyncJavaScript("return await window.nexusMath(tex, display, size, color, maxW, maxH)",
+                                                               arguments: ["tex": tex, "display": display, "size": Double(pt), "color": css,
+                                                                           "maxW": Double(room.width), "maxH": Double(room.height)],
                                                                in: nil, contentWorld: .page) as? [String: Any] else { return nil }
                 guard (r["ok"] as? Bool) == true else { self.bad.insert((display ? "D" : "I") + tex); return nil }
                 let w = (r["w"] as? Double) ?? 0, h = (r["h"] as? Double) ?? 0
@@ -113,6 +129,9 @@ final class MathRender {
                 let cfg = WKSnapshotConfiguration()
                 cfg.rect = CGRect(x: (r["x"] as? Double) ?? 0, y: (r["y"] as? Double) ?? 0, width: w, height: h)
                 cfg.afterScreenUpdates = true
+                // laid out smaller to fit: photographed at the size asked for
+                let k = (r["k"] as? Double) ?? 1
+                if k < 0.999 { cfg.snapshotWidth = NSNumber(value: w / k) }
                 return try? await web.takeSnapshot(configuration: cfg)
             }
         }
