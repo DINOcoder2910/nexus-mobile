@@ -96,7 +96,7 @@ final class TutorTests: XCTestCase {
         XCTAssertEqual(TutorSteps.resolveTarget(.point(1, 2), look, frame: [5, 5]), TutorBox(6, 7, 0, 0))
         XCTAssertEqual(TutorSteps.placeBlock(.point(10, 10), size: [50, 20], look, frame: [100, 0]), [110, 10])
         XCTAssertEqual([TutorPlace.beside("below", "eq1", gap: nil), .beside("right", "eq1", gap: 10), .beside("above", "eq1", gap: nil), .beside("left", "eq1", gap: nil)]
-            .map { TutorSteps.placeBlock($0, size: [50, 20], look) }, [[100, 164], [310, 100], [100, 56], [26, 100]])
+            .map { TutorSteps.placeBlock($0, size: [50, 20], look) }, [[100, 164], [310, 110], [100, 56], [26, 110]], "a note beside a line is level with its middle")
         XCTAssertEqual(TutorSteps.placeBlock(nil, size: [50, 20], look, flow: [7, 9]), [7, 9])
         XCTAssertEqual(TutorSteps.placeBlock(.beside("below", "nope", gap: nil), size: [50, 20], look, flow: [7, 9]), [7, 9])
         let t = TutorSteps.estimateSize(step(#"{"type":"text","text":"a short line"}"#)!)
@@ -164,7 +164,7 @@ final class TutorTests: XCTestCase {
         XCTAssertEqual(c[36].map { TutorSteps.jsRound($0 * 1000) / 1000 }, [66.793, 75.325])
         let g = TutorDraw.graphPlan(step(#"{"type":"graph","fns":[{"fn":"x^2-3","label":"y"}],"x":[-4,4],"points":[[0,-3,"min"]]}"#)!, box: TutorBox(0, 0, 320, 220))
         XCTAssertEqual(g.lines.count, 22)
-        XCTAssertEqual(g.labels.map(\.text), ["−4", "−3", "−2", "−1", "1", "2", "3", "−4", "−2", "2", "4", "6", "8", "10", "12", "0", "y", "min"])
+        XCTAssertEqual(g.labels.map(\.text), ["−4", "−3", "−2", "1", "2", "3", "−4", "−2", "2", "4", "6", "8", "10", "12", "0", "y", "min"])
         XCTAssertEqual(g.yRange[0], -4.51, accuracy: 1e-9)
         XCTAssertEqual(g.yRange[1], 13.73, accuracy: 1e-9)
         XCTAssertNil(g.error)
@@ -201,11 +201,12 @@ final class TutorTests: XCTestCase {
         // a side of a block as a target
         XCTAssertEqual(step(#"{"type":"point","target":{"of":"eq1","side":"top"}}"#)!.target, .of("eq1", side: "top", dx: nil, dy: nil))
         XCTAssertEqual(TutorSteps.resolveTarget(.of("eq1", side: "top", dx: nil, dy: nil), { _ in TutorBox(0, 0, 100, 40) }), TutorBox(50, 0, 0, 0))
-        // resolving inside: the words found, else the whole block; a graph point
+        // resolving inside: the words found (or nothing); a graph point
         let look = TutorLookup(get: { ["eq1": TutorBox(100, 100, 200, 40), "g1": TutorBox(0, 0, 380, 260)][$0] },
                                part: { _, t in t == "x" ? TutorBox(150, 110, 10, 20) : nil }, graphAt: { _, p in [p[0] * 10, p[1] * 10] })
         XCTAssertEqual([TutorInside(id: "eq1", part: "x"), TutorInside(id: "eq1", part: "zz"), TutorInside(id: "g1", at: [2, 3]), TutorInside(id: "nope", part: "x")]
-            .map { TutorSteps.resolveTarget(.inside($0), look) }, [TutorBox(150, 110, 10, 20), TutorBox(100, 100, 200, 40), TutorBox(20, 30, 0, 0), nil])
+            .map { TutorSteps.resolveTarget(.inside($0), look) }, [TutorBox(150, 110, 10, 20), nil, TutorBox(20, 30, 0, 0), nil], "words not in the block: nothing, not the whole block")
+        XCTAssertEqual(TutorSteps.insideBox(TutorInside(id: "eq1", part: "zz"), TutorLookup(get: look.get)), TutorBox(100, 100, 200, 40), "without a part finder: the whole block")
         var ln = TutorStep(type: "line"); ln.from = .inside(TutorInside(id: "eq1", part: "x")); ln.to = .point(155, 300)
         let e = TutorSteps.resolveEnds(ln, look)!
         XCTAssertEqual([r(e.0), r(e.1)], [[155, 133], [155, 300]], "a line from inside a block aims from the words' edge")
@@ -299,6 +300,66 @@ final class TutorTests: XCTestCase {
         XCTAssertEqual(two.geom.y[1], 5.38, accuracy: 1e-9)
         XCTAssertEqual(TutorDraw.graphPoint(two.geom, [1, 3]).map { TutorSteps.jsRound($0 * 1000) / 1000 }, [226.167, 71.945])
         XCTAssertEqual(TutorDraw.graphPoint(two.geom, [two.geom.x[0], two.geom.y[0]]), [two.geom.X0, two.geom.Y1], "a graph's corner is the plot's")
+    }
+
+    /// The laptop's third review (nexus a34f457): colours in maths, graphs drawn into, dashed curves, true circles, nested angles, notes
+    /// level with their line, a far point no lower than just under the ink.
+    func testColoursCurvesAndCirclesMatchTheLaptop() {
+        let tex = [#"a + \color{blue}{u} + b"#, #"\color{red} x"#, #"\textcolor{green}{y}"#, #"\color { #a1b2c3 } {z}"#, #"\color{teal}{w}"#, #"\textcolor{blue} q"#]
+        let want = [#"a + \textcolor{#1F5FD1}{u} + b"#, #"\color{#D93025} x"#, #"\textcolor{#188038}{y}"#, #"\textcolor{#A1B2C3}{z}"#, #"\textcolor{teal}{w}"#, #"\textcolor{#1F5FD1} q"#]
+        XCTAssertEqual(tex.map(TutorSteps.texColors), want)
+        XCTAssertEqual(tex.map { TutorSteps.normalize(.object([("type", .string("math")), ("tex", .string("$" + $0 + "$"))]))?.tex }, want)
+        XCTAssertEqual(step(#"{"type":"text","text":"see $\\color{red}{x}$ and \\color{red}"}"#)!.text, #"see $\textcolor{#D93025}{x}$ and \color{red}"#, "only maths in a text block")
+        XCTAssertEqual(step(#"{"type":"text","text":"a $$\\color{blue}{u}$$ b $\\color{green}{v}$"}"#)!.text, #"a $$\textcolor{#1F5FD1}{u}$$ b $\textcolor{#188038}{v}$"#)
+        // a graph drawn into another: no place of its own; a dashed curve
+        let gin = step(#"{"type":"graph","in":"g1","fns":[{"fn":"x","dash":true},{"fn":"x+1","dash":"yes"}],"at":[1,2],"w":300,"h":200}"#)!
+        XCTAssertEqual(gin.into, "g1")
+        XCTAssertNil(gin.at); XCTAssertNil(gin.w); XCTAssertNil(gin.h)
+        XCTAssertEqual(gin.fns.map(\.dash), [true, false])
+        XCTAssertEqual(step(#"{"type":"graph","in":"$last","fn":"x"}"#)!.into, "last")
+        let bad = step(#"{"type":"graph","in":"bad id","fn":"x","at":[1,2]}"#)!
+        XCTAssertNil(bad.into); XCTAssertEqual(bad.at, .point(1, 2))
+        // a true circle: its centre and radius
+        let c = step(#"{"type":"circle","at":[100,50],"r":40}"#)!
+        XCTAssertEqual(c.vertex, .point(100, 50)); XCTAssertEqual(c.r, 40)
+        XCTAssertNil(c.target)
+        let c2 = step(#"{"type":"circle","at":"eq1","r":4000,"label":"O","brief":true}"#)!
+        XCTAssertEqual(c2.vertex, .id("eq1")); XCTAssertEqual(c2.r, 2000); XCTAssertTrue(c2.brief)
+        let c3 = step(#"{"type":"circle","at":[1,2],"r":5,"target":"eq1"}"#)!
+        XCTAssertEqual(c3.target, .id("eq1")); XCTAssertNil(c3.r)
+        for raw in [#"{"type":"circle","at":[1,2],"r":0}"#, #"{"type":"circle","r":5}"#] {
+            XCTAssertEqual(problem(raw), #"circle needs target: an id, [x, y, w, h], [x, y] or {"in": id, "part"|"at": ...}"#)
+        }
+        // placing: beside a tall picture, level with its top; a far point no lower than just under the ink
+        let boxes = ["eq1": TutorBox(100, 100, 200, 40), "g1": TutorBox(100, 300, 320, 220)]
+        XCTAssertEqual(TutorSteps.placeBlock(.beside("right", "g1", gap: nil), size: [50, 10], { boxes[$0] }), [444, 300])
+        XCTAssertEqual([(900.0, 400.0), (900, 50), (300, 400)].map { TutorSteps.placeBlock(.point(0, $0.0), size: [100, 40], { _ in nil }, flow: [0, 100], low: $0.1) },
+                       [[0, 448], [0, 148], [0, 300]])
+        // a second angle at a corner: a wider arc
+        let m = TutorDraw.angleLines([10, 10], [80, 10], [60, -40], more: 10)
+        XCTAssertEqual(m.lines[0].count, 9)
+        XCTAssertEqual(m.lines[0].last!.map { TutorSteps.jsRound($0 * 1000) / 1000 }, [35.456, -15.456])
+        XCTAssertEqual(m.label.map { TutorSteps.jsRound($0 * 1000) / 1000 }, [56.194, -9.134])
+        let rm = TutorDraw.angleLines([0, 0], [50, 0], [0, -50], right: true, more: 10)
+        XCTAssertEqual(rm.lines, [[[26, 0], [26, -26], [0, -26]]])
+        XCTAssertEqual(rm.label.map { TutorSteps.jsRound($0 * 1000) / 1000 }, [35.822, -35.822])
+        // more curves drawn into a graph: its axes and ranges, no axes or ticks again, colours on from its curves
+        let base = TutorDraw.graphPlan(step(#"{"type":"graph","fns":[{"fn":"x^2","label":"y = x²"}],"x":[-3,3],"y":[-2,9]}"#)!, box: TutorBox(0, 0, 380, 260))
+        XCTAssertEqual([base.lines.count, base.labels.count], [16, 12])
+        XCTAssertEqual(base.geom, TutorDraw.GraphGeom(X0: 30, X1: 368, Y0: 10, Y1: 238, x: [-3, 3], y: [-2, 9], curves: 1))
+        let into = TutorDraw.graphPlan(step(#"{"type":"graph","in":"g1","fns":[{"fn":"2x-1","label":"tangent"},{"fn":"-x","dash":true}],"points":[[1,1,"(1, 1)"]]}"#)!,
+                                       box: TutorBox(999, 999, 10, 10), into: base.geom)
+        XCTAssertEqual(into.lines.count, 23)
+        XCTAssertEqual(into.lines.prefix(4).map { "\($0.color) \($0.width) \($0.points.count)" }, ["#D93025 2.5 145", "#188038 2.0 7", "#188038 2.0 8", "#188038 2.0 8"])
+        XCTAssertEqual(into.lines.last!.color, "#D93025")
+        assertLabels(into.labels, [("tangent", 356.367, 73.055, "right", "#D93025"), ("(1, 1)", 248.333, 155.618, "right", "#D93025")])
+        XCTAssertEqual(into.geom, TutorDraw.GraphGeom(X0: 30, X1: 368, Y0: 10, Y1: 238, x: [-3, 3], y: [-2, 9], curves: 3))
+        let dash = TutorDraw.graphPlan(step(#"{"type":"graph","fns":[{"fn":"x","dash":true}],"x":[-3,3],"y":[-3,3]}"#)!, box: TutorBox(0, 0, 380, 260))
+        let dl = dash.lines.filter(\.curve)
+        XCTAssertEqual([dash.lines.count, dl.count], [44, 28])
+        XCTAssertEqual(dl[0].points.map { $0.map { TutorSteps.jsRound($0 * 1000) / 1000 } }, [[30, 238], [31.408, 237.05], [32.817, 236.1], [34.225, 235.15], [35.633, 234.2], [37.042, 233.25], [37.461, 232.967]])
+        XCTAssertEqual(dl[0].width, 2)
+        XCTAssertEqual(dl.last!.points.last!, [368, 10])
     }
 
     // MARK: reading a reply

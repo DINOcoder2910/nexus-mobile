@@ -71,6 +71,19 @@ public enum TutorSteps {
         return nil
     }
 
+    static let texColor = try! NSRegularExpression(pattern: #"\\(color|textcolor)\s*\{\s*([A-Za-z]+|#[0-9a-fA-F]{6})\s*\}(\s*\{)?"#)
+    static let dollarRun = try! NSRegularExpression(pattern: #"\$\$?[^$]+\$\$?"#)
+    /// Colours in TeX as the board's: \color{blue}{u} -> \textcolor{#1F5FD1}{u} (KaTeX's \color is a switch: the rest of the line took
+    /// the colour) and a named colour as the board's own (KaTeX's pure blue turned near-white on the dark board).
+    public static func texColors(_ tex: String) -> String {
+        TutorDraw.replace(texColor, in: tex) { g in
+            let hex = color(of: .string(g[2] ?? "")) ?? (g[2] ?? ""), open = g[3] != nil
+            return open || g[1] == "textcolor" ? "\\textcolor{" + hex + "}" + (open ? "{" : "") : "\\color{" + hex + "}"
+        }
+    }
+    /// The same inside a text block's $…$.
+    static func textColors(_ t: String) -> String { TutorDraw.replace(dollarRun, in: t) { g in texColors(g[0] ?? "") } }
+
     /// An id, or "$last" (the block drawn last) as "last".
     static func idOf(_ v: JSONValue?) -> String? {
         guard let s = v?.string else { return nil }
@@ -170,21 +183,21 @@ public enum TutorSteps {
         switch type {
         case "text":
             guard let text = str(raw["text"], 2000) else { return bad("text needs text") }
-            s.text = text
+            s.text = textColors(text)
             if let size = sizeOf(raw["size"]), size != sizes["normal"]! { s.size = size }
         case "math":
             guard let tex = str(raw["tex"], 600) else { return bad("math needs tex") }
             let t = tex.trimmingCharacters(in: .whitespacesAndNewlines)
                 .replacingOccurrences(of: #"^\$+|\$+$"#, with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
             guard !t.isEmpty else { return bad("math needs tex") }
-            s.tex = t
+            s.tex = texColors(t)
             if let size = sizeOf(raw["size"]), size != mathSize { s.size = size }
         case "graph":
             let list: [JSONValue] = raw["fn"]?.string != nil ? [.object([("fn", raw["fn"]!)])] : (raw["fns"]?.array ?? [])
             s.fns = list.prefix(6).compactMap { f -> TutorFn? in
                 let o: JSONValue = f.string != nil ? .object([("fn", f)]) : f
                 guard let fn = str(o["fn"], 200) else { return nil }
-                return TutorFn(fn: String(fn.prefix(200)), color: color(of: o["color"]), label: str(o["label"], 40))
+                return TutorFn(fn: String(fn.prefix(200)), color: color(of: o["color"]), label: str(o["label"], 40), dash: o["dash"]?.bool == true)
             }
             s.graphPoints = (raw["points"]?.array ?? []).prefix(40).compactMap { p -> TutorGraphPoint? in
                 guard let a = p.array, a.count >= 2, let x = num(a[0]), let y = num(a[1]) else { return nil }
@@ -199,6 +212,7 @@ public enum TutorSteps {
             s.xLabel = str(raw["xLabel"], 40)
             s.yLabel = str(raw["yLabel"], 40)
             if let h = num(raw["h"]), h >= 40 { s.h = r2(min(h, 2000)) }
+            if let g = idOf(raw["in"]) { s.into = g; s.at = nil; s.w = nil; s.h = nil } // (more curves or points on graph `in`, in its axes)
         case "chem":
             let kind = raw["kind"]?.string?.lowercased() ?? ""
             guard chemKinds.contains(kind) else { return bad("chem needs kind: " + chemKinds.joined(separator: ", ")) }
@@ -235,6 +249,8 @@ public enum TutorSteps {
         case "erase":
             guard let t = raw["target"]?.string, isId(t) else { return bad("erase needs target: an earlier step id") }
             s.target = .id(t)
+        case "circle" where (raw["target"] == nil || raw["target"] == .null) && (num(raw["r"]) ?? 0) > 0 && pos(raw["at"]) != nil:
+            s.vertex = pos(raw["at"]); s.r = r2(min(num(raw["r"])!, 2000)) // (a true circle: its centre and radius, for a diagram)
         default: // the marks
             guard let t = target(raw["target"]) else { return bad(type + " needs target: an id, [x, y, w, h], [x, y] or {\"in\": id, \"part\"|\"at\": ...}") }
             s.target = t
@@ -280,10 +296,11 @@ public enum TutorSteps {
         return k >= 1 ? p : [c[0] + dx * k, c[1] + dy * k]
     }
     /// A place inside a block -> its box on the board: the words' box (`lookup.part`, the drawer's: it finds them in the drawn block;
-    /// else the whole block), or the graph point's ([x, y, 0, 0], `lookup.graphAt`). nil when the block is unknown.
+    /// nil when they are not there; without a `lookup.part`, the whole block), or the graph point's ([x, y, 0, 0], `lookup.graphAt`). nil
+    /// when the block is unknown.
     public static func insideBox(_ p: TutorInside, _ lookup: TutorLookup) -> TutorBox? {
         guard let b = lookup.get(p.id) else { return nil }
-        if let part = p.part { return lookup.part?(p.id, part) ?? b }
+        if let part = p.part { return lookup.part.map { $0(p.id, part) } ?? b } // (not found in it: nothing, not the whole block)
         if let at = p.at {
             guard let q = lookup.graphAt?(p.id, at) else { return nil }
             return TutorBox(q[0], q[1], 0, 0)
@@ -347,19 +364,21 @@ public enum TutorSteps {
         withoutActuallyEscaping(lookup) { f in resolveTarget(t, TutorLookup(get: f), frame: frame) }
     }
     /// A block's top-left. size: [w, h]; flow: where the next block goes when `at` is left out (the left edge and the bottom of the
-    /// last block, frame included).
-    public static func placeBlock(_ at: TutorPlace?, size: [Double], _ lookup: (String) -> TutorBox?, frame: [Double] = [0, 0], flow: [Double]? = nil) -> [Double] {
+    /// last block, frame included); low: the bottom of the ink drawn so far.
+    public static func placeBlock(_ at: TutorPlace?, size: [Double], _ lookup: (String) -> TutorBox?, frame: [Double] = [0, 0], flow: [Double]? = nil, low: Double? = nil) -> [Double] {
         switch at {
         // (a point far below everything drawn so far is a board-wide y meant for an earlier turn: no empty band before it)
-        case .point(let x, let y)?: return [x + frame[0], flow.map { min(y + frame[1], $0[1] + 2 * gap) } ?? y + frame[1]]
+        case .point(let x, let y)?: return [x + frame[0], flow.map { min(y + frame[1], max($0[1], low ?? -.infinity) + 2 * gap) } ?? y + frame[1]]
         case .beside(let rel, let id, let g)?:
             if let b = lookup(id) {
                 let gp = g ?? gap
                 switch rel {
                 case "below": return [b.x, b.y + b.h + gp]
                 case "above": return [b.x, b.y - gp - size[1]]
-                case "right": return [b.x + b.w + gp, b.y]
-                default: return [b.x - gp - size[0], b.y]
+                default:
+                    // (a note beside a line is level with its middle; beside a picture, with its top)
+                    let y = b.h <= max(80, size[1] * 1.6) ? b.y + (b.h - size[1]) / 2 : b.y
+                    return rel == "right" ? [b.x + b.w + gp, y] : [b.x - gp - size[0], y]
                 }
             }
         case nil: break
@@ -445,15 +464,17 @@ Every step may have "id" (letters, digits, _ or -; give one to anything you will
 Blocks (have a size). "at" is the top-left [x, y], or {"below"|"above"|"right"|"left": "<id>"}; leave "at" out to go below the block before.
 - {"type":"text","text":"markdown","size":"small|normal|large|huge","w":300}
 - {"type":"math","tex":"\\Delta H = \\sum \\Delta H_f(\\text{products}) - \\sum \\Delta H_f(\\text{reactants})"}  (LaTeX, no $; chemical symbols upright: \\mathrm{Zn^{2+}})
-- {"type":"graph","fns":[{"fn":"x^2-3","label":"y = x² − 3"}],"x":[-4,4],"y":[-4,10],"points":[[0,-3,"min"]],"xLabel":"x","yLabel":"y","w":320,"h":220}  (fn uses x, + - * / ^, sin cos tan exp ln log sqrt abs, pi, e)
-- {"type":"chem","kind":"lewis","molecule":"H2O"}, {"type":"chem","kind":"vsepr","molecule":"NH3"} (or "bp":3,"lp":1), {"type":"chem","kind":"cycle","compound":"NaCl"}  (Nexus's own chemistry diagrams)
+- {"type":"graph","fns":[{"fn":"x^2-3","label":"y = x² − 3"}],"x":[-4,4],"y":[-4,10],"points":[[0,-3,"min"]],"xLabel":"x","yLabel":"y","w":320,"h":220}  (fn uses x, + - * / ^, sin cos tan exp ln log sqrt abs, pi, e; "dash":true in a fn for a dashed curve). About 380 by 260 unless w and h say.
+- {"type":"graph","in":"g1","fns":[{"fn":"2x-1","label":"tangent"}],"points":[[1,1,"(1, 1)"]]}  (adds curves or points to graph g1, in its axes; never draw a second graph to add a curve)
+- {"type":"chem","kind":"lewis","molecule":"H2O"}, {"type":"chem","kind":"vsepr","molecule":"NH3"} (or "bp":3,"lp":1), {"type":"chem","kind":"cycle","compound":"NaCl"}  (Nexus's own chemistry diagrams; about lewis 260 wide, vsepr 200, cycle 600 by 340: leave them that room)
 Ink. A position is [x, y], an id (the edge of that thing facing the other end), or {"of":"<id>","side":"top|bottom|left|right|center|topleft|...","dx":0,"dy":0}.
 - {"type":"arrow","from":"eq1","to":"g1","bend":0.3,"label":"gives"}  (bend -1..1 curves it; "both":true for a double arrow)
 - {"type":"line","from":[0,40],"to":[200,40],"dash":true}
 - {"type":"path","points":[[0,0],[30,-20],[60,0]],"closed":false}  (a freehand curve through the points; a closed path has straight sides unless "smooth":true)
-- {"type":"circle"|"box"|"underline"|"highlight"|"point","target":"eq1"}  (target: an id, [x, y, w, h] or [x, y])
+- {"type":"circle"|"box"|"underline"|"highlight"|"point","target":"eq1"}  (target: an id, [x, y, w, h] or [x, y]; a box or circle round a coloured block takes its colour)
+- {"type":"circle","at":[150,150],"r":120}  (a true circle in a diagram, by its centre and radius)
 - {"type":"angle","at":[60,200],"from":[0,200],"to":[60,120],"right":true,"label":"θ"}  (at the corner, from and to a point along each side: a small square when "right":true, else an arc)
-Inside a block, as a target or a position: {"in":"eq1","part":"(x+3)"} (those symbols or words of a text or math block, as written in it) or {"in":"g1","at":[2,-1]} (a point of graph g1 in its own x, y numbers); "last" is the block drawn last.
+Inside a block, as a target or a position: {"in":"eq1","part":"(x+3)"} (those symbols or words of a text or math block, as written in it: plain characters and symbols like "9+32", "x^2", "\\pm", one fraction's top or bottom, never a whole \\frac{..}{..}) or {"in":"g1","at":[2,-1]} (a point of graph g1 in its own x, y numbers); "last" is the block drawn last.
 Gestures: "brief":true on a mark, arrow, line or angle shows it only while its sentence is said (a teacher pointing), then it goes; a point is always brief. Keep ink (no brief) for what should stay in the notes.
 - {"type":"point","target":{"in":"g1","at":[0,-3]}}  (a pointer to it while you say "this minimum")
 - {"type":"erase","target":"eq1"}  (takes an earlier step's drawing away)
@@ -527,6 +548,8 @@ public struct TutorFn: Equatable {
     public var fn: String
     public var color: String?
     public var label: String?
+    /// A dashed curve.
+    public var dash = false
 }
 
 public struct TutorGraphPoint: Equatable {
@@ -572,8 +595,12 @@ public struct TutorStep: Equatable {
     public var smooth: Bool?
     public var target: TutorTarget?
     public var width: Double?
-    /// An angle's corner (its `at`), and whether it is a right angle.
+    /// An angle's corner or a true circle's centre (their `at`), and whether the angle is a right angle.
     public var vertex: TutorPos?
+    /// A true circle's radius (a circle with `at` and `r`, no target).
+    public var r: Double?
+    /// A graph's: the graph it adds curves and points to (its `in`).
+    public var into: String?
     public var right = false
     /// A gesture: shown while its sentence is said, then gone (a point is one unless it says not).
     public var brief = false

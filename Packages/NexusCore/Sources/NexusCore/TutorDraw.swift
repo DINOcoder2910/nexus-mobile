@@ -279,10 +279,11 @@ public enum TutorDraw {
 
     /// An angle at corner `at` between the sides toward `from` and `to`: a small square for a right angle, else an arc across the smaller
     /// angle. -> lines (polylines) and where its label goes (on the bisector, outside the mark).
-    public static func angleLines(_ at: [Double], _ from: [Double], _ to: [Double], right: Bool = false, r rr: Double? = nil) -> (lines: [[[Double]]], label: [Double]) {
+    /// more: extra radius (an angle already at this corner: a wider arc).
+    public static func angleLines(_ at: [Double], _ from: [Double], _ to: [Double], right: Bool = false, r rr: Double? = nil, more: Double = 0) -> (lines: [[[Double]]], label: [Double]) {
         func u(_ p: [Double]) -> [Double] { let d = dist(at, p) == 0 ? 1 : dist(at, p); return [(p[0] - at[0]) / d, (p[1] - at[1]) / d] }
         let a = u(from), b = u(to), short = min(dist(at, from), dist(at, to))
-        let r = rr ?? max(10, min(right ? 16 : 26, short * 0.4))
+        let r = (rr ?? max(10, min(right ? 16 : 26, short * 0.4))) + more
         var bis = [a[0] + b[0], a[1] + b[1]]
         let bl = hypot(bis[0], bis[1])
         bis = bl > 1e-6 ? [bis[0] / bl, bis[1] / bl] : [-a[1], a[0]]
@@ -461,6 +462,8 @@ public enum TutorDraw {
         public var X0, X1, Y0, Y1: Double
         public var x: [Double]
         public var y: [Double]
+        /// How many curves the graph has (more drawn into it take the next colours).
+        public var curves = 0
     }
 
     public struct GraphPlan {
@@ -495,13 +498,14 @@ public enum TutorDraw {
         [g.X0 + (p[0] - g.x[0]) / (g.x[1] - g.x[0]) * (g.X1 - g.X0), g.Y1 - (p[1] - g.y[0]) / (g.y[1] - g.y[0]) * (g.Y1 - g.Y0)]
     }
 
-    /// A graph step drawn in its box on the board.
-    public static func graphPlan(_ step: TutorStep, box: TutorBox) -> GraphPlan {
+    /// A graph step drawn in its box on the board. into: a graph already drawn (its geom) to draw into: its axes and ranges, only the new
+    /// curves, points and labels, coloured on from its `curves`.
+    public static func graphPlan(_ step: TutorStep, box: TutorBox, into: GraphGeom? = nil) -> GraphPlan {
         let xLabelW = step.xLabel.map { min(90, Double($0.utf16.count) * 13 * 0.55) + 8 } ?? 0 // (the x axis's name goes past its arrow head)
         let bx = box.x, by = box.y, bw = box.w, bh = box.h
         let padL = 30.0, padB = 22.0, padT = 10.0, padR = 12.0 + xLabelW
-        let X0 = bx + padL, X1 = bx + bw - padR, Y0 = by + padT, Y1 = by + bh - padB
-        let xa = step.xRange?[0] ?? -5, xb = step.xRange?[1] ?? 5
+        let X0 = into?.X0 ?? bx + padL, X1 = into?.X1 ?? bx + bw - padR, Y0 = into?.Y0 ?? by + padT, Y1 = into?.Y1 ?? by + bh - padB
+        let xa = into?.x[0] ?? step.xRange?[0] ?? -5, xb = into?.x[1] ?? step.xRange?[1] ?? 5
         var compiled: [(TutorFn, (Double) -> Double)] = []
         var errors: [String] = []
         for f in step.fns {
@@ -510,7 +514,7 @@ public enum TutorDraw {
         let N = 240
         let samples: [[[Double]]] = compiled.map { _, f in (0...N).map { k in let x = xa + (xb - xa) * Double(k) / Double(N); return [x, f(x)] } }
         var ya: Double, yb: Double
-        if let yr = step.yRange { ya = yr[0]; yb = yr[1] } else {
+        if let yr = into?.y ?? step.yRange { ya = yr[0]; yb = yr[1] } else {
             let ys = (samples.flatMap { $0.map { $0[1] } }.filter { $0.isFinite } + step.graphPoints.map(\.y)).sorted()
             if ys.isEmpty { ya = -5; yb = 5 } else {
                 let lo = ys[Int(floor(Double(ys.count) * 0.03))], hi = ys[max(0, Int(ceil(Double(ys.count) * 0.97)) - 1)]
@@ -526,6 +530,7 @@ public enum TutorDraw {
         let grey = "#6B6B6B", ink = "#1B1B1B"
         // axes: through 0 when 0 is in range, else along the edge; small arrow heads at the positive ends
         let ax = xa <= 0 && xb >= 0 ? sx(0) : X0, ay = ya <= 0 && yb >= 0 ? sy(0) : Y1
+        if into == nil {
         for l in arrowLines([X0 - 4, ay], [X1 + 8, ay], width: 1.5) { lines.append(Line(points: l, color: ink, width: 1.5, corners: true)) }
         for l in arrowLines([ax, Y1 + 4], [ax, Y0 - 6], width: 1.5) { lines.append(Line(points: l, color: ink, width: 1.5, corners: true)) }
         // ticks; a trig graph's x axis in steps of π/2 (π, 2π when that is too many)
@@ -546,6 +551,7 @@ public enum TutorDraw {
             if abs(v) < tx / 2 && ax == sx(0) { continue }
             let t = xfmt(v), X = sx(v)
             if !room(lastX, X, Double(t.utf16.count) * TICK * 0.6 + 8) || X > X1 - 4 { continue } // (none under the arrow head)
+            if ax == sx(0) && ay == sy(0) && X < ax && X + Double(t.utf16.count) * TICK * 0.3 > ax - 30 { continue } // (nor run into the 0 at the corner)
             labels.append(GraphLabel(text: t, x: X, y: ay + 5 + TICK * 0.7, size: TICK, color: grey, anchor: "center")); lastX = X
         }
         v = ceil(ya / ty) * ty
@@ -559,14 +565,23 @@ public enum TutorDraw {
         if ax == sx(0) && ay == sy(0) { labels.append(GraphLabel(text: "0", x: ax - 5, y: ay + 3, size: TICK, color: grey, anchor: "right")) }
         if let l = step.xLabel { labels.append(GraphLabel(text: l, x: X1 + 14, y: ay, size: 13, color: ink, anchor: "leftmid")) }
         if let l = step.yLabel { labels.append(GraphLabel(text: l, x: ax + 8, y: Y0 - 10, size: 13, color: ink, anchor: "left")) }
+        }
         // curves: split where they leave the range or jump (an asymptote)
         let cols = ["#1F5FD1", "#D93025", "#188038", "#8E44AD", "#C26A00", "#1B1B1B"]
         let slack = (yb - ya) * 0.02
-        func colorOf(_ k: Int) -> String { compiled[k].0.color ?? step.color ?? cols[k % cols.count] }
+        let offset = into?.curves ?? 0 // (curves the graph already has)
+        func colorOf(_ k: Int) -> String { compiled[k].0.color ?? step.color ?? cols[(k + offset) % cols.count] }
         for (k, pts) in samples.enumerated() {
             let color = colorOf(k)
             var run: [[Double]] = []
-            func flush() { if run.count > 1 { var l = Line(points: run, color: color, width: 2.5); l.curve = true; lines.append(l) }; run = [] }
+            func flush() {
+                if run.count > 1 {
+                    if compiled[k].0.dash {
+                        for d in dashes(densify(run, step: 2), on: 9, off: 6) { var l = Line(points: d, color: color, width: 2); l.curve = true; lines.append(l) }
+                    } else { var l = Line(points: run, color: color, width: 2.5); l.curve = true; lines.append(l) }
+                }
+                run = []
+            }
             for p in pts {
                 let x = p[0], y = p[1]
                 if !y.isFinite || y < ya - slack || y > yb + slack { flush(); continue }
@@ -621,6 +636,6 @@ public enum TutorDraw {
                               (P[0] - 7, P[1] + 3, "right", 0), (P[0] + 10, P[1] - h / 2, "left", 0), (P[0] - 10, P[1] - h / 2, "right", 0)])
         }
         return GraphPlan(lines: lines, labels: labels, error: errors.isEmpty ? nil : errors.joined(separator: "; "), xRange: [xa, xb], yRange: [ya, yb],
-                         geom: GraphGeom(X0: X0, X1: X1, Y0: Y0, Y1: Y1, x: [xa, xb], y: [ya, yb]))
+                         geom: GraphGeom(X0: X0, X1: X1, Y0: Y0, Y1: Y1, x: [xa, xb], y: [ya, yb], curves: (into?.curves ?? 0) + compiled.count))
     }
 }
