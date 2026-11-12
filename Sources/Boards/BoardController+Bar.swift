@@ -227,8 +227,9 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
                 self?.bar.refresh()
             }
         }
+        // the three dark-board choices at the top, one tap each (not a submenu)
         var items: [UIMenuElement] = [
-            UIMenu(title: "Dark board", image: UIImage(systemName: "moon"), children: dark),
+            UIMenu(title: "Dark board", options: .displayInline, children: dark),
             UIAction(title: "Fingers draw too", image: UIImage(systemName: "hand.draw"), state: tools.fingersDraw ? .on : .off) { [weak self] _ in
                 tools.fingersDraw.toggle()
                 self?.toolChanged()
