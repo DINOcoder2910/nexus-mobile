@@ -351,15 +351,15 @@ struct TutorPanel: View {
     private var chips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                Chip(title: "Hints only", symbol: tutor.hints ? "lightbulb.fill" : "lightbulb", on: tutor.hints,
+                TutorChip(title: "Hints only", symbol: tutor.hints ? "lightbulb.fill" : "lightbulb", on: tutor.hints,
                      label: tutor.hints ? "Hints only: on" : "Hints only: off") { tutor.hints.toggle() }
                 if tutor.yourTurn == nil {
-                    Chip(title: "Check my work", symbol: "checkmark.circle") { tutor.checkWork() }
-                    Chip(title: "Hint", symbol: "questionmark.bubble", label: "Give me a hint") { tutor.hint() }
+                    TutorChip(title: "Check my work", symbol: "checkmark.circle") { tutor.checkWork() }
+                    TutorChip(title: "Hint", symbol: "questionmark.bubble", label: "Give me a hint") { tutor.hint() }
                 }
-                Chip(title: "Try one", symbol: "square.and.pencil", label: "Try one") { tutor.practice() }
+                TutorChip(title: "Try one", symbol: "square.and.pencil", label: "Try one") { tutor.practice() }
                 if tutor.canReplay {
-                    Chip(title: "Replay", symbol: "play.rectangle", label: "Replay the explanations", action: onReplay)
+                    TutorChip(title: "Replay", symbol: "play.rectangle", label: "Replay the explanations", action: onReplay)
                 }
             }
             .padding(.horizontal, 1)
@@ -517,7 +517,7 @@ struct RoundButton: View {
 }
 
 /// One of the ways of asking.
-struct Chip: View {
+struct TutorChip: View {
     var title: String
     var symbol: String
     var on = false
