@@ -16,7 +16,6 @@ extension BoardController {
         }
     }
 
-    var deviceName: String { UserDefaults.standard.string(forKey: "sync.deviceName") ?? "iPad" }
 
     // MARK: where a mark is
 
