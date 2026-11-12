@@ -6,6 +6,7 @@ struct NexusMobileApp: App {
     @State private var store = NexusStore()
     @State private var sync = SyncService()
     @State private var calendar = CalendarStore()
+    @State private var reminders = ReminderCenter()
 
     var body: some Scene {
         WindowGroup {
@@ -13,8 +14,20 @@ struct NexusMobileApp: App {
                 .environment(store)
                 .environment(sync)
                 .environment(calendar)
+                .environment(reminders)
                 .tint(Theme.accent)
         }
+        // iOS wakes the app now and then: sync once, read the folder, and give iOS the reminders again
+        .backgroundTask(.appRefresh(ReminderCenter.refreshId)) { await refreshInBackground() }
+    }
+
+    @MainActor
+    private func refreshInBackground() async {
+        ReminderCenter.scheduleRefresh()
+        await sync.backgroundCycle(store)
+        store.reloadIfChanged()
+        if reminders.store == nil { reminders.attach(store, calendar) }
+        reminders.reschedule()
     }
 }
 
@@ -30,6 +43,7 @@ struct RootView: View {
     @Environment(NexusStore.self) private var store
     @Environment(SyncService.self) private var sync
     @Environment(CalendarStore.self) private var calendar
+    @Environment(ReminderCenter.self) private var reminders
     @Environment(\.scenePhase) private var phase
     @State private var screen: Screen? = .today
     @State private var columns = NavigationSplitViewVisibility.all
@@ -74,15 +88,26 @@ struct RootView: View {
                 store.reloadIfChanged()
                 calendar.refreshStatus()
                 sync.becameActive()
+                Task { await reminders.refreshStatus() }
             case .background:
                 sync.enteredBackground()
+                ReminderCenter.scheduleRefresh()
             default:
                 break
             }
         }
         .onChange(of: store.folder) { _, _ in sync.restart() }
+        // the reminders follow the files and the calendars
+        .onChange(of: store.snapshot.loadedAt) { _, _ in reminders.reschedule() }
+        .onChange(of: calendar.version) { _, _ in reminders.reschedule() }
+        .onChange(of: reminders.tappedTask) { _, id in
+            guard let id else { return }
+            reminders.tappedTask = nil
+            if store.task(id) != nil { store.openTaskId = id }
+        }
         .task {
             sync.attach(store)
+            reminders.attach(store, calendar)
             InkBoardMove.runIfNeeded(store)
             // Another writer (sync, the Files app) can change the folder at any time: look every few seconds while open,
             // and let sync send what changed.

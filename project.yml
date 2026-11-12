@@ -43,6 +43,10 @@ targets:
         # a class keeps recording when the screen locks or you switch apps
         UIBackgroundModes:
           - audio
+          # reminders: iOS wakes the app now and then to sync and schedule them again
+          - fetch
+        BGTaskSchedulerPermittedIdentifiers:
+          - app.nexus.mobile.refresh
         UISupportedInterfaceOrientations~ipad:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationPortraitUpsideDown
