@@ -53,6 +53,10 @@ struct RootView: View {
             }
         }
         .overlay(alignment: .bottom) { UndoBar().animation(.snappy, value: store.toast) }
+        .background {
+            AppShortcutKeys(enabled: store.openTaskId == nil && store.capture == nil && store.openBoard == nil,
+                            canRun: canRunShortcut, perform: runShortcut)
+        }
         .sheet(isPresented: Binding(get: { store.openTaskId != nil }, set: { if !$0 { store.openTaskId = nil } })) {
             if let id = store.openTaskId { TaskDetailView(taskId: id).id(id) }
         }
@@ -87,6 +91,41 @@ struct RootView: View {
                 try? await Task.sleep(for: .seconds(3))
                 if phase == .active, store.reloadIfChanged() { sync.wake() }
             }
+        }
+    }
+
+    // MARK: the iPad's app-wide keys (Settings › Shortcuts)
+
+    private func canRunShortcut(_ id: String) -> Bool {
+        switch id {
+        case "app.undo": return store.toast?.change != nil
+        case "app.newTask", "app.search", "app.newNotebook": return store.snapshot.isDataFolder
+        default: return true
+        }
+    }
+
+    private func runShortcut(_ id: String) {
+        func go(_ s: Screen) { screen = s }
+        switch id {
+        case "app.today": go(.today)
+        case "app.planner": go(.planner)
+        case "app.tasks": go(.tasks)
+        case "app.notebooks": go(.boardSearch); columns = .all
+        case "app.inbox": go(.inbox)
+        case "app.someday": go(.someday)
+        case "app.settings": go(.settings)
+        case "app.sidebar": columns = columns == .detailOnly ? .all : .detailOnly
+        case "app.newTask":
+            if case .workstream(let w) = screen { store.capture = .init(workstream: w, parent: nil, plan: nil) }
+            else { store.capture = .init(workstream: nil, parent: nil, plan: screen == .today ? store.today : nil) }
+        case "app.search":
+            ShortcutCenter.shared.searchPending = true
+            go(.tasks)
+        case "app.newNotebook":
+            columns = .all
+            ShortcutCenter.shared.notebookRequest += 1
+        case "app.undo": store.undo()
+        default: break
         }
     }
 

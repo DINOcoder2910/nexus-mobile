@@ -34,6 +34,21 @@ struct SettingsView: View {
                 Text("Sync (below) keeps this folder the same as the laptop's through the hub on the G14. You can also copy a data folder into \(Device.defaultFolder) with the Files app, or pick a folder another app keeps in sync.")
             }
 
+            Section {
+                NavigationLink {
+                    ShortcutsView()
+                } label: {
+                    LabeledContent {
+                        let n = ShortcutConflicts.errorCount(ShortcutConflicts.compute(ShortcutCenter.shared.ipad))
+                        if n > 0 { Text(n == 1 ? "1 conflict" : "\(n) conflicts").foregroundStyle(.red) }
+                    } label: {
+                        Label("Shortcuts", systemImage: "keyboard")
+                    }
+                }
+            } footer: {
+                Text("Every key and gesture that does something in Nexus, on the iPad and on the laptop, and changing them.")
+            }
+
             SyncSettings()
 
             CalendarSettings()

@@ -7,6 +7,7 @@ struct TasksView: View {
     @Environment(NexusStore.self) private var store
     @State private var lens: Planning.Lens
     @State private var query = ""
+    @State private var searching = false
     /// Tasks whose subtasks are folded away (everything is open by default).
     @State private var folded: Set<String> = []
 
@@ -25,7 +26,14 @@ struct TasksView: View {
         }
         .listStyle(.insetGrouped)
         .safeAreaInset(edge: .top, spacing: 0) { lensBar(p) }
-        .searchable(text: $query, prompt: "Search tasks")
+        .searchable(text: $query, isPresented: $searching, prompt: "Search tasks")
+        .task(id: ShortcutCenter.shared.searchPending) {
+            // Search tasks (a key, Settings › Shortcuts): into the search field once the screen is up
+            guard ShortcutCenter.shared.searchPending else { return }
+            ShortcutCenter.shared.searchPending = false
+            try? await Task.sleep(for: .milliseconds(250))
+            searching = true
+        }
         .refreshable { store.reload() }
         .navigationTitle(lens == .someday ? "Someday" : "Tasks")
         .toolbar {

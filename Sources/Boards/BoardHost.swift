@@ -20,7 +20,7 @@ struct BoardHost: UIViewControllerRepresentable {
         vc.isSidePane = isSide
         vc.onSidebar = onSidebar
         vc.onSide = onSide
-        return UINavigationController(rootViewController: vc)
+        return BoardNavigationController(rootViewController: vc)
     }
 
     func updateUIViewController(_ controller: UINavigationController, context: Context) {}

@@ -45,6 +45,11 @@ public struct Snapshot {
 
 public enum DataFolder {
     static let skip: Set<String> = [".git", ".import", ".nexus", ".obsidian", "node_modules", ".Trash", "files"]
+    /// Where each device keeps its shortcuts (`shortcuts/<device>.yaml`, Shortcuts.swift).
+    public static let shortcutsFolder = "shortcuts"
+
+    /// A device's shortcuts file, relative to the data folder.
+    public static func shortcutsFile(_ device: String) -> String { shortcutsFolder + "/" + device + ".yaml" }
 
     /// Reads the folder. Missing files are fine; a file that does not parse is listed in `problems` and left out.
     public static func load(_ root: URL) -> Snapshot {
@@ -142,6 +147,11 @@ public enum DataFolder {
             if a.pathExtension == "yaml" { stamp(a); continue }
             guard !skip.contains(a.lastPathComponent), (try? a.resourceValues(forKeys: keys).isDirectory) == true else { continue }
             parts.append("/" + a.lastPathComponent)
+            if a.lastPathComponent == shortcutsFolder {
+                // each device's shortcuts (the other device may change a `keys:` line)
+                for b in list(a) where b.pathExtension == "yaml" { stamp(b) }
+                continue
+            }
             for b in list(a) {
                 if b.lastPathComponent == "group.yaml" { stamp(b); continue }
                 guard (try? b.resourceValues(forKeys: keys).isDirectory) == true, !b.lastPathComponent.hasSuffix(".board") else { continue }

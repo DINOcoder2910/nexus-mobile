@@ -21,6 +21,11 @@ One app for the iPad and the iPhone. On the iPhone the sidebar is the first scre
   - **Search boards**: handwriting read on the iPad with Vision, plus typed text; tap a hit to open the board there. The index lives in the app, never in the data folder.
   - The ink test's own boards were copied once into **Notebooks › Ink test**; the originals stay under Ink test boards.
 
+- **Shortcuts**, editable in **Settings › Shortcuts**, with a **Laptop | iPad** switch: search, collapsible sections, conflicts in red (a board key that takes over an app-wide one is a grey note), Conflicts only, a reset beside each changed key and Reset all.
+  - **iPad keys** (with a hardware keyboard; hold ⌘ to see them): ⌘1–6 Today, Planner, Tasks, Notebooks, Inbox, Someday; ⌘, Settings; ⌘N new task; ⌘F search tasks; ⇧⌘N new notebook; ⌘Z undo the last change; on a board ⌘W close, ⌘Z / ⇧⌘Z undo and redo, ⌘= ⌘- ⌘0 zoom, ⌘G PDF contents, P E L pen, eraser, lasso, T text, ↩ edit, ⌫ delete. Tap a key to change it and press the new one, or pick it without a keyboard; a key another shortcut has there offers Swap or Replace.
+  - **Gestures** on a board: two-finger tap undo, three-finger tap redo, the Pencil's double-tap and squeeze doing what Settings › Apple Pencil says, each movable to another action or off.
+  - Kept in the data folder as `shortcuts/ipad.yaml` (the iPad writes it whole; the laptop may change a `keys:` line). The Laptop side reads `shortcuts/laptop.yaml` and edits just the changed `keys:` line. The format is `docs/data-format.md` "Shortcuts" in the Nexus repo.
+
 ## The data folder
 
 The app reads `On My iPad › Nexus › nexus-data` (or a folder picked from Files) in the laptop's format (`docs/data-format.md` in the Nexus repo). Reading never writes. Every change is a line-level edit of one `tasks.yaml` or `inbox.yaml`, checked by parsing the result before it is saved, so comments, order and formatting stay and the laptop sees a one-line change. A file that doesn't parse, a task without an id, and a folder in another format version are read-only. The app looks for changes every few seconds and when it comes back to the front, so sync can write underneath it.
