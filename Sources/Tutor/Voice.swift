@@ -98,8 +98,66 @@ final class Speaker: NSObject, AVSpeechSynthesizerDelegate {
         let u = utterance(text, lang: lang)
         await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
             started[ObjectIdentifier(u)] = c
+            queued.append((u, text, lang))
             synth.speak(u)
         }
+    }
+
+    // MARK: the tutor strip's Pause, Back and Next (the laptop's bar)
+
+    /// The tutor's sentences: queued (not started yet), the one being said, the one said last.
+    private var queued: [(u: AVSpeechUtterance, text: String, lang: String?)] = []
+    private var current: (u: AVSpeechUtterance, text: String, lang: String?)?
+    private var last: (text: String, lang: String?)?
+    /// Called with a sentence said again after Back (nothing waits on it; the strip shows it).
+    var onAgain: ((String) -> Void)?
+    private var again = Set<ObjectIdentifier>()
+
+    var paused: Bool { synth.isPaused }
+    func pause(_ on: Bool) {
+        if on { synth.pauseSpeaking(at: .immediate) } else { synth.continueSpeaking() }
+    }
+
+    /// Next: the sentence being said ends now and the next one starts.
+    @discardableResult
+    func skip() -> Bool {
+        guard let now = current else { return false }
+        last = (now.text, now.lang)
+        current = nil
+        requeue(again: nil)
+        return true
+    }
+
+    /// Back: the sentence said before is said again, then the one being said from its start.
+    @discardableResult
+    func back() -> Bool {
+        let cur: (text: String, lang: String?)? = current.map { (text: $0.text, lang: $0.lang) }
+        guard let prev = last ?? cur else { return false }
+        let redo = current
+        current = nil
+        requeue(again: prev, redo: redo)
+        return true
+    }
+
+    /// Stops the synthesizer and speaks again: (a sentence said again), (the one being said), then the queued ones, which keep their
+    /// waiting turns (each queued sentence's "started" moves to its new utterance).
+    private func requeue(again prev: (text: String, lang: String?)?, redo: (u: AVSpeechUtterance, text: String, lang: String?)? = nil) {
+        let rest = queued
+        var moved: [(AVSpeechUtterance, CheckedContinuation<Void, Never>?)] = []
+        var next: [(u: AVSpeechUtterance, text: String, lang: String?)] = []
+        for q in ([redo].compactMap { $0 } + rest) {
+            let u = utterance(q.text, lang: q.lang)
+            moved.append((u, started.removeValue(forKey: ObjectIdentifier(q.u))))
+            next.append((u, q.text, q.lang))
+        }
+        synth.stopSpeaking(at: .immediate)
+        queued = next
+        if let prev {
+            let u = utterance(prev.text, lang: prev.lang)
+            again.insert(ObjectIdentifier(u))
+            synth.speak(u)
+        }
+        for (u, c) in moved { if let c { started[ObjectIdentifier(u)] = c }; synth.speak(u) }
     }
 
     /// Speaks a whole text now (Read aloud), replacing whatever was being said.
@@ -119,7 +177,9 @@ final class Speaker: NSObject, AVSpeechSynthesizerDelegate {
     }
 
     func stop() {
+        if synth.isPaused { synth.continueSpeaking() }
         synth.stopSpeaking(at: .immediate)
+        queued = []; current = nil
         release()
     }
 
@@ -132,7 +192,11 @@ final class Speaker: NSObject, AVSpeechSynthesizerDelegate {
 
     nonisolated func speechSynthesizer(_ s: AVSpeechSynthesizer, didStart u: AVSpeechUtterance) {
         let key = ObjectIdentifier(u)
-        Task { @MainActor in self.started.removeValue(forKey: key)?.resume() }
+        Task { @MainActor in
+            if self.again.remove(key) != nil { self.onAgain?(u.speechString); return }
+            if let i = self.queued.firstIndex(where: { ObjectIdentifier($0.u) == key }) { self.current = self.queued.remove(at: i) }
+            self.started.removeValue(forKey: key)?.resume()
+        }
     }
 
     nonisolated func speechSynthesizer(_ s: AVSpeechSynthesizer, willSpeakRangeOfSpeechString range: NSRange, utterance u: AVSpeechUtterance) {
@@ -142,6 +206,7 @@ final class Speaker: NSObject, AVSpeechSynthesizerDelegate {
     nonisolated func speechSynthesizer(_ s: AVSpeechSynthesizer, didFinish u: AVSpeechUtterance) {
         let key = ObjectIdentifier(u)
         Task { @MainActor in
+            if let c = self.current, ObjectIdentifier(c.u) == key { self.last = (c.text, c.lang); self.current = nil }
             self.started.removeValue(forKey: key)?.resume()
             self.onFinish?(u)
             if !self.synth.isSpeaking { for c in self.finished { c.resume() }; self.finished = [] }

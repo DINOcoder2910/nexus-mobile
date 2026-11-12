@@ -13,8 +13,8 @@ public enum TutorSteps {
     public static let blockTypes = ["text", "math", "graph", "chem"]
     public static let lineTypes = ["arrow", "line", "path"]
     public static let markTypes = ["circle", "box", "underline", "highlight", "point"]
-    /// (angle: a right-angle square or an arc at a corner)
-    public static let stepTypes = blockTypes + lineTypes + markTypes + ["angle", "erase"]
+    /// (angle: a right-angle square or an arc at a corner; yourturn: the tutor stops and the student writes the next step)
+    public static let stepTypes = blockTypes + lineTypes + markTypes + ["angle", "erase", "yourturn"]
     /// The ones that may be `brief`: shown while their sentence is said, then gone.
     public static let briefTypes = ["arrow", "line"] + markTypes + ["angle"]
     public static let screenTypes = ["point", "circle", "underline", "highlight"]
@@ -246,6 +246,9 @@ public enum TutorSteps {
             }
             s.vertex = at; s.from = from; s.to = to
             if raw["right"]?.bool == true { s.right = true }
+        case "yourturn":
+            s.ask = str(raw["ask"], 160) ?? "Your turn: write the next step."
+            return (s, nil)
         case "erase":
             guard let t = raw["target"]?.string, isId(t) else { return bad("erase needs target: an earlier step id") }
             s.target = .id(t)
@@ -438,7 +441,7 @@ public enum TutorSteps {
     public static func summarize(_ steps: [TutorStep], boxes: [String: TutorBox] = [:]) -> String {
         var out: [(String, String)] = []
         for s in steps {
-            guard let id = s.id, s.type != "erase" else { continue }
+            guard let id = s.id, s.type != "erase", s.type != "yourturn" else { continue }
             var what: String
             switch s.type {
             case "text": what = s.text ?? ""
@@ -478,6 +481,7 @@ Inside a block, as a target or a position: {"in":"eq1","part":"(x+3)"} (those sy
 Gestures: "brief":true on a mark, arrow, line or angle shows it only while its sentence is said (a teacher pointing), then it goes; a point is always brief. Keep ink (no brief) for what should stay in the notes.
 - {"type":"point","target":{"in":"g1","at":[0,-3]}}  (a pointer to it while you say "this minimum")
 - {"type":"erase","target":"eq1"}  (takes an earlier step's drawing away)
+- {"type":"yourturn","ask":"Write the next line: divide both sides by 2."}  (you stop here and they write it on the board; end your reply with it)
 On the screen (the screenshot, in its pixels): {"type":"point"|"circle"|"underline"|"highlight","on":"screen","target":[x, y] or [x, y, w, h],"label":"..."}; when unsure of the exact spot, "area":"C2" (a cell of the grid drawn on the screenshot) instead of "target".
 """#
 
@@ -604,6 +608,8 @@ public struct TutorStep: Equatable {
     public var right = false
     /// A gesture: shown while its sentence is said, then gone (a point is one unless it says not).
     public var brief = false
+    /// A yourturn step's: what the student is asked to write next.
+    public var ask: String?
 
     public init(type: String) { self.type = type }
 }

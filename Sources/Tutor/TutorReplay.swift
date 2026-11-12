@@ -11,6 +11,8 @@ import NexusCore
 final class TutorReplayViewController: UIViewController {
     let name: String
     let turns: [[TutorEvent]]
+    /// Replay from a line of the transcript: the turn and event the voice starts at (everything before is drawn at once, silent).
+    let start: (turn: Int, event: Int)?
     private let scratch: URL
     private let path: String
     private var board: BoardController!
@@ -24,9 +26,10 @@ final class TutorReplayViewController: UIViewController {
     /// The gap between one turn and the next, as the laptop's TURN_GAP.
     static let turnGap: Double = 48
 
-    init(name: String, turns: [[TutorEvent]]) {
+    init(name: String, turns: [[TutorEvent]], start: (turn: Int, event: Int)? = nil) {
         self.name = name
         self.turns = turns
+        self.start = start
         TutorReplayViewController.removeLeftovers()
         scratch = FileManager.default.temporaryDirectory.appendingPathComponent(TutorReplayViewController.folderPrefix + UUID().uuidString, isDirectory: true)
         path = "replay.board"
@@ -124,14 +127,17 @@ final class TutorReplayViewController: UIViewController {
     /// starts (the same order and the same start signal as a live turn).
     private func play() async {
         var n = 0
-        for events in turns {
+        for (ti, events) in turns.enumerated() {
             if stopped { break }
             let below = drawer.drewAll.map { [TutorSteps.jsRound($0.x), TutorSteps.jsRound($0.maxY + TutorReplayViewController.turnGap)] }
             drawer.turn(at: below ?? [0, 0])
-            for e in events {
+            for (ei, e) in events.enumerated() {
                 if stopped { break }
+                let fast = start.map { ti < $0.turn || (ti == $0.turn && ei < $0.event) } ?? false
+                drawer.pace = fast ? 60 : 1
                 switch e {
                 case .say(let sentence, _):
+                    if fast { drawer.spoken(n); n += 1; continue }
                     await Speaker.shared.say(sentence)
                     if stopped { break }
                     drawer.spoken(n)
@@ -170,14 +176,17 @@ final class TutorReplayViewController: UIViewController {
 
 extension BoardController {
     /// Replay the tutor's explanations on this board (the panel's Replay button).
-    func openTutorReplay() {
+    /// from: a line of the transcript (the turn and its sentence): replay from there.
+    func openTutorReplay(from: (turn: Int, n: Int)? = nil) {
         guard presentedViewController == nil else { return }
         if tutor.busy { tutor.stop() }
         let text = try? FolderAccess.read(boardURL.appendingPathComponent(TutorSession.file))
         let p = TutorSession.parse(text)
-        let turns = p.ok ? p.session.replayTurns() : []
+        var turns = p.ok ? p.session.replayTurns() : []
+        var start: (turn: Int, event: Int)?
+        if let from, p.ok, let r = p.session.replayFrom(turn: from.turn, n: from.n) { turns = r.turns; start = r.start }
         guard !turns.isEmpty else { toast("There is no tutor explanation on this board to replay."); return }
-        let vc = TutorReplayViewController(name: boardName, turns: turns)
+        let vc = TutorReplayViewController(name: boardName, turns: turns, start: start)
         vc.modalPresentationStyle = .fullScreen
         present(vc, animated: true)
     }
