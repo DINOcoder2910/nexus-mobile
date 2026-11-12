@@ -31,6 +31,8 @@ enum BlockStyler {
     final class MathBox: NSObject, @unchecked Sendable {
         let image: UIImage
         let size: CGSize
+        /// A $$ block of its own lines: centred, standing on the line instead of on the words' middle.
+        var block = false
         init(image: UIImage, size: CGSize) { self.image = image; self.size = size }
     }
 
@@ -103,6 +105,26 @@ enum BlockStyler {
                 case .rule: storage.addAttribute(glyphKey, value: "rule", range: m.range)
                 case .none: break
                 }
+            }
+        }
+
+        // $$ blocks over several lines: drawn as one picture on the opening line, the rest folded away, while the caret is outside
+        var mathOpen: [Int: MathBox] = [:]
+        var mathFolded = IndexSet()
+        do {
+            var i = 0
+            while i < lines.count {
+                guard lines[i].kind == .mathFence, let close = lines[(i + 1)...].firstIndex(where: { $0.kind == .mathFence }) else { i += 1; continue }
+                let from = lines[i].range.location, to = lines[close].range.location + lines[close].range.length
+                let on = selection.map { $0.location <= to && $0.location + $0.length >= from } ?? false
+                let tex = lines[(i + 1)..<close].map { ns.substring(with: $0.range) }.joined(separator: "\n")
+                if !on, !tex.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                   let box = mathBox(tex, display: true, size: body.size * s, color: body.color) {
+                    box.block = true
+                    mathOpen[i] = box
+                    mathFolded.insert(integersIn: (i + 1)...close)
+                }
+                i = close + 1
             }
         }
 
@@ -202,6 +224,20 @@ enum BlockStyler {
             }
             if line.kind == .blank { after = 0 }
             ps.paragraphSpacing = after
+            if let box = mathOpen[index], line.range.length > 0 {
+                storage.addAttribute(mathKey, value: box, range: NSRange(location: line.range.location, length: 1))
+                if line.range.length > 1 { storage.addAttribute(hiddenKey, value: true, range: NSRange(location: line.range.location + 1, length: line.range.length - 1)) }
+                ps.minimumLineHeight = box.size.height
+                ps.maximumLineHeight = box.size.height
+                ps.lineSpacing = 0
+            } else if mathFolded.contains(index) {
+                if lineAll.length > 0 { storage.addAttribute(hiddenKey, value: true, range: lineAll) }
+                ps.minimumLineHeight = 0
+                ps.maximumLineHeight = 0.01
+                ps.lineSpacing = 0
+                ps.paragraphSpacing = 0
+                ps.paragraphSpacingBefore = 0
+            }
             storage.addAttribute(.paragraphStyle, value: ps, range: lineAll)
         }
         return Result(lines: lines, quoteStep: quoteStep)
