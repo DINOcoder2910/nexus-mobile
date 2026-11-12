@@ -65,12 +65,24 @@ function setLook(L) {
   root.style.setProperty('--list', (L.size || 17) * 1.4 * s + 'px');
   const pad = L.fullscreen ? L.page || { top: 56, right: 72, bottom: 280, left: 72 } : { top: (L.padY || 0) * s, right: (L.padX || 0) * s, bottom: (L.padY || 0) * s, left: (L.padX || 0) * s };
   root.style.setProperty('--pad', `${pad.top}px ${pad.right}px ${pad.bottom}px ${pad.left}px`);
+  // the marks' places as the closed block draws them (MDLayoutManager): measured from the words' top, in ems of the line
+  const m = L.marks || {}, em = (v) => (+v || 0).toFixed(4) + 'em';
+  root.style.setProperty('--quote', (m.quote || Math.round((L.size || 17) * 1.125)) * s + 'px');
+  root.style.setProperty('--dot-x', em(Math.max(0.16, (m.dash || 0.36) / 2) - 0.16));
+  root.style.setProperty('--dot-y', em((m.ascent || 0.95) - (m.xHeight || 0.52) / 2 - 0.16));
+  root.style.setProperty('--box-x', em(Math.max(0, ((m.brackets || 0.8) - 0.9) / 2)));
+  root.style.setProperty('--box-y', em((m.ascent || 0.95) - (m.capHeight || 0.7) / 2 - 0.45));
   const st = L.styles || {};
-  const rule = (sel, v) => { if (v) css.push(`${sel}{font-size:${v.size * s}px;font-weight:${v.weight};color:${v.color};line-height:${v.line};margin:${(v.before || 0) * s}px 0 ${(v.after || 0) * s}px ${(v.indent || 0) * s}px}`); };
+  // every paragraph its style's space after (the copy is one line a paragraph; BlockStyler adds the same); `shift` lifts the words to
+  // the top of their line as TextKit has them, and the last line ends with its words (TextKit gives it no line spacing)
+  const rule = (sel, v) => { if (v) css.push(`${sel}{font-size:${v.size * s}px;font-weight:${v.weight};color:${v.color};line-height:${v.line};margin:${(v.before || 0) * s}px 0 ${(v.after || 0) * s}px ${(v.indent || 0) * s}px;position:relative;top:${-(v.shift || 0) * s}px}`); };
   rule('#ed .ProseMirror > p, #ed .rt-body', st.body);
   rule('#ed .rt-title', st.title); rule('#ed .rt-h1', st.h1); rule('#ed .rt-h2', st.h2); rule('#ed .rt-h3', st.h3);
   rule('#ed .rt-quote', st.quote); rule('#ed .rt-code', st.code);
   css.push('#ed .ProseMirror > :first-child{margin-top:0}#ed .ProseMirror > :last-child{margin-bottom:0}');
+  for (const id of ['body', 'title', 'h1', 'h2', 'h3', 'quote']) if (st[id]) css.push(`#ed .ProseMirror > .rt-${id}:last-child{margin-bottom:${-2 * (st[id].shift || 0) * s}px}`);
+  // a run of quote lines: one bar down the run (the space between them is padding, inside the bar); the bar stops at the last line's words
+  if (st.quote) css.push(`#ed .rt-quote{--qcut:${2 * (st.quote.shift || 0) * s}px}#ed .rt-quote:has(+ .rt-quote){--qcut:0px;margin-bottom:0;padding-bottom:${(st.quote.after || 0) * s}px}`);
   for (const [k, v] of Object.entries(L.hl || {})) css.push(`#ed mark[data-c="${k}"]{background:${v}}`);
   for (const [k, v] of Object.entries(L.colors || {})) css.push(`#ed .rt-color[data-c="${k}"]{color:${v}}`);
   document.getElementById('look').textContent = css.join('\n');

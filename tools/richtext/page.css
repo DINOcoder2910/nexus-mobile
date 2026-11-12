@@ -5,23 +5,26 @@ html:not(.full), html:not(.full) body { overflow: hidden; }
 body { color: var(--ink); font-family: var(--family); font-size: var(--size); line-height: 1.5; }
 #ed { padding: var(--pad); box-sizing: border-box; min-height: 1em; }
 html.full #ed { max-width: 100%; min-height: 100vh; }
-#ed .ProseMirror { outline: none; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; caret-color: var(--accent); -webkit-user-select: text; user-select: text; }
+/* a column of flex items: paragraphs' margins add up as TextKit's spacing does instead of collapsing */
+#ed .ProseMirror { display: flex; flex-direction: column; outline: none; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; caret-color: var(--accent); -webkit-user-select: text; user-select: text; }
 #ed .ProseMirror-selectednode { outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent); }
 #ed p, #ed h1, #ed h2, #ed h3, #ed h4, #ed blockquote { font: inherit; }
 #ed .rt-p:empty::after, #ed .rt-p > br:only-child { content: ''; display: inline-block; min-height: 1em; }
-#ed .rt-quote { border-left: 3px solid var(--rule); padding-left: .8em; color: var(--muted); }
-#ed .rt-li { position: relative; padding-left: calc(var(--list) + var(--rt-level, 0) * var(--list)); }
+/* the quote bar as MDLayoutManager draws it: 2 wide at the left, the words one quote step in */
+#ed .rt-quote { --qx: var(--quote); color: var(--muted); background: linear-gradient(var(--rule), var(--rule)) left top / 2px calc(100% - var(--qcut, 0px)) no-repeat; }
+#ed .rt-li { position: relative; padding-left: calc(var(--qx, 0px) + var(--list) + var(--rt-level, 0) * var(--list)); }
 #ed .rt-li.rt-lv1 { --rt-level: 1; } #ed .rt-li.rt-lv2 { --rt-level: 2; } #ed .rt-li.rt-lv3 { --rt-level: 3; } #ed .rt-li.rt-lv4 { --rt-level: 4; }
 #ed .rt-li.rt-lv5 { --rt-level: 5; } #ed .rt-li.rt-lv6 { --rt-level: 6; } #ed .rt-li.rt-lv7 { --rt-level: 7; } #ed .rt-li.rt-lv8 { --rt-level: 8; }
-#ed .rt-bullet::before { content: '•'; position: absolute; left: calc(var(--rt-level, 0) * var(--list) + .35em); }
-#ed .rt-bullet.rt-lv1::before, #ed .rt-bullet.rt-lv4::before, #ed .rt-bullet.rt-lv7::before { content: '◦'; }
-#ed .rt-bullet.rt-lv2::before, #ed .rt-bullet.rt-lv5::before, #ed .rt-bullet.rt-lv8::before { content: '▪'; }
-#ed .rt-number::before { content: attr(data-n); position: absolute; left: calc(var(--rt-level, 0) * var(--list)); min-width: 1.2em; text-align: right; font-variant-numeric: tabular-nums; }
-#ed .rt-box { position: absolute; left: calc(var(--rt-level, 0) * var(--list) + .05em); top: .28em; width: .95em; height: .95em; box-sizing: border-box; border: 1.5px solid var(--muted); border-radius: .22em; cursor: pointer; }
+/* list marks where the closed block draws them (BlockStyler, MDLayoutManager): the mark in a column level × step, the words a step on */
+#ed .rt-bullet::before { content: ''; position: absolute; left: calc(var(--qx, 0px) + var(--rt-level, 0) * var(--list) + var(--dot-x)); top: var(--dot-y); width: .32em; height: .32em; box-sizing: border-box; border-radius: 50%; background: currentColor; }
+#ed .rt-bullet.rt-lv1::before, #ed .rt-bullet.rt-lv4::before, #ed .rt-bullet.rt-lv7::before { background: transparent; border: max(1px, .06em) solid currentColor; }
+#ed .rt-bullet.rt-lv2::before, #ed .rt-bullet.rt-lv5::before, #ed .rt-bullet.rt-lv8::before { border-radius: 0; }
+#ed .rt-number::before { content: attr(data-n); position: absolute; left: calc(var(--qx, 0px) + var(--rt-level, 0) * var(--list)); }
+#ed .rt-box { position: absolute; left: calc(var(--qx, 0px) + var(--rt-level, 0) * var(--list) + var(--box-x)); top: var(--box-y); width: .9em; height: .9em; box-sizing: border-box; border: max(1px, .072em) solid var(--muted); border-radius: .18em; cursor: pointer; }
 #ed .rt-box.on { background: var(--accent); border-color: var(--accent); }
-#ed .rt-box.on::after { content: ''; position: absolute; left: .27em; top: .08em; width: .26em; height: .52em; border: solid #fff; border-width: 0 .14em .14em 0; transform: rotate(45deg); }
+#ed .rt-box.on::after { content: ''; position: absolute; left: .25em; top: .06em; width: .24em; height: .47em; border: solid #fff; border-width: 0 .12em .12em 0; transform: rotate(45deg); }
 #ed .rt-check.rt-done { color: var(--muted); text-decoration: line-through; }
-#ed .rt-p:not(.rt-li) { padding-left: calc(var(--rt-indent, 0) * var(--list)); }
+#ed .rt-p:not(.rt-li) { padding-left: calc(var(--qx, 0px) + var(--rt-indent, 0) * var(--list)); }
 #ed .rt-hr { border: none; border-top: 1px solid var(--rule); margin: .5em 0; }
 #ed .rt-code { font-family: ui-monospace, Menlo, monospace; background: var(--code-back); border-radius: 6px; padding: .5em .7em; white-space: pre-wrap; }
 #ed code { font-family: ui-monospace, Menlo, monospace; font-size: .9em; background: var(--code-back); border-radius: 4px; padding: 0 .2em; }

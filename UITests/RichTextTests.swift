@@ -13,7 +13,7 @@ final class RichTextTests: XCTestCase {
 
     func launch(dark: Bool) {
         app = XCUIApplication()
-        app.launchArguments = ["-board.dark", dark ? "always" : "never", "-notes.richEditor", "YES"]
+        app.launchArguments = ["-board.dark", dark ? "always" : "never", "-notes.richEditor", "YES", "-debug.blockDump", "YES"]
         app.launch()
         step("launched")
         let sample = app.buttons["Try with sample data"]
@@ -86,10 +86,33 @@ final class RichTextTests: XCTestCase {
         app.buttons["Done"].firstMatch.tap()
         sleep(2)
         step("closed on the board")
+        dumpBlock("closed")
         app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.18)).tap()
         XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: 10), "the block didn't open again")
         sleep(2)
         step("reopened on the board")
+        // the whole block, closed and open, at the same place: Done, Show everything, then open it again by a tap in its middle
+        app.buttons["Done"].firstMatch.tap()
+        sleep(1)
+        let zoom = app.buttons["100%"].firstMatch
+        XCTAssertTrue(zoom.waitForExistence(timeout: 5), "no zoom button")
+        zoom.tap()
+        let all = app.buttons["Show everything"].firstMatch
+        XCTAssertTrue(all.waitForExistence(timeout: 5), "no Show everything")
+        all.tap()
+        sleep(2)
+        step("whole block closed")
+        dumpBlock("whole")
+        app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.57)).tap()
+        XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: 10), "the block didn't open in the middle")
+        sleep(2)
+        step("whole block reopened")
+    }
+
+    /// Where the closed block draws each line (TextBlockView's debug label), into the log.
+    func dumpBlock(_ name: String) {
+        let d = app.descendants(matching: .any)["blockdump"].firstMatch
+        if d.waitForExistence(timeout: 3) { print("UISTEP BLOCKDUMP \(name) \(d.label)") } else { print("UISTEP BLOCKDUMP \(name) none") }
     }
 
     func writingView() {

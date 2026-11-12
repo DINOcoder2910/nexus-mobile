@@ -219,11 +219,23 @@ final class RichEditor: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         var styles: [String: Any] = [:]
         for s in BlockStyle.allCases {
             let st = look.style(s)
-            styles[s.rawValue] = ["size": st.size, "weight": weight(st.weight), "color": css(st.color), "line": st.line, "before": st.before, "after": st.after, "indent": st.indent]
+            // TextKit puts a line's extra height under its words, CSS shares it above and below: the page lifts each line by half of it
+            // (`shift`), so the words sit where the closed block (BlockStyler) draws them
+            let natural = look.font(size: st.size, weight: st.weight, mono: st.mono).lineHeight
+            styles[s.rawValue] = ["size": st.size, "weight": weight(st.weight), "color": css(st.color), "line": st.line, "before": st.before, "after": st.after, "indent": st.indent,
+                                  "shift": max(0, st.size * st.line - natural) / 2]
         }
+        // where MDLayoutManager draws a list's marks, from the body font (in ems, so they follow a line's own size)
+        let body = look.style(.body)
+        let f = look.font(size: body.size, weight: body.weight)
+        let em = { (v: CGFloat) in v / max(1, body.size) }
+        let dash = ("-" as NSString).size(withAttributes: [.font: f]).width
+        let brackets = ("[ ]" as NSString).size(withAttributes: [.font: f]).width
+        let marks: [String: Any] = ["ascent": em(f.ascender), "xHeight": em(f.xHeight), "capHeight": em(f.capHeight), "dash": em(dash), "brackets": em(brackets),
+                                    "quote": (look.size * 1.125).rounded()]
         var out: [String: Any] = [
             "size": look.size, "scale": scale, "family": look.family, "color": css(look.color), "muted": css(BlockLook.muted), "accent": css(BlockLook.accent),
-            "rule": css(BlockLook.rule), "codeBack": css(BlockLook.codeBack), "dark": traits.userInterfaceStyle == .dark, "styles": styles,
+            "rule": css(BlockLook.rule), "codeBack": css(BlockLook.codeBack), "dark": traits.userInterfaceStyle == .dark, "styles": styles, "marks": marks,
             "hl": Dictionary(uniqueKeysWithValues: BlockLook.highlights.map { ($0.key, css($0.color)) }),
             "colors": Dictionary(uniqueKeysWithValues: BlockLook.textColors.map { ($0.key, css($0.color)) }),
         ]

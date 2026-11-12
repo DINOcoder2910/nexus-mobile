@@ -88,7 +88,7 @@ jobs:
           [ -f shots/manifest.json ] || xcrun xcresulttool export attachments --path ui.xcresult --output-path shots 2>&1 | tail -n 5 || true
           python3 - <<'PY' > rich/list.txt || true
           import json
-          want = ("block opened", "typed on the board", "closed on the board", "reopened on the board", "writing view", "back on the board")
+          want = ("block opened", "typed on the board", "closed on the board", "reopened on the board", "writing view", "back on the board", "whole block")
           for t in json.load(open("shots/manifest.json")):
               test = t.get("testIdentifier", "")
               if "RichText" not in test: continue
