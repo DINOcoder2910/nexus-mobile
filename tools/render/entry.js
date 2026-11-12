@@ -60,13 +60,17 @@ function molVars() {
   return MOLV;
 }
 const PAINT = ['fill', 'fill-opacity', 'stroke', 'stroke-width', 'stroke-opacity', 'stroke-dasharray', 'stroke-linecap', 'stroke-linejoin', 'opacity', 'font-family', 'font-size', 'font-weight', 'font-style', 'font-variant-numeric', 'text-anchor', 'dominant-baseline', 'paint-order'];
-function freezeSvg(svgText, vars = []) {
+// crop >= 0: the picture cut to what is drawn in it, with that margin (a small molecule in a big drawing area is not lost in white);
+// full: the drawing area's width before the cut, so the caller keeps the picture's scale
+function freezeSvg(svgText, vars = [], crop = -1) {
   const host = h('div', { 'aria-hidden': 'true', style: 'position:fixed;left:-12000px;top:0;pointer-events:none' });
   for (const [p, v] of [...lightVars(), ...vars]) host.style.setProperty(p, v);
   host.innerHTML = svgText; document.body.append(host);
   try {
     const svg = host.querySelector('svg'); if (!svg) return null;
-    const vb = svg.viewBox && svg.viewBox.baseVal, W = (vb && vb.width) || +svg.getAttribute('width') || 300, H = (vb && vb.height) || +svg.getAttribute('height') || 300;
+    const vb = svg.viewBox && svg.viewBox.baseVal, full = (vb && vb.width) || +svg.getAttribute('width') || 300;
+    let W = full, H = (vb && vb.height) || +svg.getAttribute('height') || 300, view = null;
+    if (crop >= 0) { try { const b = svg.getBBox(); if (b.width > 4 && b.height > 4) { view = [b.x - crop, b.y - crop, b.width + 2 * crop, b.height + 2 * crop].map((v) => Math.round(v * 10) / 10); W = view[2]; H = view[3]; } } catch {} }
     const clone = svg.cloneNode(true), src = [svg, ...svg.querySelectorAll('*')], dst = [clone, ...clone.querySelectorAll('*')];
     src.forEach((e, i) => {
       const cs = getComputedStyle(e), d = dst[i];
@@ -74,20 +78,26 @@ function freezeSvg(svgText, vars = []) {
       for (const p of PAINT) { const v = cs.getPropertyValue(p); if (v) d.style.setProperty(p, v); }
     });
     clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg'); clone.setAttribute('width', W); clone.setAttribute('height', H); clone.removeAttribute('class');
-    return { svg: new XMLSerializer().serializeToString(clone), w: W, h: H };
+    if (view) clone.setAttribute('viewBox', view.join(' '));
+    return { svg: new XMLSerializer().serializeToString(clone), w: W, h: H, full };
   } finally { host.remove(); }
 }
-async function svgToPng(svg, w, hh, scale = 3) {
+// pad > 0: on a white card that much bigger on every side (a printed figure, readable on a dark board too)
+async function svgToPng(svg, w, hh, scale = 3, pad = 0) {
   const img = new Image(); img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg); await img.decode();
-  const cv = document.createElement('canvas'); cv.width = Math.round(w * scale); cv.height = Math.round(hh * scale);
-  cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+  const cv = document.createElement('canvas'); cv.width = Math.round((w + 2 * pad) * scale); cv.height = Math.round((hh + 2 * pad) * scale);
+  const g = cv.getContext('2d');
+  if (pad > 0) { g.fillStyle = '#FFFFFF'; g.beginPath(); if (g.roundRect) g.roundRect(0, 0, cv.width, cv.height, 10 * scale); else g.rect(0, 0, cv.width, cv.height); g.fill(); }
+  g.drawImage(img, pad * scale, pad * scale, w * scale, hh * scale);
   return cv.toDataURL('image/png').replace(/^data:image\/png;base64,/, '');
 }
-// the picture of a tutor chem step ({kind, molecule | compound | bp, lp}): { png (base64), w, h } in board units, or { error }
+const CHEM_PAD = 12; // the white card round a chem diagram
+// the picture of a tutor chem step ({kind, molecule | compound | bp, lp}): { png (base64), w, h, full } in board units (cropped to the
+// drawing, on a white card; full: the uncropped width, for its scale), or { error }
 window.nexusChem = async (s) => {
   let c = null; try { c = chemSvg(s || {}); } catch (e) { return { error: String(e && e.message || e) }; }
   if (!c || !c.svg) return { error: 'Nexus has no ' + (s && s.kind) + ' diagram for ' + ((s && (s.molecule || s.compound)) || (s && s.bp + '/' + s.lp)) };
-  const f = freezeSvg(c.svg, c.vars || []); if (!f) return { error: 'no picture' };
-  try { return { png: await svgToPng(f.svg, f.w, f.h), w: f.w, h: f.h }; } catch (e) { return { error: String(e && e.message || e) }; }
+  const f = freezeSvg(c.svg, c.vars || [], 6); if (!f) return { error: 'no picture' };
+  try { return { png: await svgToPng(f.svg, f.w, f.h, 3, CHEM_PAD), w: f.w + 2 * CHEM_PAD, h: f.h + 2 * CHEM_PAD, full: f.full + 2 * CHEM_PAD }; } catch (e) { return { error: String(e && e.message || e) }; }
 };
 window.nexusRenderReady = true;

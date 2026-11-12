@@ -166,10 +166,11 @@ final class MathRender {
 }
 
 /// The tutor's chemistry diagrams drawn by the laptop's study tools (Lewis structure, VSEPR shape, Born–Haber cycle) as a PNG at 3x,
-/// with its size in board units, or why there is none.
+/// cropped to the drawing and on a white card, with its size in board units, or why there is none.
 @MainActor
 enum ChemRender {
-    struct Picture: Sendable { let png: Data; let w: Double; let h: Double }
+    /// full: the drawing area's width before the picture was cropped to what is drawn (its scale at the usual size).
+    struct Picture: Sendable { let png: Data; let w: Double; let h: Double; let full: Double }
 
     static func picture(kind: String, molecule: String?, compound: String?, bp: Int?, lp: Int?) async -> Result<Picture, ChemError> {
         var step: [String: Any] = ["kind": kind]
@@ -183,7 +184,7 @@ enum ChemRender {
             if let e = r["error"] as? String { return .failure(ChemError(message: e)) }
             guard let b64 = r["png"] as? String, let data = Data(base64Encoded: b64), let w = r["w"] as? Double, let h = r["h"] as? Double, w > 0, h > 0
             else { return .failure(ChemError(message: "no picture")) }
-            return .success(Picture(png: data, w: w, h: h))
+            return .success(Picture(png: data, w: w, h: h, full: (r["full"] as? Double) ?? w))
         }
         return got ?? .failure(ChemError(message: "the chemistry drawings didn't load"))
     }
