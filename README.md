@@ -16,6 +16,7 @@ One app for the iPad and the iPhone. On the iPhone the sidebar is the first scre
   - **Add a task** anywhere with +, into a workstream or the Inbox.
 - **Notebooks**, as on the laptop: `notebooks/<notebook>/<section>/<board>.board` in the data folder, made, renamed and opened from the sidebar.
   - **A board**: PencilKit ink on an endless canvas that grows in every direction, over PDF printouts (pages drawn only near the view, Contents with the PDF's chapters and go to page), images, shapes (rectangle, ellipse, line, arrow) and typed text blocks (markdown, size, colour, background, tick a checkbox with a tap).
+  - **Tools** (the grid button): the Study tools (Molecules, VSEPR chart, Enthalpies, from the laptop's `.nexus-tools/`) and any .html file in the notebook, used in a panel from the right; put one on the board as a live card (tap it twice to use it again, where you left it) or as a picture. Tools run offline with no access to your files.
   - Fingers pick, move and resize items; hold the Pencil still at the end of a stroke to snap it to a line, circle, ellipse or polygon.
   - Saved in the laptop's board format, byte for byte, 600 ms after an edit: only the tiles that changed are written, and every stroke keeps its id, so a sync merge sees only what changed. Another device's write is read in when nothing here is unsaved.
   - **Search boards**: handwriting read on the iPad with Vision, plus typed text; tap a hit to open the board there. The index lives in the app, never in the data folder.

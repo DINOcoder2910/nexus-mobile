@@ -17,10 +17,10 @@ public enum BoardFormat {
     public static let pdfGap: Double = 24
     public static let pointFields = ["x", "y", "force", "azimuth", "altitude", "t", "w", "h", "opacity"]
     /// The item types this app draws and edits; any other type (made by a newer Nexus) is kept as it is and shown as a placeholder.
-    public static let itemTypes: Set<String> = ["text", "image", "pdf", "shape"]
+    public static let itemTypes: Set<String> = ["text", "image", "pdf", "shape", "tool"]
     /// The board redesign's features this app understands (nexus docs/data-format.md "Features"): a board.json naming one not here
     /// opens read-only. Add a name in the same change that makes the app read and write that feature.
-    public static let features: Set<String> = ["writing", "space", "drafts", "marks", "tape"]
+    public static let features: Set<String> = ["writing", "space", "drafts", "marks", "tape", "tool"]
     /// A placeholder's size when a foreign item has none.
     public static let foreignSize = (w: 200.0, h: 80.0)
 

@@ -244,7 +244,16 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
     }
 
     /// Buttons other parts of the app put in the top row, before the board menu.
-    func extraBarButtons() -> [UIButton] { boardExtraButtons() }
+    func extraBarButtons() -> [UIButton] {
+        var c = UIButton.Configuration.plain()
+        c.image = UIImage(systemName: "square.grid.2x2", withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .regular))
+        c.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 9, bottom: 8, trailing: 9)
+        let tools = UIButton(configuration: c, primaryAction: UIAction { [weak self] _ in self?.toggleToolPanel() })
+        tools.tintColor = toolPanel != nil ? .tintColor : .label
+        tools.accessibilityLabel = "Tools"
+        tools.toolTip = "Tools"
+        return [tools] + boardExtraButtons()
+    }
 
     var pageLabel: String { currentPage.isEmpty ? "" : currentPage }
 

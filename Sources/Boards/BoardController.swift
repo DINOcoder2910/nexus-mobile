@@ -71,6 +71,8 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     weak var store: NexusStore?
     /// Revision tape lifted on this iPad (each device's own; the file doesn't keep it).
     var peeking: Set<String> = []
+    /// The Tools panel (BoardController+Tools.swift), while it is shown.
+    var toolPanel: ToolPanelController?
 
     // hold to make a shape (BoardController+Snap.swift)
     let snapOverlay = UIView(), snapLine = CAShapeLayer(), snapHalo = CAShapeLayer()
@@ -295,6 +297,11 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
                 let v = (itemViews[it.id] as? ShapeItemView) ?? ShapeItemView(frame: .zero)
                 if v.superview == nil { shapeLayer.addSubview(v); itemViews[it.id] = v }
                 v.update(it, offset: offset)
+            case "tool":
+                let v = (itemViews[it.id] as? ToolCardView) ?? ToolCardView(frame: .zero)
+                if v.superview == nil { imageLayer.addSubview(v); itemViews[it.id] = v }
+                v.update(it, offset: offset, pageURL: ToolCatalog.pageURL(it.src, board: boardURL, root: root),
+                         imageURL: resolve(it.string("image")))
             case "text":
                 let v = (itemViews[it.id] as? TextBlockView) ?? TextBlockView()
                 if v.superview == nil { textLayer.addSubview(v); itemViews[it.id] = v }
@@ -513,7 +520,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     func updateBar() {
         guard isViewLoaded else { return }
         // rebuilt only when something it shows changed (this runs on every item move)
-        let key = "\(selected ?? "")|\(pdfs.count)|\(readOnly)|\(paper.kind.rawValue)\(paper.size)|\(canvas.isRulerActive)"
+        let key = "\(selected ?? "")|\(pdfs.count)|\(readOnly)|\(paper.kind.rawValue)\(paper.size)|\(canvas.isRulerActive)|\(toolPanel != nil)"
         guard key != lastBarKey else { return }
         lastBarKey = key
         bar.refresh()
