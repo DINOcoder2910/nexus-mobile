@@ -10,15 +10,19 @@ struct BoardHost: UIViewControllerRepresentable {
     let onClose: () -> Void
     let onSaved: (String) -> Void
 
-    func makeUIViewController(context: Context) -> UINavigationController {
+    func makeUIViewController(context: Context) -> BoardSplitController {
         let vc = BoardController(root: root, path: target.path, focus: target.focus)
         vc.onClose = onClose
         vc.onSaved = onSaved
         vc.store = store
-        return UINavigationController(rootViewController: vc)
+        // the board in its own navigation, with room for a second pane beside it (Side by side)
+        let split = BoardSplitController(board: vc, root: root)
+        split.store = store
+        split.onSaved = onSaved
+        return split
     }
 
-    func updateUIViewController(_ controller: UINavigationController, context: Context) {}
+    func updateUIViewController(_ controller: BoardSplitController, context: Context) {}
 }
 
 /// The ink test's boards (Documents/Boards) copied once into the data folder as boards in the laptop's format, in the notebook

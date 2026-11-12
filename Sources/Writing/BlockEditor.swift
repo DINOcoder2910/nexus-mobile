@@ -374,6 +374,9 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
         var extra: [UIMenuElement] = [
             UIAction(title: "Comment", image: UIImage(systemName: "text.bubble")) { [weak b] _ in b?.addComment(on: id, range: range) },
         ]
+        extra.append(UIAction(title: "Make a flashcard", image: UIImage(systemName: "rectangle.on.rectangle.angled")) { [weak b] _ in
+            b?.makeFlashcard(from: id, range: range)
+        })
         if b.content.items.contains(where: { $0.id == id }) {
             extra.append(UIAction(title: "Add a Nexus task", image: UIImage(systemName: "checkmark.circle.badge.plus")) { [weak b] _ in
                 b?.addNexusTask(from: id, range: range)

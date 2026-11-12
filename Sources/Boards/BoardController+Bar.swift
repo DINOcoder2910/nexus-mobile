@@ -182,6 +182,14 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
     func titleMenu() -> UIMenu {
         UIMenu(children: [
             UIAction(title: "Board info", image: UIImage(systemName: "info.circle")) { [weak self] _ in self?.showInfo() },
+            UIMenu(title: "Side by side", image: UIImage(systemName: "rectangle.split.2x1"), children: [
+                UIDeferredMenuElement.uncached { [weak self] done in done(self?.sideBySideMenu() ?? []) },
+            ]),
+            UIMenu(options: .displayInline, children: [
+                UIAction(title: "All comments", image: UIImage(systemName: "text.bubble")) { [weak self] _ in self?.openComments() },
+                UIAction(title: "Lift all revision tape", image: UIImage(systemName: "eye")) { [weak self] _ in self?.peekAll(true) },
+                UIAction(title: "Cover all revision tape", image: UIImage(systemName: "eye.slash")) { [weak self] _ in self?.peekAll(false) },
+            ]),
         ])
     }
 

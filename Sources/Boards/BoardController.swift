@@ -31,6 +31,8 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     // views
     let canvas = PKCanvasView()
     let world = UIView()
+    /// Above the ink: revision tape covers what is drawn too. Moves with `world`.
+    let overWorld = UIView()
     let pdfLayer = UIView(), imageLayer = UIView(), shapeLayer = UIView(), textLayer = UIView()
     let selection = SelectionView()
     let toolPicker = PKToolPicker()
@@ -63,6 +65,8 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     var markBoxes: [String: CGRect] = [:]
     /// The user's tasks, for "Add a Nexus task" from typed words.
     weak var store: NexusStore?
+    /// Revision tape lifted on this iPad (each device's own; the file doesn't keep it).
+    var peeking: Set<String> = []
 
     // hold to make a shape (BoardController+Snap.swift)
     let snapOverlay = UIView(), snapLine = CAShapeLayer(), snapHalo = CAShapeLayer()
@@ -130,6 +134,10 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         canvas.alwaysBounceHorizontal = true
         canvas.overrideUserInterfaceStyle = .light
         view.addSubview(canvas)
+        overWorld.layer.anchorPoint = .zero
+        overWorld.layer.position = .zero
+        overWorld.isUserInteractionEnabled = false
+        view.insertSubview(overWorld, aboveSubview: canvas)
 
         load()
         canvas.delegate = self
@@ -287,6 +295,10 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
                 v.frame.origin = CGPoint(x: it.x + offset.x, y: it.y + offset.y)
             case "mark":
                 break // placed below, once the blocks they sit on are laid out
+            case "tape":
+                let v = (itemViews[it.id] as? TapeView) ?? TapeView(frame: .zero)
+                if v.superview == nil { overWorld.addSubview(v); itemViews[it.id] = v }
+                v.update(it, offset: offset, peeking: peeking.contains(it.id))
             default:
                 let v = (itemViews[it.id] as? ForeignItemView) ?? ForeignItemView(frame: .zero)
                 if v.superview == nil { shapeLayer.addSubview(v); itemViews[it.id] = v }
@@ -319,6 +331,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         let w = max(b.maxX + offset.x + 1400, view.bounds.width / z)
         let h = max(b.maxY + offset.y + 1500, view.bounds.height * 2 / z)
         world.bounds = CGRect(x: 0, y: 0, width: w, height: h)
+        overWorld.bounds = world.bounds
         let target = CGSize(width: w * z, height: h * z)
         if abs(canvas.contentSize.width - target.width) > 1 || abs(canvas.contentSize.height - target.height) > 1 {
             canvas.contentSize = target
@@ -335,6 +348,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     func syncWorld() {
         let z = canvas.zoomScale, o = canvas.contentOffset
         world.transform = CGAffineTransform(a: z, b: 0, c: 0, d: z, tx: -o.x, ty: -o.y)
+        overWorld.transform = world.transform
         let vis = visibleBoard
         let scale = traitCollection.displayScale > 0 ? traitCollection.displayScale : 2
         var page = ""

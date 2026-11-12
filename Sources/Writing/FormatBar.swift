@@ -293,6 +293,10 @@ final class FormatBar: UIInputView {
             UIAction(title: "All comments", image: UIImage(systemName: "list.bullet.rectangle")) { [weak b] _ in b?.openComments() },
             UIAction(title: "Show comments", image: UIImage(systemName: "eye"), state: shown ? .on : .off) { [weak b] _ in b?.marksShown = !shown },
         ]))
+        out.append(UIAction(title: "Cover with revision tape", subtitle: "A strip on each line; tap one to peek", image: UIImage(systemName: "rectangle.dashed")) { [weak b] _ in
+            b?.endWriting()
+            b?.tapeBlock(id)
+        })
         if it.json["chip"]?.bool == true {
             out.append(UIAction(title: "Unfold", subtitle: "Show the words on the board again", image: UIImage(systemName: "rectangle.expand.vertical")) { [weak b] _ in
                 b?.setBlockField(id, "chip", nil)
