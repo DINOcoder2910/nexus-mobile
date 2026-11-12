@@ -98,6 +98,7 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
         } else {
             canvas.drawingGestureRecognizer.isEnabled = false
         }
+        quietCanvasMenus()
     }
 
     /// Touch and hold a colour to change it.

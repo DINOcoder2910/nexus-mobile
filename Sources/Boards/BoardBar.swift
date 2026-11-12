@@ -387,7 +387,7 @@ final class BoardBar: UIView {
         } else if t == .text {
             rowStack.addArrangedSubview(label("Tap where you want to type."))
         } else if t == .lasso {
-            rowStack.addArrangedSubview(label("Circle ink to move it. Tap a block, picture or shape to pick it."))
+            rowStack.addArrangedSubview(label("Circle ink to move it. Touch and hold ink to attach it to the words beside it."))
         } else if t == .hand {
             rowStack.addArrangedSubview(label("The Pencil scrolls and picks things; nothing is drawn."))
         }
