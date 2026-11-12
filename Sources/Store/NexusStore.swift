@@ -92,8 +92,9 @@ final class NexusStore {
 
     deinit { observers.forEach { NotificationCenter.default.removeObserver($0) } }
 
-    /// This store changed the folder: tell sync (through `onWrite` or the notice) and the other windows.
-    private func wrote(listChanged: Bool = false) {
+    /// This store changed the folder: tell sync (through `onWrite` or the notice) and the other windows. Code that writes to
+    /// the folder itself (study grades, boards) calls this after.
+    func didWrite(listChanged: Bool = false) {
         onWrite?()
         NotificationCenter.default.post(name: Self.wrote, object: self, userInfo: listChanged ? ["list": true] : nil)
     }
@@ -145,13 +146,13 @@ final class NexusStore {
     /// A board (or a notebook) was written: let sync send it.
     func boardsChanged(listChanged: Bool = false) {
         if listChanged { notebooksVersion += 1 }
-        wrote(listChanged: listChanged)
+        didWrite(listChanged: listChanged)
     }
 
     func makeSample() {
         do { try SampleFolder.make(at: folder, today: today) } catch { problem = error.localizedDescription }
         reload()
-        wrote()
+        didWrite()
     }
 
     // MARK: lookups for the screens
@@ -173,7 +174,7 @@ final class NexusStore {
         do {
             let c = try make(editor, snapshot)
             reload()
-            wrote()
+            didWrite()
             toast = Toast(message: c.message, change: c, offerParent: c.offerParent)
         } catch {
             problem = "\(error)"
@@ -224,7 +225,7 @@ final class NexusStore {
                 }
             }
             reload()
-            wrote()
+            didWrite()
             toast = Toast(message: c.message, change: c)
             return id
         } catch {
@@ -242,7 +243,7 @@ final class NexusStore {
         do {
             try FolderAccess.write(url, text)
             reload()
-            wrote()
+            didWrite()
             toast = Toast(message: message, change: Change(file: rel, before: before, after: text, message: message))
         } catch {
             problem = "Couldn't save \(rel): \(error.localizedDescription)"
@@ -253,7 +254,7 @@ final class NexusStore {
         guard let c = toast?.change else { return }
         do { try editor.undo(c); toast = Toast(message: "Undone") } catch { problem = "\(error)" }
         reload()
-        wrote()
+        didWrite()
     }
 
     func tickOfferedParent() {

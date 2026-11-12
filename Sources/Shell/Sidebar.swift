@@ -17,6 +17,9 @@ struct Sidebar: View {
                 row(.planner, "Planner", "rectangle.split.3x1", count: nil)
                 row(.calendar, "Calendar", "calendar", count: nil)
                 row(.tasks, "Tasks", "checklist", count: nil)
+                if s.isDataFolder && StudyLibrary.shared.hasDecks {
+                    row(.study, "Study", "rectangle.on.rectangle.angled", count: StudyLibrary.shared.dueTotal)
+                }
             }
 
             if s.isDataFolder {
@@ -82,6 +85,8 @@ struct Sidebar: View {
             ToolbarItem(placement: .topBarLeading) { NewWindowButton() }
         }
         .refreshable { store.reload() }
+        // the study decks: read with the folder (their due count is the Study row's number)
+        .task(id: store.snapshot.loadedAt) { StudyLibrary.shared.refreshIfChanged(store) }
     }
 
     private func row(_ screen: Screen, _ title: String, _ icon: String, count: Int?) -> some View {
