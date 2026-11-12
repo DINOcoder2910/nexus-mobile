@@ -7,6 +7,8 @@ struct NexusMobileApp: App {
     @State private var sync = SyncService()
     @State private var calendar = CalendarStore()
 
+    init() { WebRender.warmUp() }
+
     var body: some Scene {
         WindowGroup {
             RootView()

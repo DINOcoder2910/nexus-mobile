@@ -8,6 +8,15 @@ import WebKit
 final class WebRender: NSObject, WKNavigationDelegate {
     static let shared = WebRender()
 
+    /// Starts WebKit's JavaScript engine in this process at launch. Its first start reserves a large block of memory addresses; left
+    /// until the first tool, maths or tutor page minutes later, that reservation could fail and end the app (the Nov 12 crash on
+    /// tapping Molecules in the Tools panel: JavaScriptCore pas_compact_heap_reservation_try_allocate under WKWebViewConfiguration.init).
+    /// At launch the addresses are still free. The configuration is kept so the engine stays set up.
+    private static var warm: WKWebViewConfiguration?
+    nonisolated static func warmUp() {
+        DispatchQueue.main.async { MainActor.assumeIsolated { if warm == nil { warm = WKWebViewConfiguration() } } }
+    }
+
     private var web: WKWebView?
     private var loaded = false
     private var failed = false
