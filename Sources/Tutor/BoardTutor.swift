@@ -132,10 +132,12 @@ final class BoardTutor {
             for await e in events {
                 if self.stopped { continue }
                 switch e {
-                case .say(let sentence, _):
+                case .say(let sentence, let n):
                     self.said.append(sentence)
                     if self.phase == .thinking { self.phase = .speaking }
                     await Speaker.shared.say(sentence)
+                    // the sentence has started: the gestures made while the one before was said go
+                    self.drawer.spoken(n)
                 case .step(let st):
                     await self.drawer.draw(st)
                 }
@@ -152,7 +154,7 @@ final class BoardTutor {
         for e in reader.end() { sink.yield(e) }
         sink.finish()
         await player.value
-        if !stopped { await Speaker.shared.untilDone() }
+        if !stopped { await Speaker.shared.untilDone(); drawer.ended() }
         if !drawer.problems.isEmpty { print("tutor:", drawer.problems.joined(separator: "; ")); drawer.problems = [] }
 
         if let reply, !reply.text.isEmpty {

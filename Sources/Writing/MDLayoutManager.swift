@@ -77,7 +77,7 @@ final class MDLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
     }
 
     /// Where a formula's picture is drawn (container coordinates).
-    private func mathRect(_ box: BlockStyler.MathBox, at charIndex: Int) -> CGRect? {
+    func mathRect(_ box: BlockStyler.MathBox, at charIndex: Int) -> CGRect? {
         guard let storage = textStorage else { return nil }
         let g = glyphIndexForCharacter(at: charIndex)
         guard g < numberOfGlyphs else { return nil }

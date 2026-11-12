@@ -118,6 +118,9 @@ final class MathRender {
 
     func cannotRead(tex: String, display: Bool) -> Bool { bad.contains((display ? "D" : "I") + tex) }
 
+    /// A formula's picture is being drawn (the tutor waits for it before measuring a block, as the laptop waits for KaTeX's fonts).
+    var busy: Bool { !asked.isEmpty }
+
     func image(tex: String, display: Bool, size: CGFloat, color: UIColor) async -> UIImage? {
         let k = key(tex, display, size, color)
         if let img = cache.object(forKey: k as NSString) { return img }
