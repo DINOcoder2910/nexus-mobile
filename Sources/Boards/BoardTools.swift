@@ -171,9 +171,11 @@ final class BoardTools {
         switch t {
         case .pen, .pencil, .highlighter, .shapes:
             let type: PKInkingTool.InkType = t == .pencil ? .pencil : t == .highlighter ? .marker : penKind.ink
-            var c = InkConvert.color(color(t))
-            if dark { c = PKInkingTool.convertColor(c, from: .light, to: .dark) }
-            return PKInkingTool(type, color: c, width: width(t))
+            // the tool's colour is always the light-board colour: a dark canvas shows it converted (black as white) and the stroke keeps
+            // the light colour, so it turns back when the board does. Converting it here as well made ink drawn on a dark board come out
+            // dark grey on dark, and stay grey on a light board.
+            _ = dark
+            return PKInkingTool(type, color: InkConvert.color(color(t)), width: width(t))
         case .eraser:
             return eraserPixel ? PKEraserTool(.bitmap, width: width(.eraser)) : PKEraserTool(.vector)
         case .lasso:
