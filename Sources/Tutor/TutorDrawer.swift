@@ -24,6 +24,12 @@ final class TutorDrawer {
     private var blockItems: [String: String] = [:]
     private var anon: [String: TutorBox] = [:]
     private var lastBlock: String?
+    /// Frames round blocks (no block lands on them); ink drawn and labels placed (the next label goes where it covers least); how many
+    /// angles each corner has (a second one is a wider arc).
+    private var marks: [TutorBox] = []
+    private var inkPts: [[Double]] = []
+    private var labels: [TutorBox] = []
+    private var corners: [String: Int] = [:]
     /// 1 = as written; higher is faster (a stopped turn finishes at once).
     var pace: Double = 1
     var problems: [String] = []
@@ -54,6 +60,8 @@ final class TutorDrawer {
         var strokes: [String] = []
         var items: [String] = []
         var geom: TutorDraw.GraphGeom?
+        /// A graph drawn into another: that graph's key.
+        var into: String?
     }
 
     init(board: BoardController) {
@@ -86,8 +94,10 @@ final class TutorDrawer {
         TutorLookup(get: { [unowned self] in self.lookup($0) },
                     part: { [unowned self] id, text in
                         let key = id == "last" ? self.lastBlock : id
-                        guard let key, let iid = self.blockItems[key] ?? (self.board.content.items.contains { $0.id == key } ? key : nil) else { return nil }
-                        return self.partBox(iid, text)
+                        let iid = key.flatMap { k in self.blockItems[k] ?? (self.board.content.items.contains { $0.id == k } ? k : nil) }
+                        let r = iid.flatMap { self.partBox($0, text) }
+                        if r == nil { self.problems.append("\"" + text + "\" is not in " + (key ?? "null")) }
+                        return r
                     },
                     graphAt: { [unowned self] id, p in
                         let key = id == "last" ? self.lastBlock : id
@@ -137,20 +147,43 @@ final class TutorDrawer {
         }
         guard let res, let box = res.box else { return }
         if let id = s.id, !s.brief { boxes[id] = box; drawn[id] = (res.strokes, res.items) }
-        if TutorSteps.blockTypes.contains(s.type) {
+        if TutorSteps.blockTypes.contains(s.type) && res.into == nil {
             flow = TutorSteps.nextFlow(flow, at: s.at, box: box)
+            // (what "last" and a place inside a block find; a side note is not "last": the column's line before it is)
             let key = s.id ?? "#\(steps.count)"
-            lastBlock = key
             if s.id == nil { anon[key] = box }
+            if case .beside(let rel, _, _)? = s.at, rel == "right" || rel == "left" {} else { lastBlock = key }
             if s.type == "text" || s.type == "math", let first = res.items.first { blockItems[key] = first }
             if let g = res.geom { graphs[key] = g }
         }
+        if let into = res.into, let g = res.geom { graphs[into] = g }
+        if (s.type == "box" || s.type == "circle") && !s.brief { marks.append(box) } // (a frame round a block: no block lands on it)
         if s.brief { return }
         drewAll = box.union(drewAll)
         show(box)
     }
 
     private func miss(_ s: TutorStep) { problems.append(s.type + ": an id it names is not on the board") }
+
+    /// How much a label at box b would cover: ink points (this session's and `own`) under it, blocks and labels it overlaps.
+    private func crowd(_ b: TutorBox, own: [[Double]] = []) -> Double {
+        func inside(_ p: [Double]) -> Bool { p[0] > b.x - 2 && p[0] < b.x + b.w + 2 && p[1] > b.y - 2 && p[1] < b.y + b.h + 2 }
+        var n = 0.0
+        for p in inkPts where inside(p) { n += 2 }
+        for p in own where inside(p) { n += 2 }
+        for o in Array(boxes.values) + Array(anon.values) + labels where b.x < o.x + o.w && b.x + b.w > o.x && b.y < o.y + o.h && b.y + b.h > o.y { n += 30 }
+        return n
+    }
+
+    /// Ink drawn and labels placed, remembered for the next label's place.
+    private func remember(_ lines: [TutorDraw.Line], labels placed: [TutorBox] = []) {
+        for l in lines {
+            let pts = TutorDraw.densify(l.points, step: 6)
+            for i in stride(from: 0, to: pts.count, by: 2) { inkPts.append(pts[i]) }
+        }
+        if inkPts.count > 20000 { inkPts.removeFirst(inkPts.count - 20000) }
+        labels += placed
+    }
 
     /// Where a block goes: as Claude asked (placeBlock), then moved down clear of anything already on the board.
     private func place(_ at: TutorPlace?, size: [Double]) -> [Double] {
@@ -160,21 +193,40 @@ final class TutorDrawer {
         }
         // a PDF: its pages (the whole printout is one tall box)
         for p in board.pdfs.values { for f in p.frames { taken.append(TutorBox(f.minX, f.minY, f.width, f.height)) } }
-        taken += boxes.values
-        return TutorSteps.freeSpot(TutorSteps.placeBlock(at, size: size, lookup, frame: frame, flow: flow), size: size, taken: taken)
+        // and graphs, whose ink is no item, and frames round blocks; other ink is not in the way (a label put on a drawn triangle or
+        // circle is meant to be there)
+        for k in graphs.keys { if let b = boxes[k] ?? anon[k] { taken.append(b) } }
+        taken += marks
+        // (a point far below: no lower than just under the ink)
+        let low = flow != nil ? drewAll?.maxY : nil
+        return TutorSteps.freeSpot(TutorSteps.placeBlock(at, size: size, lookup, frame: frame, flow: flow, low: low), size: size, taken: taken)
     }
 
-    private struct Label { var text: String; var at: [Double]; var anchor: String; var shaft: [[Double]]? }
+    /// A label: where it goes by its anchor; a line's shaft or the box a mark marks, when it may go where it covers least instead.
+    private struct Label { var text: String; var at: [Double]; var anchor: String; var shaft: [[Double]]? = nil; var around: TutorBox? = nil }
     private struct Shape { var lines: [TutorDraw.Line]; var label: Label?; var width: Double; var target: TutorBox? }
 
     /// What a line, a mark or an angle step draws (board points), or nil when it names nothing drawn.
     private func shape(_ s: TutorStep) -> Shape? {
-        let L = places
-        let color = s.color ?? (s.type == "highlight" ? TutorDraw.highlight : "#1B1B1B"), width = s.width ?? TutorDraw.inkWidth
+        let L = places, width = s.width ?? TutorDraw.inkWidth
+        // (a frame round a coloured block takes its colour)
+        var own: String?
+        if s.color == nil, s.type == "box" || s.type == "circle", case .id(let t)? = s.target { own = steps.first { $0.id == t }?.color }
+        let color = s.color ?? own ?? (s.type == "highlight" ? TutorDraw.highlight : "#1B1B1B")
         var lines: [TutorDraw.Line] = []
         var label: Label?
         var target: TutorBox?
-        if s.type == "arrow" || s.type == "line" {
+        var same: (TutorInside, TutorInside)?
+        if case .inside(let a)? = s.from, case .inside(let b)? = s.to, a.part != nil, b.part != nil, a.id == b.id { same = (a, b) }
+        if s.type == "arrow" || s.type == "line", let pair = same {
+            // from one part of a line to another part of it: over the top, not through its words
+            guard let a = TutorSteps.resolveTarget(.inside(pair.0), L, frame: frame), let b = TutorSteps.resolveTarget(.inside(pair.1), L, frame: frame) else { return nil }
+            let p = [a.x + a.w / 2, a.y - 3], q = [b.x + b.w / 2, b.y - 3]
+            let parts = TutorDraw.arrowLines(p, q, bend: q[0] >= p[0] ? -0.7 : 0.7, both: s.both, width: width, head: s.type == "arrow")
+            lines.append(TutorDraw.Line(points: parts[0], color: color, width: width))
+            for hd in parts.dropFirst() { lines.append(TutorDraw.Line(points: hd, color: color, width: width, corners: true)) }
+            if let l = s.label { label = Label(text: l, at: [(p[0] + q[0]) / 2, (parts[0].map { $0[1] }.min() ?? p[1]) - 13], anchor: "center") }
+        } else if s.type == "arrow" || s.type == "line" {
             // between two blocks of one column: round their right side (a straight one would be a stub, or would cross the blocks between)
             var A: TutorBox?, B: TutorBox?
             if case .id(let a)? = s.from { A = lookup(a) }
@@ -201,9 +253,17 @@ final class TutorDrawer {
         } else if s.type == "angle" {
             guard let v = s.vertex, let at = TutorSteps.resolve(v, L, frame: frame) else { return nil }
             guard let f = s.from, let t = s.to, let from = TutorSteps.resolve(f, L, frame: frame, toward: at), let to = TutorSteps.resolve(t, L, frame: frame, toward: at) else { return nil }
-            let g = TutorDraw.angleLines(at, from, to, right: s.right)
+            // (a second angle at the same corner: a wider arc)
+            let key = "\(Int(TutorSteps.jsRound(at[0] / 4))),\(Int(TutorSteps.jsRound(at[1] / 4)))", n = corners[key] ?? 0
+            if !s.brief { corners[key] = n + 1 }
+            let g = TutorDraw.angleLines(at, from, to, right: s.right, more: Double(n * 10))
             lines = g.lines.map { TutorDraw.Line(points: $0, color: color, width: s.width ?? 2, corners: s.right) }
             if let l = s.label { label = Label(text: l, at: g.label, anchor: "center") }
+        } else if s.type == "circle", let r = s.r { // (a true circle in a diagram)
+            guard let v = s.vertex, let c = TutorSteps.resolve(v, L, frame: frame) else { return nil }
+            let pts = (0...96).map { i -> [Double] in let t = 2 * Double.pi * Double(i) / 96; return [c[0] + r * cos(t), c[1] + r * sin(t)] }
+            lines.append(TutorDraw.Line(points: pts, color: color, width: width, corners: true))
+            if let l = s.label { label = Label(text: l, at: [c[0], c[1] + r + 14], anchor: "center") }
         } else {
             guard let tg = s.target, let t = TutorSteps.resolveTarget(tg, L, frame: frame) else { return nil }
             if s.type == "highlight" && t.h > 40 { // (a tall block: a marker frame round it, not a stripe through its middle)
@@ -216,7 +276,7 @@ final class TutorDrawer {
                     lines = ls.enumerated().map { i, p in TutorDraw.Line(points: p, color: color, width: width, corners: s.type == "box" || (s.type == "point" && i > 0)) }
                 }
             }
-            if let l = s.label { label = Label(text: l, at: [t.x + t.w / 2, t.y + t.h + 14], anchor: "center") }
+            if let l = s.label { label = Label(text: l, at: [t.x + t.w / 2, t.y + t.h + 14], anchor: "center", around: t) }
             target = t
         }
         return Shape(lines: lines, label: label, width: width, target: target)
@@ -226,26 +286,38 @@ final class TutorDrawer {
         guard let sh = shape(s) else { miss(s); return nil }
         var box: TutorBox?
         for l in sh.lines { for p in l.points { box = TutorBox(p[0], p[1], 0, 0).union(box) } }
-        var items: [String] = []
+        var items: [String] = [], labelBoxes: [TutorBox] = []
         if let label = sh.label {
             let m = await measureLabel(label.text, color: s.color, size: 13)
             var b = TutorDrawer.anchored(label.at, label.anchor, m.w, m.h)
-            // a line's label beside it, clear of it by its own size: the upper side, unless that lands on something drawn and the other
-            // side is clearer
+            // where it covers least: a line's beside it on either side (the upper first) or past its tip; a mark's under, over or beside
+            // what it marks; scored against the ink drawn (and this step's own), the blocks and the labels already placed
+            let w = m.w, hh = m.h
+            var cands: [(Double, Double, Double)] = []
             if let shaft = label.shaft {
-                let taken = Array(boxes.values) + Array(anon.values)
-                func hits(_ q: TutorBox) -> Int { taken.filter { q.x < $0.x + $0.w && q.x + q.w > $0.x && q.y < $0.y + $0.h && q.y + q.h > $0.y }.count }
-                func spot(_ side: Double) -> TutorBox {
-                    let at = TutorDraw.labelAt(shaft, off: 6, size: [m.w, m.h], side: side)
-                    return TutorBox(TutorSteps.jsRound(at[0] - m.w / 2), TutorSteps.jsRound(at[1] - m.h / 2), m.w, m.h)
+                for side in [1.0, -1.0] { let at = TutorDraw.labelAt(shaft, off: 6, size: [w, hh], side: side); cands.append((at[0] - w / 2, at[1] - hh / 2, side < 0 ? 1 : 0)) }
+                let tip = shaft[shaft.count - 1], prev = shaft[max(0, shaft.count - 3)]
+                let d0 = hypot(tip[0] - prev[0], tip[1] - prev[1]), d = d0 == 0 ? 1 : d0
+                cands.append((tip[0] + (tip[0] - prev[0]) / d * (8 + w / 2) - w / 2, tip[1] + (tip[1] - prev[1]) / d * (8 + hh / 2) - hh / 2, 3))
+            } else if let t = label.around {
+                let cx = t.x + t.w / 2, cy = t.y + t.h / 2
+                cands += [(cx - w / 2, t.y + t.h + 8, 0), (cx - w / 2, t.y - hh - 8, 1), (t.x + t.w + 10, cy - hh / 2, 2), (t.x - w - 10, cy - hh / 2, 2)]
+            }
+            if !cands.isEmpty {
+                let own = sh.lines.flatMap(\.points)
+                var best: (Double, Double, Double)?
+                for (x, y, extra) in cands {
+                    let score = extra + crowd(TutorBox(x, y, w, hh), own: own)
+                    if best == nil || score < best!.2 { best = (x, y, score) }
                 }
-                let up = spot(1), down = spot(-1)
-                b = hits(up) > 0 && hits(down) < hits(up) ? down : up
+                if let best { b = TutorBox(TutorSteps.jsRound(best.0), TutorSteps.jsRound(best.1), w, hh) }
             }
             items.append(addLabel(m, box: b))
             box = b.union(box)
+            labelBoxes.append(b)
         }
         let strokes = await ink(sh.lines)
+        remember(sh.lines, labels: labelBoxes)
         for id in items { await reveal(id, seconds: 0.25) }
         let pad = s.type == "highlight" ? 0 : sh.width / 2
         return Drawn(box: box.map { TutorBox($0.x - pad, $0.y - pad, $0.w + 2 * pad, $0.h + 2 * pad) }, strokes: strokes, items: items)
@@ -280,19 +352,29 @@ final class TutorDrawer {
     }
 
     private func graph(_ s: TutorStep) async -> Drawn? {
-        let dim = TutorSteps.estimateSize(s), p = place(s.at, size: dim)
-        let box = TutorBox(TutorSteps.jsRound(p[0]), TutorSteps.jsRound(p[1]), dim[0], dim[1])
-        let plan = TutorDraw.graphPlan(s, box: box)
+        // more curves on a graph already drawn: in its axes, coloured on from its curves
+        let key = s.into.flatMap { $0 == "last" ? lastBlock : $0 }
+        var into: (geom: TutorDraw.GraphGeom, box: TutorBox)?
+        if let key, let g = graphs[key], let b = boxes[key] ?? anon[key] { into = (g, b) }
+        if let k = s.into, into == nil { problems.append("graph: " + k + " is not a graph on the board; drawn as a new one") }
+        let box: TutorBox
+        if let into { box = into.box } else {
+            let dim = TutorSteps.estimateSize(s), p = place(s.at, size: dim)
+            box = TutorBox(TutorSteps.jsRound(p[0]), TutorSteps.jsRound(p[1]), dim[0], dim[1])
+        }
+        let plan = TutorDraw.graphPlan(s, box: box, into: into?.geom)
         if let e = plan.error { problems.append("graph: " + e) }
         show(box)
-        var items: [String] = []
+        var items: [String] = [], placed: [TutorBox] = []
         for l in plan.labels {
             let m = await measureLabel(l.text, color: l.color, size: l.size)
-            items.append(addLabel(m, box: TutorDrawer.anchored([l.x, l.y], l.anchor, m.w, m.h)))
+            let b = TutorDrawer.anchored([l.x, l.y], l.anchor, m.w, m.h)
+            items.append(addLabel(m, box: b)); placed.append(b)
         }
         let strokes = await ink(plan.lines)
+        remember(plan.lines, labels: placed)
         for id in items { await reveal(id, seconds: 0.15) }
-        return Drawn(box: box, strokes: strokes, items: items, geom: plan.geom)
+        return Drawn(box: box, strokes: strokes, items: items, geom: plan.geom, into: into != nil ? key : nil)
     }
 
     /// Nexus's chemistry diagrams, drawn by the laptop's own study tools (Sources/Render) and kept as a PNG in the board's files/, as the
@@ -733,27 +815,71 @@ extension TutorDrawer {
 
     // MARK: words inside a drawn block
 
-    private static func norm(_ c: String) -> String { c == "−" || c == "–" ? "-" : c == "×" || c == "⋅" || c == "·" ? "*" : c }
-    /// The part's characters as the board shows them: TeX commands, braces, $, ^, _ and spaces left out, minus signs and × as - and *.
-    private static func chars(_ s: String) -> [String] {
-        s.replacingOccurrences(of: #"\\[a-zA-Z]+|[{}$\s^_]"#, with: "", options: .regularExpression).map { norm(String($0)) }
+    /// Characters made alike: minus signs, ×, a product's dots, a prime.
+    private static func norm(_ c: String) -> String {
+        c == "−" || c == "–" ? "-" : c == "×" ? "*" : c == "⋅" || c == "·" || c == "∙" ? "." : c == "′" ? "'" : c
+    }
+    /// TeX's symbol names read as the symbols drawn (\pm as ±), as the laptop's tutorboard.js has them.
+    private static let texSymbols: [String: String] = [
+        "pm": "±", "mp": "∓", "times": "×", "cdot": "⋅", "div": "÷", "to": "→", "rightarrow": "→", "Rightarrow": "⇒", "leftarrow": "←",
+        "rightleftharpoons": "⇌", "le": "≤", "leq": "≤", "ge": "≥", "geq": "≥", "ne": "≠", "neq": "≠", "approx": "≈", "infty": "∞",
+        "degree": "°", "circ": "∘", "partial": "∂", "int": "∫", "sum": "∑",
+        "alpha": "α", "beta": "β", "gamma": "γ", "delta": "δ", "Delta": "Δ", "theta": "θ", "lambda": "λ", "mu": "μ", "pi": "π", "rho": "ρ",
+        "sigma": "σ", "omega": "ω", "Omega": "Ω", "phi": "φ"]
+    private static let texName = try! NSRegularExpression(pattern: #"\\([a-zA-Z]+)"#)
+    private static let braceGroup = try! NSRegularExpression(pattern: #"\{([^{}]*)\}"#)
+    private static let stackCmd = try! NSRegularExpression(pattern: #"\\(d?frac|tfrac|sqrt|binom)\s*(\{[^{}]*\}\s*)*"#)
+    /// What a formula's TeX has that is never drawn as characters: colours, environments' names.
+    private static let unseen = try! NSRegularExpression(pattern: #"\\(textcolor|color|begin|end)\s*\{[^{}]*\}"#)
+
+    /// TeX's characters as drawn: symbol names as their symbols; other commands, braces, $, ^, _, & and spaces left out.
+    private static func texChars(_ t: String) -> [String] {
+        let ns = t as NSString
+        var named = "", last = 0
+        for m in texName.matches(in: t, range: NSRange(location: 0, length: ns.length)) {
+            named += ns.substring(with: NSRange(location: last, length: m.range.location - last))
+            named += texSymbols[ns.substring(with: m.range(at: 1))] ?? ""
+            last = m.range.location + m.range.length
+        }
+        named += ns.substring(from: last)
+        return named.replacingOccurrences(of: #"[{}$\s^_&]"#, with: "", options: .regularExpression).map { norm(String($0)) }
+    }
+    /// The pieces to find: the whole part, or for \frac{a}{b} / \sqrt{x} the pieces between the braces, then the rest run by run (their
+    /// boxes are joined).
+    private static func pieces(_ tex: String) -> [[String]] {
+        guard tex.range(of: #"\\(d?frac|tfrac|sqrt|binom)\b"#, options: .regularExpression) != nil else { return [texChars(tex)].filter { !$0.isEmpty } }
+        let ns = tex as NSString, all = NSRange(location: 0, length: ns.length)
+        var out: [[String]] = []
+        for m in braceGroup.matches(in: tex, range: all) { out.append(texChars(ns.substring(with: m.range(at: 1)))) }
+        for r in stackCmd.stringByReplacingMatches(in: tex, range: all, withTemplate: "\u{1}").components(separatedBy: "\u{1}") { out.append(texChars(r)) }
+        return out.filter { !$0.isEmpty }
     }
     private static func find(_ want: [String], in hay: [String]) -> Int? {
         guard !want.isEmpty, hay.count >= want.count else { return nil }
         for i in 0...(hay.count - want.count) where Array(hay[i..<(i + want.count)]) == want { return i }
         return nil
     }
+    /// Whether `hay` has every character of `want` (as many times), in any order.
+    private static func holds(_ hay: [String], _ want: [String]) -> Bool {
+        var n: [String: Int] = [:]
+        for c in hay { n[c, default: 0] += 1 }
+        for c in want { guard let k = n[c], k > 0 else { return false }; n[c] = k - 1 }
+        return true
+    }
     /// TeX laid out in two dimensions (a fraction, a root, a sum's limits): its characters are not in a row.
     private static let stacked = ["\\frac", "\\dfrac", "\\tfrac", "\\over", "\\sqrt", "\\begin", "\\sum", "\\int", "\\prod", "\\lim", "\\binom",
                                   "\\stackrel", "\\overset", "\\underset", "\\\\"]
 
-    /// Some words of a drawn text or maths block ("(x+3)", "2x", a word) -> their box on the board, or nil. The block's visible words
-    /// are searched with spaces, minus signs and × ignored, and the box is the union of their glyphs (TextKit). Maths is a picture: the
-    /// words found in a formula's TeX give the formula's picture, narrowed to where they come in it when the formula is one row.
+    /// Some words of a drawn text or maths block ("(x+3)", "2x", "\pm", a word) -> their box on the board, or nil when they are not in
+    /// it. The block's visible words are searched with spaces ignored, TeX's symbol names read as the symbols drawn and minus signs, ×
+    /// and · made alike; a fraction's or a root's pieces are found one by one and their boxes joined (TextKit's glyphs). Maths is a
+    /// picture, so there the box is a best estimate: the pieces found in a formula's TeX give where they come in it when the formula is
+    /// one row, else the formula's picture; a formula that has the part's characters, though not in a row, gives its picture. Nothing
+    /// only when the part's characters can't be in the block at all.
     private func partBox(_ iid: String, _ text: String) -> TutorBox? {
         guard let v = board.itemViews[iid] as? TextBlockView, let tl = v.layout?.text,
               let it = board.content.items.first(where: { $0.id == iid }) else { return nil }
-        let want = TutorDrawer.chars(text)
+        let want = TutorDrawer.pieces(text)
         guard !want.isEmpty else { return nil }
         let origin = board.box(of: it).origin, storage = tl.storage, ns = storage.string as NSString
         func onBoard(_ r: CGRect) -> TutorBox {
@@ -767,31 +893,38 @@ extension TutorDrawer {
             if storage.attribute(BlockStyler.mathKey, at: range.location, effectiveRange: nil) != nil { return }
             hay.append(TutorDrawer.norm(sub)); at.append(range)
         }
-        if let i = TutorDrawer.find(want, in: hay) {
-            var r = CGRect.null
-            for k in i..<(i + want.count) { let q = tl.rect(of: at[k]); if !q.isNull { r = r.union(q) } }
-            if !r.isNull { return onBoard(r) }
+        var r = CGRect.null, all = true
+        for w in want {
+            guard let i = TutorDrawer.find(w, in: hay) else { all = false; break }
+            for k in i..<(i + w.count) { let q = tl.rect(of: at[k]); if !q.isNull { r = r.union(q) } }
         }
+        if all && !r.isNull { return onBoard(r) }
         // in a formula's TeX
-        var found: TutorBox?
+        var found: TutorBox?, loose: TutorBox?
         storage.enumerateAttribute(BlockStyler.mathKey, in: NSRange(location: 0, length: storage.length), options: []) { value, range, stop in
             guard let box = value as? BlockStyler.MathBox, let pic = tl.manager.mathRect(box, at: range.location) else { return }
             let rest = ns.substring(from: range.location)
             let open = rest.hasPrefix("$$") ? "$$" : rest.hasPrefix("$") ? "$" : ""
             guard !open.isEmpty else { return }
             let body = String(rest.dropFirst(open.count))
-            let tex = body.range(of: open).map { String(body[..<$0.lowerBound]) } ?? body
-            let src = TutorDrawer.chars(tex)
-            guard let i = TutorDrawer.find(want, in: src) else { return }
-            var r = pic
-            if !TutorDrawer.stacked.contains(where: { tex.contains($0) }), src.count > 0 {
-                let n = CGFloat(src.count)
-                r = CGRect(x: pic.minX + pic.width * CGFloat(i) / n, y: pic.minY, width: pic.width * CGFloat(want.count) / n, height: pic.height)
+            let tex0 = body.range(of: open).map { String(body[..<$0.lowerBound]) } ?? body
+            let tex = TutorDrawer.unseen.stringByReplacingMatches(in: tex0, range: NSRange(location: 0, length: (tex0 as NSString).length), withTemplate: "")
+            let src = TutorDrawer.texChars(tex)
+            var spans: [(Int, Int)] = []
+            for w in want { guard let i = TutorDrawer.find(w, in: src) else { break }; spans.append((i, w.count)) }
+            if spans.count == want.count {
+                var q = pic
+                if !TutorDrawer.stacked.contains(where: { tex.contains($0) }), !src.isEmpty {
+                    let n = CGFloat(src.count), lo = CGFloat(spans.map(\.0).min()!), hi = CGFloat(spans.map { $0.0 + $0.1 }.max()!)
+                    q = CGRect(x: pic.minX + pic.width * lo / n, y: pic.minY, width: pic.width * (hi - lo) / n, height: pic.height)
+                }
+                found = onBoard(q)
+                stop.pointee = true
+            } else if loose == nil && TutorDrawer.holds(src, want.flatMap { $0 }) {
+                loose = onBoard(pic)
             }
-            found = onBoard(r)
-            stop.pointee = true
         }
-        return found
+        return found ?? loose
     }
 }
 
