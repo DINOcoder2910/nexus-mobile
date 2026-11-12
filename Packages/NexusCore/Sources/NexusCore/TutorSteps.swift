@@ -13,7 +13,10 @@ public enum TutorSteps {
     public static let blockTypes = ["text", "math", "graph", "chem"]
     public static let lineTypes = ["arrow", "line", "path"]
     public static let markTypes = ["circle", "box", "underline", "highlight", "point"]
-    public static let stepTypes = blockTypes + lineTypes + markTypes + ["erase"]
+    /// (angle: a right-angle square or an arc at a corner)
+    public static let stepTypes = blockTypes + lineTypes + markTypes + ["angle", "erase"]
+    /// The ones that may be `brief`: shown while their sentence is said, then gone.
+    public static let briefTypes = ["arrow", "line"] + markTypes + ["angle"]
     public static let screenTypes = ["point", "circle", "underline", "highlight"]
     public static let chemKinds = ["lewis", "vsepr", "cycle"]
     public static let sides = ["center", "top", "bottom", "left", "right", "topleft", "topright", "bottomleft", "bottomright"]
@@ -23,7 +26,9 @@ public enum TutorSteps {
     public static let sizes: [String: Double] = ["small": 13, "normal": 16, "large": 22, "huge": 32]
     public static let mathSize: Double = 22
     public static let gap: Double = 24
-    public static let graphW: Double = 320, graphH: Double = 220
+    public static let graphW: Double = 380, graphH: Double = 260
+    /// A text block put beside another wraps at this width.
+    public static let sideNoteW: Double = 240
     /// A diagram's width and its height as a fraction of the width.
     public static let chemSize: [String: (Double, Double)] = ["lewis": (320, 340.0 / 460), "vsepr": (220, 1), "cycle": (520, 430.0 / 760)]
     static let maxCoord: Double = 100000
@@ -41,7 +46,7 @@ public enum TutorSteps {
         }
     }
     /// JavaScript's Math.round (halves go up).
-    static func jsRound(_ v: Double) -> Double { (v + 0.5).rounded(.down) }
+    public static func jsRound(_ v: Double) -> Double { (v + 0.5).rounded(.down) }
     static func r2(_ v: Double) -> Double { jsRound(max(-maxCoord, min(maxCoord, v)) * 100) / 100 }
     static func str(_ v: JSONValue?, _ maxLen: Int) -> String? {
         guard let s = v?.string, !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
@@ -66,22 +71,65 @@ public enum TutorSteps {
         return nil
     }
 
+    static let texColor = try! NSRegularExpression(pattern: #"\\(color|textcolor)\s*\{\s*([A-Za-z]+|#[0-9a-fA-F]{6})\s*\}(\s*\{)?"#)
+    static let dollarRun = try! NSRegularExpression(pattern: #"\$\$?[^$]+\$\$?"#)
+    /// Colours in TeX as the board's: \color{blue}{u} -> \textcolor{#1F5FD1}{u} (KaTeX's \color is a switch: the rest of the line took
+    /// the colour) and a named colour as the board's own (KaTeX's pure blue turned near-white on the dark board).
+    public static func texColors(_ tex: String) -> String {
+        TutorDraw.replace(texColor, in: tex) { g in
+            let hex = color(of: .string(g[2] ?? "")) ?? (g[2] ?? ""), open = g[3] != nil
+            return open || g[1] == "textcolor" ? "\\textcolor{" + hex + "}" + (open ? "{" : "") : "\\color{" + hex + "}"
+        }
+    }
+    /// The same inside a text block's $…$.
+    static func textColors(_ t: String) -> String { TutorDraw.replace(dollarRun, in: t) { g in texColors(g[0] ?? "") } }
+
+    /// An id, or "$last" (the block drawn last) as "last".
+    static func idOf(_ v: JSONValue?) -> String? {
+        guard let s = v?.string else { return nil }
+        if s == "$last" { return "last" }
+        return isId(s) ? s : nil
+    }
+    /// Inside a block: { in: id, part: "text" } (those words or symbols of a text or maths block, as drawn) or { in: id, at: [x, y] } (a
+    /// point of a graph, in the graph's own numbers); { in: id } alone is the whole block.
+    static func inside(_ v: JSONValue?) -> TutorInside? {
+        guard case .object? = v, let id = idOf(v?["in"]) else { return nil }
+        if let part = v?["part"]?.string, !part.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return TutorInside(id: id, part: String(part.trimmingCharacters(in: .whitespacesAndNewlines).prefix(80)))
+        }
+        if let p = pt(v?["at"]) { return TutorInside(id: id, at: p) }
+        return TutorInside(id: id)
+    }
+    static func ofPos(_ v: JSONValue?) -> TutorPos? {
+        guard let of = v?["of"]?.string, isId(of) else { return nil }
+        let side = v?["side"]?.string.flatMap { sides.contains($0) ? $0 : nil } ?? "center"
+        return .of(of, side: side, dx: num(v?["dx"]).map(r2), dy: num(v?["dy"]).map(r2))
+    }
+    /// A position (`from`, `to`, an angle's `at`): [x, y]; an id; { of: id, side, dx, dy }; or a place inside a block.
     static func pos(_ v: JSONValue?) -> TutorPos? {
         switch v {
-        case .string(let s)?: return isId(s) ? .id(s) : nil
+        case .string?: return idOf(v).map { .id($0) }
         case .array?: return pt(v).map { .point($0[0], $0[1]) }
         case .object?:
-            guard let of = v?["of"]?.string, isId(of) else { return nil }
-            let side = v?["side"]?.string.flatMap { sides.contains($0) ? $0 : nil } ?? "center"
-            return .of(of, side: side, dx: num(v?["dx"]).map(r2), dy: num(v?["dy"]).map(r2))
+            if let i = v?["in"], i != .null { return inside(v).map { .inside($0) } }
+            return ofPos(v)
         default: return nil
         }
     }
+    /// A target (what a mark goes around): [x, y, w, h], [x, y], an id, a side of a block ({ of: id, side }), or a place inside a block.
     static func target(_ v: JSONValue?) -> TutorTarget? {
-        if let s = v?.string { return isId(s) ? .id(s) : nil }
-        if let r = rect(v) { return .rect(r[0], r[1], r[2], r[3]) }
-        if let p = pt(v) { return .point(p[0], p[1]) }
-        return nil
+        switch v {
+        case .string?: return idOf(v).map { .id($0) }
+        case .array?:
+            if let r = rect(v) { return .rect(r[0], r[1], r[2], r[3]) }
+            if let p = pt(v) { return .point(p[0], p[1]) }
+            return nil
+        case .object?:
+            if let i = v?["in"], i != .null { return inside(v).map { .inside($0) } }
+            if case .of(let id, let side, let dx, let dy)? = ofPos(v) { return .of(id, side: side, dx: dx, dy: dy) }
+            return nil
+        default: return nil
+        }
     }
     static func place(_ v: JSONValue?) -> TutorPlace? {
         if case .array? = v { return pt(v).map { .point($0[0], $0[1]) } }
@@ -135,21 +183,21 @@ public enum TutorSteps {
         switch type {
         case "text":
             guard let text = str(raw["text"], 2000) else { return bad("text needs text") }
-            s.text = text
+            s.text = textColors(text)
             if let size = sizeOf(raw["size"]), size != sizes["normal"]! { s.size = size }
         case "math":
             guard let tex = str(raw["tex"], 600) else { return bad("math needs tex") }
             let t = tex.trimmingCharacters(in: .whitespacesAndNewlines)
                 .replacingOccurrences(of: #"^\$+|\$+$"#, with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
             guard !t.isEmpty else { return bad("math needs tex") }
-            s.tex = t
+            s.tex = texColors(t)
             if let size = sizeOf(raw["size"]), size != mathSize { s.size = size }
         case "graph":
             let list: [JSONValue] = raw["fn"]?.string != nil ? [.object([("fn", raw["fn"]!)])] : (raw["fns"]?.array ?? [])
             s.fns = list.prefix(6).compactMap { f -> TutorFn? in
                 let o: JSONValue = f.string != nil ? .object([("fn", f)]) : f
                 guard let fn = str(o["fn"], 200) else { return nil }
-                return TutorFn(fn: String(fn.prefix(200)), color: color(of: o["color"]), label: str(o["label"], 40))
+                return TutorFn(fn: String(fn.prefix(200)), color: color(of: o["color"]), label: str(o["label"], 40), dash: o["dash"]?.bool == true)
             }
             s.graphPoints = (raw["points"]?.array ?? []).prefix(40).compactMap { p -> TutorGraphPoint? in
                 guard let a = p.array, a.count >= 2, let x = num(a[0]), let y = num(a[1]) else { return nil }
@@ -164,6 +212,7 @@ public enum TutorSteps {
             s.xLabel = str(raw["xLabel"], 40)
             s.yLabel = str(raw["yLabel"], 40)
             if let h = num(raw["h"]), h >= 40 { s.h = r2(min(h, 2000)) }
+            if let g = idOf(raw["in"]) { s.into = g; s.at = nil; s.w = nil; s.h = nil } // (more curves or points on graph `in`, in its axes)
         case "chem":
             let kind = raw["kind"]?.string?.lowercased() ?? ""
             guard chemKinds.contains(kind) else { return bad("chem needs kind: " + chemKinds.joined(separator: ", ")) }
@@ -186,17 +235,29 @@ public enum TutorSteps {
         case "path":
             let pts = (raw["points"]?.array ?? []).prefix(400).compactMap { pt($0) }
             guard pts.count >= 2 else { return bad("path needs 2 or more points") }
-            s.points = pts
-            if raw["closed"]?.bool == true { s.closed = true }
-            if raw["smooth"]?.bool == false { s.smooth = false }
+            // a path that ends where it starts is a closed one (its first point repeated would make a knot in the curve)
+            let shut = pts.count > 3 && pts[0] == pts[pts.count - 1]
+            s.points = shut ? Array(pts.dropLast()) : pts
+            if raw["closed"]?.bool == true || (shut && raw["closed"]?.bool != false) { s.closed = true }
+            if let sm = raw["smooth"]?.bool { s.smooth = sm }
+        case "angle":
+            guard let at = pos(raw["at"]), let from = pos(raw["from"]), let to = pos(raw["to"]) else {
+                return bad("angle needs at (the corner), from and to (a point along each side)")
+            }
+            s.vertex = at; s.from = from; s.to = to
+            if raw["right"]?.bool == true { s.right = true }
         case "erase":
             guard let t = raw["target"]?.string, isId(t) else { return bad("erase needs target: an earlier step id") }
             s.target = .id(t)
+        case "circle" where (raw["target"] == nil || raw["target"] == .null) && (num(raw["r"]) ?? 0) > 0 && pos(raw["at"]) != nil:
+            s.vertex = pos(raw["at"]); s.r = r2(min(num(raw["r"])!, 2000)) // (a true circle: its centre and radius, for a diagram)
         default: // the marks
-            guard let t = target(raw["target"]) else { return bad(type + " needs target: an id, [x, y, w, h] or [x, y]") }
+            guard let t = target(raw["target"]) else { return bad(type + " needs target: an id, [x, y, w, h], [x, y] or {\"in\": id, \"part\"|\"at\": ...}") }
             s.target = t
         }
-        if lineTypes.contains(type) || markTypes.contains(type), let w = num(raw["width"]), w > 0 { s.width = r2(min(w, 24)) }
+        if lineTypes.contains(type) || markTypes.contains(type) || type == "angle", let w = num(raw["width"]), w > 0 { s.width = r2(min(w, 24)) }
+        // brief: a gesture while a sentence is said (gone when the next one starts), not ink left on the board; a point is one unless "brief": false
+        if briefTypes.contains(type) && (raw["brief"]?.bool == true || (type == "point" && raw["brief"]?.bool != false)) { s.brief = true }
         return (s, nil)
     }
 
@@ -234,57 +295,121 @@ public enum TutorSteps {
         let k = min(dx != 0 ? hw / abs(dx) : .infinity, dy != 0 ? hh / abs(dy) : .infinity)
         return k >= 1 ? p : [c[0] + dx * k, c[1] + dy * k]
     }
-    /// A position -> a board point; nil when an id is unknown. `toward`: the other end, for a bare id.
-    public static func resolve(_ p: TutorPos, _ lookup: (String) -> TutorBox?, frame: [Double] = [0, 0], toward: [Double]? = nil) -> [Double]? {
+    /// A place inside a block -> its box on the board: the words' box (`lookup.part`, the drawer's: it finds them in the drawn block;
+    /// nil when they are not there; without a `lookup.part`, the whole block), or the graph point's ([x, y, 0, 0], `lookup.graphAt`). nil
+    /// when the block is unknown.
+    public static func insideBox(_ p: TutorInside, _ lookup: TutorLookup) -> TutorBox? {
+        guard let b = lookup.get(p.id) else { return nil }
+        if let part = p.part { return lookup.part.map { $0(p.id, part) } ?? b } // (not found in it: nothing, not the whole block)
+        if let at = p.at {
+            guard let q = lookup.graphAt?(p.id, at) else { return nil }
+            return TutorBox(q[0], q[1], 0, 0)
+        }
+        return b
+    }
+    /// A position -> a board point; nil when an id is unknown. `toward`: the other end, for a bare id (or the words inside a block).
+    public static func resolve(_ p: TutorPos, _ lookup: TutorLookup, frame: [Double] = [0, 0], toward: [Double]? = nil) -> [Double]? {
         switch p {
         case .point(let x, let y): return [x + frame[0], y + frame[1]]
+        case .inside(let i):
+            guard let b = insideBox(i, lookup) else { return nil }
+            if let toward, b.w != 0 || b.h != 0 { return edgeToward(b, toward, gap: 3) }
+            return center(b)
         case .id(let id):
-            guard let b = lookup(id) else { return nil }
+            guard let b = lookup.get(id) else { return nil }
             return toward.map { edgeToward(b, $0) } ?? center(b)
         case .of(let id, let side, let dx, let dy):
-            guard let b = lookup(id) else { return nil }
+            guard let b = lookup.get(id) else { return nil }
             let q = sidePoint(b, side)
             return [q[0] + (dx ?? 0), q[1] + (dy ?? 0)]
         }
     }
-    /// An arrow's or a line's two ends: an id end aims at the other end.
-    public static func resolveEnds(_ s: TutorStep, _ lookup: (String) -> TutorBox?, frame: [Double] = [0, 0]) -> ([Double], [Double])? {
+    public static func resolve(_ p: TutorPos, _ lookup: (String) -> TutorBox?, frame: [Double] = [0, 0], toward: [Double]? = nil) -> [Double]? {
+        withoutActuallyEscaping(lookup) { f in resolve(p, TutorLookup(get: f), frame: frame, toward: toward) }
+    }
+    /// An arrow's or a line's two ends: an id end (or the words inside a block) aims at the other end (its centre, or its point).
+    public static func resolveEnds(_ s: TutorStep, _ lookup: TutorLookup, frame: [Double] = [0, 0]) -> ([Double], [Double])? {
         guard let from = s.from, let to = s.to else { return nil }
         func rough(_ p: TutorPos) -> [Double]? {
-            if case .id(let id) = p { return lookup(id).map(center) }
+            if case .id(let id) = p { return lookup.get(id).map(center) }
             return resolve(p, lookup, frame: frame)
         }
+        func aims(_ p: TutorPos) -> Bool {
+            switch p {
+            case .id: return true
+            case .inside(let i): return i.at == nil
+            default: return false
+            }
+        }
         guard let a0 = rough(from), let b0 = rough(to) else { return nil }
-        let a: [Double]? = { if case .id = from { return resolve(from, lookup, frame: frame, toward: b0) }; return a0 }()
-        let b: [Double]? = { if case .id = to { return resolve(to, lookup, frame: frame, toward: a0) }; return b0 }()
+        let a = aims(from) ? resolve(from, lookup, frame: frame, toward: b0) : a0
+        let b = aims(to) ? resolve(to, lookup, frame: frame, toward: a0) : b0
         guard let a, let b else { return nil }
         return (a, b)
     }
-    public static func resolveTarget(_ t: TutorTarget, _ lookup: (String) -> TutorBox?, frame: [Double] = [0, 0]) -> TutorBox? {
+    public static func resolveEnds(_ s: TutorStep, _ lookup: (String) -> TutorBox?, frame: [Double] = [0, 0]) -> ([Double], [Double])? {
+        withoutActuallyEscaping(lookup) { f in resolveEnds(s, TutorLookup(get: f), frame: frame) }
+    }
+    public static func resolveTarget(_ t: TutorTarget, _ lookup: TutorLookup, frame: [Double] = [0, 0]) -> TutorBox? {
         switch t {
-        case .id(let id): return lookup(id)
+        case .id(let id): return lookup.get(id)
+        case .inside(let i): return insideBox(i, lookup)
+        case .of(let id, let side, let dx, let dy):
+            return resolve(.of(id, side: side, dx: dx, dy: dy), lookup, frame: frame).map { TutorBox($0[0], $0[1], 0, 0) }
         case .rect(let x, let y, let w, let h): return TutorBox(x + frame[0], y + frame[1], w, h)
         case .point(let x, let y): return TutorBox(x + frame[0], y + frame[1], 0, 0)
         }
     }
+    public static func resolveTarget(_ t: TutorTarget, _ lookup: (String) -> TutorBox?, frame: [Double] = [0, 0]) -> TutorBox? {
+        withoutActuallyEscaping(lookup) { f in resolveTarget(t, TutorLookup(get: f), frame: frame) }
+    }
     /// A block's top-left. size: [w, h]; flow: where the next block goes when `at` is left out (the left edge and the bottom of the
-    /// last block, frame included).
-    public static func placeBlock(_ at: TutorPlace?, size: [Double], _ lookup: (String) -> TutorBox?, frame: [Double] = [0, 0], flow: [Double]? = nil) -> [Double] {
+    /// last block, frame included); low: the bottom of the ink drawn so far.
+    public static func placeBlock(_ at: TutorPlace?, size: [Double], _ lookup: (String) -> TutorBox?, frame: [Double] = [0, 0], flow: [Double]? = nil, low: Double? = nil) -> [Double] {
         switch at {
-        case .point(let x, let y)?: return [x + frame[0], y + frame[1]]
+        // (a point far below everything drawn so far is a board-wide y meant for an earlier turn: no empty band before it)
+        case .point(let x, let y)?: return [x + frame[0], flow.map { min(y + frame[1], max($0[1], low ?? -.infinity) + 2 * gap) } ?? y + frame[1]]
         case .beside(let rel, let id, let g)?:
             if let b = lookup(id) {
                 let gp = g ?? gap
                 switch rel {
                 case "below": return [b.x, b.y + b.h + gp]
                 case "above": return [b.x, b.y - gp - size[1]]
-                case "right": return [b.x + b.w + gp, b.y]
-                default: return [b.x - gp - size[0], b.y]
+                default:
+                    // (a note beside a line is level with its middle; beside a picture, with its top)
+                    let y = b.h <= max(80, size[1] * 1.6) ? b.y + (b.h - size[1]) / 2 : b.y
+                    return rel == "right" ? [b.x + b.w + gp, y] : [b.x - gp - size[0], y]
                 }
             }
         case nil: break
         }
         return flow ?? frame
+    }
+    /// A block's top-left moved down, as little as it takes, until its box overlaps none of `taken`, `margin` apart: Claude places blocks
+    /// without seeing them, so two would otherwise land on each other (a graph under a diagram, a label over a picture).
+    public static func freeSpot(_ at: [Double], size: [Double], taken: [TutorBox], margin: Double = 10) -> [Double] {
+        let x = at[0], w = size[0], h = size[1]
+        var y = at[1]
+        for _ in 0..<400 {
+            var low: Double?
+            for b in taken where x < b.x + b.w + margin && x + w + margin > b.x && y < b.y + b.h + margin && y + h + margin > b.y {
+                low = max(low ?? -.infinity, b.y + b.h + margin)
+            }
+            guard let low else { break }
+            y = low
+        }
+        return [x, y]
+    }
+    /// Where the next block without "at" goes once `box` is drawn (placed by `at`): under it when it went below the one before, at a
+    /// point (a new column starts there) or followed the flow itself, so a column goes on; after a block put beside or above another (a
+    /// side note), the flow keeps its column and goes below the lowest of the two.
+    public static func nextFlow(_ flow: [Double]?, at: TutorPlace?, box: TutorBox) -> [Double] {
+        let bottom = box.y + box.h + gap
+        switch at {
+        case nil, .point?: return [box.x, bottom]
+        case .beside(let rel, _, _)? where rel == "below": return [box.x, bottom]
+        default: return [flow?[0] ?? box.x, max(flow?[1] ?? bottom, bottom)]
+        }
     }
     /// A rough size before the block is drawn (the board measures the real one).
     public static func estimateSize(_ s: TutorStep) -> [Double] {
@@ -339,13 +464,19 @@ Every step may have "id" (letters, digits, _ or -; give one to anything you will
 Blocks (have a size). "at" is the top-left [x, y], or {"below"|"above"|"right"|"left": "<id>"}; leave "at" out to go below the block before.
 - {"type":"text","text":"markdown","size":"small|normal|large|huge","w":300}
 - {"type":"math","tex":"\\Delta H = \\sum \\Delta H_f(\\text{products}) - \\sum \\Delta H_f(\\text{reactants})"}  (LaTeX, no $; chemical symbols upright: \\mathrm{Zn^{2+}})
-- {"type":"graph","fns":[{"fn":"x^2-3","label":"y = x² − 3"}],"x":[-4,4],"y":[-4,10],"points":[[0,-3,"min"]],"xLabel":"x","yLabel":"y","w":320,"h":220}  (fn uses x, + - * / ^, sin cos tan exp ln log sqrt abs, pi, e)
-- {"type":"chem","kind":"lewis","molecule":"H2O"}, {"type":"chem","kind":"vsepr","molecule":"NH3"} (or "bp":3,"lp":1), {"type":"chem","kind":"cycle","compound":"NaCl"}  (Nexus's own chemistry diagrams)
+- {"type":"graph","fns":[{"fn":"x^2-3","label":"y = x² − 3"}],"x":[-4,4],"y":[-4,10],"points":[[0,-3,"min"]],"xLabel":"x","yLabel":"y","w":320,"h":220}  (fn uses x, + - * / ^, sin cos tan exp ln log sqrt abs, pi, e; "dash":true in a fn for a dashed curve). About 380 by 260 unless w and h say.
+- {"type":"graph","in":"g1","fns":[{"fn":"2x-1","label":"tangent"}],"points":[[1,1,"(1, 1)"]]}  (adds curves or points to graph g1, in its axes; never draw a second graph to add a curve)
+- {"type":"chem","kind":"lewis","molecule":"H2O"}, {"type":"chem","kind":"vsepr","molecule":"NH3"} (or "bp":3,"lp":1), {"type":"chem","kind":"cycle","compound":"NaCl"}  (Nexus's own chemistry diagrams; about lewis 260 wide, vsepr 200, cycle 600 by 340: leave them that room)
 Ink. A position is [x, y], an id (the edge of that thing facing the other end), or {"of":"<id>","side":"top|bottom|left|right|center|topleft|...","dx":0,"dy":0}.
 - {"type":"arrow","from":"eq1","to":"g1","bend":0.3,"label":"gives"}  (bend -1..1 curves it; "both":true for a double arrow)
 - {"type":"line","from":[0,40],"to":[200,40],"dash":true}
-- {"type":"path","points":[[0,0],[30,-20],[60,0]],"closed":false}  (a freehand curve through the points)
-- {"type":"circle"|"box"|"underline"|"highlight"|"point","target":"eq1"}  (target: an id, [x, y, w, h] or [x, y])
+- {"type":"path","points":[[0,0],[30,-20],[60,0]],"closed":false}  (a freehand curve through the points; a closed path has straight sides unless "smooth":true)
+- {"type":"circle"|"box"|"underline"|"highlight"|"point","target":"eq1"}  (target: an id, [x, y, w, h] or [x, y]; a box or circle round a coloured block takes its colour)
+- {"type":"circle","at":[150,150],"r":120}  (a true circle in a diagram, by its centre and radius)
+- {"type":"angle","at":[60,200],"from":[0,200],"to":[60,120],"right":true,"label":"θ"}  (at the corner, from and to a point along each side: a small square when "right":true, else an arc)
+Inside a block, as a target or a position: {"in":"eq1","part":"(x+3)"} (those symbols or words of a text or math block, as written in it: plain characters and symbols like "9+32", "x^2", "\\pm", one fraction's top or bottom, never a whole \\frac{..}{..}) or {"in":"g1","at":[2,-1]} (a point of graph g1 in its own x, y numbers); "last" is the block drawn last.
+Gestures: "brief":true on a mark, arrow, line or angle shows it only while its sentence is said (a teacher pointing), then it goes; a point is always brief. Keep ink (no brief) for what should stay in the notes.
+- {"type":"point","target":{"in":"g1","at":[0,-3]}}  (a pointer to it while you say "this minimum")
 - {"type":"erase","target":"eq1"}  (takes an earlier step's drawing away)
 On the screen (the screenshot, in its pixels): {"type":"point"|"circle"|"underline"|"highlight","on":"screen","target":[x, y] or [x, y, w, h],"label":"..."}; when unsure of the exact spot, "area":"C2" (a cell of the grid drawn on the screenshot) instead of "target".
 """#
@@ -375,13 +506,36 @@ public enum TutorPos: Equatable {
     case point(Double, Double)
     case id(String)
     case of(String, side: String, dx: Double?, dy: Double?)
+    case inside(TutorInside)
 }
 
-/// What a mark goes around: an id, [x, y, w, h] or [x, y].
+/// A place inside a block: some of its words or symbols (`part`, as written in it), a point of a graph (`at`, in the graph's own
+/// numbers), or the whole block. The id "last" names the block drawn last.
+public struct TutorInside: Equatable {
+    public var id: String
+    public var part: String?
+    public var at: [Double]?
+    public init(id: String, part: String? = nil, at: [Double]? = nil) { self.id = id; self.part = part; self.at = at }
+}
+
+/// What ids name, for the geometry: `get` a box (earlier steps, the board's own items); `part` the box of some words inside a drawn block
+/// (nil when they can't be found: the whole block is used); `graphAt` a graph's own point as a board point.
+public struct TutorLookup {
+    public var get: (String) -> TutorBox?
+    public var part: ((String, String) -> TutorBox?)?
+    public var graphAt: ((String, [Double]) -> [Double]?)?
+    public init(get: @escaping (String) -> TutorBox?, part: ((String, String) -> TutorBox?)? = nil, graphAt: ((String, [Double]) -> [Double]?)? = nil) {
+        self.get = get; self.part = part; self.graphAt = graphAt
+    }
+}
+
+/// What a mark goes around: an id, [x, y, w, h], [x, y], a side point of a block, or a place inside a block.
 public enum TutorTarget: Equatable {
     case id(String)
     case rect(Double, Double, Double, Double)
     case point(Double, Double)
+    case of(String, side: String, dx: Double?, dy: Double?)
+    case inside(TutorInside)
 }
 
 /// Where a block goes: its top-left, or beside (below, above, right, left) another thing.
@@ -394,6 +548,8 @@ public struct TutorFn: Equatable {
     public var fn: String
     public var color: String?
     public var label: String?
+    /// A dashed curve.
+    public var dash = false
 }
 
 public struct TutorGraphPoint: Equatable {
@@ -435,9 +591,19 @@ public struct TutorStep: Equatable {
     public var dash = false
     public var points: [[Double]] = []
     public var closed = false
-    public var smooth = true
+    /// A path's: nil (the default: a curve, but a closed path has straight sides), true or false as Claude wrote it.
+    public var smooth: Bool?
     public var target: TutorTarget?
     public var width: Double?
+    /// An angle's corner or a true circle's centre (their `at`), and whether the angle is a right angle.
+    public var vertex: TutorPos?
+    /// A true circle's radius (a circle with `at` and `r`, no target).
+    public var r: Double?
+    /// A graph's: the graph it adds curves and points to (its `in`).
+    public var into: String?
+    public var right = false
+    /// A gesture: shown while its sentence is said, then gone (a point is one unless it says not).
+    public var brief = false
 
     public init(type: String) { self.type = type }
 }

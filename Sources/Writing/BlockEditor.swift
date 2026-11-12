@@ -197,7 +197,7 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
         let s = scale
         textView.textContainerInset = UIEdgeInsets(top: box.padY * s, left: box.padX * s, bottom: box.padY * s, right: box.padX * s)
         manager.ensureLayout(for: container)
-        let own = ceil(manager.usedRect(for: container).height) + 2 * box.padY * s
+        let own = ceil(max(manager.usedRect(for: container).height, manager.mathBottom())) + 2 * box.padY * s
         let size = CGSize(width: displaySize.width * s, height: max(displaySize.height * s, own))
         if textView.bounds.size != size { textView.bounds = CGRect(origin: .zero, size: size) }
         textView.layer.position = b.viewPoint(board: CGPoint(x: it.x, y: it.y))
