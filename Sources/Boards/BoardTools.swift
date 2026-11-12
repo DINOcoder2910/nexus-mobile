@@ -1,5 +1,6 @@
 import UIKit
 import PencilKit
+import NexusCore
 
 /// The board's tools, in the bar (the redesign's Option B): what the Pencil does, each pen's colour and width, and the board
 /// settings that go with them. Kept between boards and launches (UserDefaults), the same on every board.
@@ -120,6 +121,32 @@ final class BoardTools {
     var spaceOpensPage: Bool {
         get { d.object(forKey: "board.spaceOpensPage") as? Bool ?? true }
         set { d.set(newValue, forKey: "board.spaceOpensPage") }
+    }
+
+    // Insert space's other options (NexusCore InsertSpace); defaults as approved in the redesign proposal.
+    var spaceMoves: InsertSpace.Moves {
+        get { InsertSpace.Moves(rawValue: d.string(forKey: "board.spaceMoves") ?? "") ?? .everything }
+        set { d.set(newValue.rawValue, forKey: "board.spaceMoves") }
+    }
+    var spaceDirection: InsertSpace.Direction {
+        get { InsertSpace.Direction(rawValue: d.string(forKey: "board.spaceDirection") ?? "") ?? .follow }
+        set { d.set(newValue.rawValue, forKey: "board.spaceDirection") }
+    }
+    var spaceSize: InsertSpace.Size {
+        get { InsertSpace.Size(rawValue: d.string(forKey: "board.spaceSize") ?? "") ?? .snap }
+        set { d.set(newValue.rawValue, forKey: "board.spaceSize") }
+    }
+    var spaceClosing: InsertSpace.Closing {
+        get { InsertSpace.Closing(rawValue: d.string(forKey: "board.spaceClosing") ?? "") ?? .stopAtContent }
+        set { d.set(newValue.rawValue, forKey: "board.spaceClosing") }
+    }
+    var spaceTap: InsertSpace.Tap {
+        get { InsertSpace.Tap(rawValue: d.string(forKey: "board.spaceTap") ?? "") ?? .half }
+        set { d.set(newValue.rawValue, forKey: "board.spaceTap") }
+    }
+    var spaceAfter: InsertSpace.After {
+        get { InsertSpace.After(rawValue: d.string(forKey: "board.spaceAfter") ?? "") ?? .pen }
+        set { d.set(newValue.rawValue, forKey: "board.spaceAfter") }
     }
 
     var fingersDraw: Bool {
