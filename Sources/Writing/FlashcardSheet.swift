@@ -26,16 +26,8 @@ final class FlashcardSheet: UIViewController {
 
     required init?(coder: NSCoder) { fatalError("not used") }
 
-    /// "term: meaning", "term — meaning", "term – meaning", "term - meaning", "term = meaning" → (term, meaning).
-    static func split(_ s: String) -> (String, String) {
-        let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
-        for sep in [" — ", " – ", " - ", " = ", ": ", "\n"] {
-            if let r = t.range(of: sep) {
-                return (String(t[..<r.lowerBound]).trimmingCharacters(in: .whitespaces), String(t[r.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines))
-            }
-        }
-        return (t, "")
-    }
+    /// The laptop's split (Cards.split): "term — meaning", "term: meaning", "term = meaning", "term -> meaning", else all on the front.
+    static func split(_ s: String) -> (String, String) { let c = Cards.split(s); return (c.front, c.back) }
 
     override func viewDidLoad() {
         super.viewDidLoad()

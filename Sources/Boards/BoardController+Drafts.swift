@@ -145,8 +145,16 @@ extension BoardController {
 
     /// Bring them over: the old draft's changes since this one was made, merged in.
     func bringOver(_ id: String, into draft: String) {
-        let ok = changeDrafts(id, "Bring changes over") { BlockDrafts.bringOver($0, id: id, into: draft) }
-        tell(ok ? "Brought the changes over." : "Some lines were changed in both drafts, so nothing was brought over. Compare them to copy what you need.", brief: ok)
+        var clashes = 0
+        let ok = changeDrafts(id, "Bring changes over") { c in
+            guard let r = BlockDrafts.bringOver(c, id: id, into: draft) else { return nil }
+            clashes = r.clashes
+            return r.content
+        }
+        guard ok else { return }
+        tell(clashes == 0 ? "Brought the changes over."
+             : "Brought the changes over. \(clashes == 1 ? "One place was" : "\(clashes) places were") changed in both drafts: the old draft's words are there as suggestions to Apply or Reject.",
+             brief: clashes == 0)
     }
 
     func compareDraft(_ id: String, _ draft: String) {

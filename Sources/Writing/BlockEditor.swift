@@ -247,9 +247,11 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
                 return false
             }
         }
-        if look.review, text != "\n", textView.markedTextRange == nil {
-            // Review mode: the change becomes a suggestion
-            apply(Review.type(self.text, range: range, with: text))
+        if look.review, textView.markedTextRange == nil {
+            // Review mode: the change becomes a suggestion (a deletion with the caret at its start is the Delete key)
+            let sel = textView.selectedRange
+            let forward = text.isEmpty && range.length > 0 && sel.length == 0 && sel.location == range.location
+            apply(Review.type(self.text, range: range, with: text, forward: forward))
             return false
         }
         if (text as NSString).length == 1, range.length == 0 { lastTyped = range.location + 1 }
@@ -289,7 +291,7 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
         if applying { return }
         board?.tellTyping(id)
         edited()
-        if look.chem, let caret = lastTyped {
+        if look.chem, !practicing, let caret = lastTyped {
             lastTyped = nil
             // a moment later, so undo takes the formula back on its own
             DispatchQueue.main.async { [weak self] in self?.convertChemistry(caret: caret) }
@@ -485,7 +487,10 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
     /// Practice mode turns every check off: spelling, autocorrect, predictions and Writing Tools; it is back on when practice ends.
     func applyPractice() {
         let on = practicing
-        textView.spellCheckingType = on ? .no : .default
+        // a Spanish block is spellchecked only with a Spanish dictionary (an English one would flag every word), and never with `check: false`
+        let spanishOff = isSpanish && (item?.json["check"]?.bool == false
+            || !UITextInputMode.activeInputModes.contains { $0.primaryLanguage?.hasPrefix("es") == true })
+        textView.spellCheckingType = on || spanishOff ? .no : .default
         textView.autocorrectionType = on ? .no : .default
         textView.inlinePredictionType = on ? .no : .default
         if #available(iOS 18.0, *) { textView.writingToolsBehavior = on ? .none : .default }

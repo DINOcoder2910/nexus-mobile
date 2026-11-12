@@ -59,12 +59,15 @@ final class DraftsTests: XCTestCase {
         c.texts["b1"] = "one\ntwo\nTHREE"
         c.texts["b1~d1"] = "One\ntwo\nthree"
         XCTAssertEqual(BlockDrafts.changedSince(c, id: "b1", draft: "d2"), [.removed("one"), .added("One")])
-        let merged = try XCTUnwrap(BlockDrafts.bringOver(c, id: "b1", into: "d2"))
-        XCTAssertEqual(merged.texts["b1"], "One\ntwo\nTHREE")
-        XCTAssertEqual(BlockDrafts.changedSince(merged, id: "b1", draft: "d2"), [])
-        // both changed the same line: nothing is brought over
+        let r = try XCTUnwrap(BlockDrafts.bringOver(c, id: "b1", into: "d2"))
+        XCTAssertEqual(r.content.texts["b1"], "One\ntwo\nTHREE")
+        XCTAssertEqual(r.merged, 1)
+        XCTAssertEqual(BlockDrafts.changedSince(r.content, id: "b1", draft: "d2"), [])
+        // both changed the same line: this draft's line stays, the old draft's version is a suggestion on it (as the laptop does)
         c.texts["b1"] = "One!\ntwo\nTHREE"
-        XCTAssertNil(BlockDrafts.bringOver(c, id: "b1", into: "d2"))
+        let clash = try XCTUnwrap(BlockDrafts.bringOver(c, id: "b1", into: "d2"))
+        XCTAssertEqual(clash.content.texts["b1"], "One{--!--}\ntwo\nTHREE")
+        XCTAssertEqual(clash.clashes, 1)
     }
 
     func testDeleteAndRename() throws {

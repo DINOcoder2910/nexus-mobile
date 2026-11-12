@@ -33,6 +33,9 @@ public enum Practice {
         return f.date(from: s)
     }
 
+    /// The lengths offered, in minutes (the laptop's PRACTICE_MIN).
+    public static let choices = [15, 30, 45, 60]
+
     public static func isOn(_ item: BoardItem) -> Bool { minutes(item) != nil }
 
     /// Seconds left (never below 0), or nil when practice is off.
