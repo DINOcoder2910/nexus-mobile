@@ -4,9 +4,8 @@ import NexusCore
 /// Add a task. The line is read as the laptop reads it (NexusCore's CaptureParse): "physics hw sheet by fri; q1-5 by thu on wed 45m"
 /// is "physics hw sheet", due Friday, in the workstream its words name, with a subtask "q1-5" due Thursday, planned Wednesday, 45
 /// minutes. A preview under the line shows what was read. The field buttons (workstream, deadline, planned day, ★, estimate) show
-/// what the task will have, typed or picked; a value picked with them wins over the typed one, until a new one is typed. Repeat,
-/// waiting and tags are read but can't be written on the iPad yet: the preview says so. Return adds it and keeps the sheet open for
-/// the next one.
+/// what the task will have, typed or picked; a value picked with them wins over the typed one, until a new one is typed. A typed
+/// repeat, waiting on and #tags are written too. Return adds it and keeps the sheet open for the next one.
 struct CaptureSheet: View {
     @Environment(NexusStore.self) private var store
     @Environment(\.dismiss) private var dismiss
@@ -163,10 +162,9 @@ struct CaptureSheet: View {
         case .plan: Chip(text: c.text, icon: "calendar", color: Theme.planned)
         case .est: Chip(text: c.text, icon: "hourglass", color: .secondary)
         case .key: Chip(text: c.text, color: Theme.key, strong: true)
-        // read, but the iPad can't write these yet: said, not dropped silently
-        case .every: Chip(text: c.text + " · not saved yet", icon: "repeat", color: .secondary)
-        case .waiting: Chip(text: c.text + " · not saved yet", icon: "person", color: .secondary)
-        case .tag: Chip(text: c.text + " · not saved yet", icon: "number", color: .secondary)
+        case .every: Chip(text: c.text, icon: "repeat", color: .secondary)
+        case .waiting: Chip(text: c.text, icon: "person", color: .secondary)
+        case .tag: Chip(text: c.text, icon: "number", color: .secondary)
         case .subs: Chip(text: c.text, icon: "list.bullet.indent", color: .secondary)
         }
     }
@@ -215,12 +213,13 @@ struct CaptureSheet: View {
         let p = parsed
         guard p.kind == .task, p.ok else { return }
         let ws = effWorkstream
-        guard let id = store.add(title: p.title, workstream: ws, parent: parent, due: effDue, plan: effPlan, key: effKey, est: effEst) else { return }
+        guard let id = store.add(title: p.title, workstream: ws, parent: parent, due: effDue, plan: effPlan, key: effKey, est: effEst,
+                                 extras: p.facts) else { return }
         // the `; a; b` subtasks, each with its own facts, under the task just added
         var subs = 0
         for s in p.subtasksToAdd {
             let sid = store.add(title: s.title, workstream: ws, parent: store.task(id), due: s.facts.due, plan: s.facts.planEntries,
-                                key: s.facts.key, est: s.facts.est)
+                                key: s.facts.key, est: s.facts.est, extras: s.facts)
             if sid != nil { subs += 1 }
         }
         added.append(subs == 0 ? p.title : subs == 1 ? "\(p.title) (+1 subtask)" : "\(p.title) (+\(subs) subtasks)")

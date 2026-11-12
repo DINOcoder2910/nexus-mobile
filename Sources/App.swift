@@ -1,12 +1,14 @@
 import SwiftUI
+import CoreSpotlight
 import NexusCore
 
 @main
 struct NexusMobileApp: App {
-    @State private var store = NexusStore()
-    @State private var sync = SyncService()
-    @State private var calendar = CalendarStore()
-    @State private var reminders = ReminderCenter()
+    // one of each for the whole app (every window shares them), also reached by Siri and Shortcuts (AppServices)
+    @State private var store = AppServices.store
+    @State private var sync = AppServices.sync
+    @State private var calendar = AppServices.calendar
+    @State private var reminders = AppServices.reminders
 
     var body: some Scene {
         WindowGroup {
@@ -29,6 +31,16 @@ struct NexusMobileApp: App {
         if reminders.store == nil { reminders.attach(store, calendar) }
         reminders.reschedule()
     }
+}
+
+/// The app's services, made once. The windows get them through the environment; an App Intent (Siri, Shortcuts, the Action
+/// button) runs in the same process and reaches them here, so what it adds shows at once and is synced.
+@MainActor
+enum AppServices {
+    static let store = NexusStore()
+    static let sync = SyncService()
+    static let calendar = CalendarStore()
+    static let reminders = ReminderCenter()
 }
 
 /// Where the sidebar can take you.
@@ -98,7 +110,18 @@ struct RootView: View {
         }
         .onChange(of: store.folder) { _, _ in sync.restart() }
         // the reminders follow the files and the calendars
-        .onChange(of: store.snapshot.loadedAt) { _, _ in reminders.reschedule() }
+        .onChange(of: store.snapshot.loadedAt) { _, _ in reminders.reschedule(); SpotlightIndex.update(store) }
+        // a Spotlight result: a task, a workstream or a board
+        .onContinueUserActivity(CSSearchableItemActionType) { activity in
+            guard let hit = SpotlightIndex.target(activity) else { return }
+            let value = hit.value
+            switch hit.kind {
+            case "task": if store.task(value) != nil { store.openTaskId = value }
+            case "ws": screen = .workstream(value)
+            case "board": store.openBoard = .init(path: value)
+            default: break
+            }
+        }
         .onChange(of: calendar.version) { _, _ in reminders.reschedule() }
         .onChange(of: reminders.tappedTask) { _, id in
             guard let id else { return }
@@ -108,6 +131,7 @@ struct RootView: View {
         .task {
             sync.attach(store)
             reminders.attach(store, calendar)
+            SpotlightIndex.update(store)
             InkBoardMove.runIfNeeded(store)
             // Another writer (sync, the Files app) can change the folder at any time: look every few seconds while open,
             // and let sync send what changed.

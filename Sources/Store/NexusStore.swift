@@ -163,12 +163,28 @@ final class NexusStore {
     func setTags(_ t: NexusTask, _ tags: [String]) { perform { try $0.setTags(t, tags, in: $1) } }
     func setNote(_ t: NexusTask, _ note: String?) { perform { try $0.setNote(t, note, in: $1) } }
 
-    /// Adds a task to a workstream (nil = the Inbox) or under `parent`. Returns its id.
+    /// Adds a task to a workstream (nil = the Inbox) or under `parent`. Returns its id. `extras` (a typed repeat, waiting on, #tags)
+    /// are written straight after, in the same Undo.
     @discardableResult
-    func add(title: String, workstream: String?, parent: NexusTask? = nil, due: String? = nil, plan: [PlanEntry] = [], key: Bool = false, est: String? = nil) -> String? {
+    func add(title: String, workstream: String?, parent: NexusTask? = nil, due: String? = nil, plan: [PlanEntry] = [], key: Bool = false, est: String? = nil,
+             extras: CaptureFacts? = nil) -> String? {
         let file = parent?.file ?? self.workstream(workstream)?.tasksFile ?? "inbox.yaml"
         do {
-            let (c, id) = try editor.add(title: title, to: file, parent: parent, due: due, plan: plan, key: key, est: est, in: snapshot, today: today)
+            var (c, id) = try editor.add(title: title, to: file, parent: parent, due: due, plan: plan, key: key, est: est, in: snapshot, today: today)
+            if let x = extras, x.every != nil || x.waiting != nil || !x.tags.isEmpty {
+                let s = DataFolder.load(folder)
+                if let t = s.tasks[id] {
+                    do {
+                        if let r = x.every {
+                            c.after = try editor.setRepeat(t, NexusCore.Repeat(freq: r.freq, on: r.on.map { [$0] } ?? []), in: s).after
+                        }
+                        if let w = x.waiting { c.after = try editor.setWaiting(t, on: w.on, since: w.since, in: s).after }
+                        if !x.tags.isEmpty { c.after = try editor.setTags(t, x.tags, in: s).after }
+                    } catch {
+                        problem = "Added, but couldn't write all of it: \(error)"
+                    }
+                }
+            }
             reload()
             onWrite?()
             toast = Toast(message: c.message, change: c)

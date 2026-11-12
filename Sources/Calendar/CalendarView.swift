@@ -64,6 +64,8 @@ struct CalendarView: View {
     /// The day the view is on; nil follows today.
     @State private var anchor: String?
     @State private var sheet: EventSheet?
+    /// Place tasks: a drawer beside the grid on the iPad, a sheet on the iPhone.
+    @State private var placing = false
 
     private var mode: CalMode {
         guard let m = CalMode(rawValue: modeRaw), CalMode.available.contains(m) else { return .day }
@@ -89,6 +91,39 @@ struct CalendarView: View {
         let shown = days
         let p = store.planning
         let events = cal.events(from: shown.first ?? focus, through: shown.last ?? focus)
+        HStack(spacing: 0) {
+            grid(shown, events: events, p: p)
+            if placing && !compact {
+                Divider()
+                // a drawer, not a second navigation stack: its own small header
+                VStack(spacing: 0) {
+                    HStack {
+                        Text("Place tasks").font(.headline)
+                        Spacer()
+                        Button { withAnimation(.snappy) { placing = false } } label: { Image(systemName: "xmark") }
+                            .accessibilityLabel("Close Place tasks")
+                    }
+                    .padding(.horizontal, 16).padding(.vertical, 10)
+                    PlaceTasksList(day: focus)
+                }
+                .background(Color(uiColor: .systemGroupedBackground))
+                .frame(width: 320)
+                .transition(.move(edge: .trailing))
+            }
+        }
+        .sheet(isPresented: Binding(get: { placing && compact }, set: { if !$0 { placing = false } })) {
+            NavigationStack { PlaceTasksList(day: focus, close: { placing = false }) }
+                .presentationDetents([.medium, .large])
+        }
+        .background(Color(uiColor: .systemBackground))
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar { toolbar }
+        .eventSheet($sheet, store: cal)
+    }
+
+    @ViewBuilder
+    private func grid(_ shown: [String], events: [CalEvent], p: Planning) -> some View {
         VStack(spacing: 0) {
             if !cal.canRead { CalendarAccessCard().padding([.horizontal, .top], 16) }
             switch mode {
@@ -107,15 +142,11 @@ struct CalendarView: View {
                 agenda(shown, events: events, p: p)
             }
         }
-        .background(Color(uiColor: .systemBackground))
+        // a swipe on the grid goes earlier or later (not on the drawer, where a task is dragged)
         .simultaneousGesture(DragGesture(minimumDistance: 40).onEnded { v in
             let dx = v.translation.width, dy = v.translation.height
             if abs(dx) > 90 && abs(dx) > abs(dy) * 2 { withAnimation(.snappy) { step(dx < 0 ? 1 : -1) } }
         })
-        .navigationTitle(title)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar { toolbar }
-        .eventSheet($sheet, store: cal)
     }
 
     // MARK: toolbar
@@ -132,6 +163,17 @@ struct CalendarView: View {
                 Label(mode.label, systemImage: "calendar")
                     .labelStyle(.titleAndIcon)
             }
+        }
+        ToolbarItem(placement: .topBarLeading) {
+            Button { withAnimation(.snappy) { placing.toggle() } } label: {
+                if compact {
+                    Image(systemName: placing ? "tray.full.fill" : "tray.full")
+                } else {
+                    Label("Place tasks", systemImage: placing ? "tray.full.fill" : "tray.full").labelStyle(.titleAndIcon)
+                }
+            }
+            .accessibilityLabel("Place tasks")
+            .disabled(!store.snapshot.isDataFolder)
         }
         if compact {
             ToolbarItemGroup(placement: .bottomBar) {
