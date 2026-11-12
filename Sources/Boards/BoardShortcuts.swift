@@ -47,8 +47,6 @@ extension BoardController {
         }
     }
 
-    var selectedItem: BoardItem? { selected.flatMap { id in content.items.first { $0.id == id } } }
-
     /// Runs a board shortcut (a key or a gesture).
     func runShortcut(_ id: String) {
         guard canRunShortcut(id) else { return }

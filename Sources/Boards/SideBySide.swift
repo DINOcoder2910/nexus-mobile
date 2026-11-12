@@ -147,7 +147,7 @@ extension BoardController {
             self.saveNow()
             split?.showBoard(self.path)
         })
-        let boards = Notebook.list(root).flatMap { nb in nb.boards.map { (nb.name, $0) } + nb.sections.flatMap { s in s.boards.map { ("\(nb.name) › \(s.name)", $0) } } }
+        let boards = Notebook.list(root).flatMap { nb in nb.allBoards.map { ($0.place, $0.board) } }
             .filter { $0.1.path != path }
         if !boards.isEmpty {
             out.append(UIMenu(title: "Another board", image: UIImage(systemName: "rectangle.on.rectangle"), children: boards.prefix(60).map { place, b in
