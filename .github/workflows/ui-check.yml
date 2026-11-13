@@ -106,6 +106,50 @@ jobs:
             echo "SHOT-END"
           done < wanted.txt
 
+      - name: Rich-text screenshots in the log (base64 JPEGs, for a reader that can't download artifacts)
+        if: always()
+        run: |
+          mkdir -p shots rich
+          [ -f shots/manifest.json ] || xcrun xcresulttool export attachments --path ui.xcresult --output-path shots 2>&1 | tail -n 5 || true
+          python3 - <<'PY' > rich/list.txt || true
+          import json
+          want = ("block opened", "typed on the board", "closed on the board", "reopened on the board", "writing view", "back on the board", "whole block")
+          for t in json.load(open("shots/manifest.json")):
+              test = t.get("testIdentifier", "")
+              if "RichText" not in test: continue
+              mode = "dark" if "Dark" in test else "light"
+              for a in t.get("attachments", []):
+                  n = a.get("suggestedHumanReadableName", "")
+                  if n.startswith(want):
+                      tag = mode + "-" + n.split("_")[0].split(" (")[0].replace(" ", "-")
+                      print(a["exportedFileName"] + "\t" + tag)
+          PY
+          while IFS=$'\t' read -r f tag; do
+            [ -f "shots/$f" ] || continue
+            sips -Z 1400 -s format jpeg -s formatOptions 60 "shots/$f" --out "rich/$tag.jpg" >/dev/null
+            echo "SHOT-BEGIN $tag.jpg $(stat -f%z "rich/$tag.jpg")"
+            base64 -i "rich/$tag.jpg" | fold -w 3000
+            echo "SHOT-END"
+          done < rich/list.txt
+
+      - name: PDF zoom screenshots in the log (base64 JPEG)
+        if: always()
+        run: |
+          python3 -c '
+          import json
+          m=json.load(open("shots/manifest.json"))
+          for t in m:
+              for a in t.get("attachments",[]):
+                  n=a.get("suggestedHumanReadableName","")
+                  if n.startswith("zoom-"): print(a["exportedFileName"] + "\t" + n)' 2>/dev/null > zoomshots.txt || true
+          while IFS=$'\t' read -r F N; do
+            [ -n "$F" ] || continue
+            sips -Z 1200 -s format jpeg -s formatOptions 60 "shots/$F" --out z.jpg >/dev/null
+            echo "SHOT-BEGIN $N $(stat -f%z z.jpg)"
+            base64 -i z.jpg | fold -w 3000
+            echo "SHOT-END"
+          done < zoomshots.txt
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:

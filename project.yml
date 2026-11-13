@@ -28,6 +28,9 @@ targets:
       # the laptop's maths and chemistry renderers (tools/render/build.mjs), kept as a folder so render.html finds its fonts
       - path: Resources/Render
         type: folder
+      # the laptop's rich-text editor (tools/richtext/build.mjs): rich.html and its fonts
+      - path: Resources/RichText
+        type: folder
     dependencies:
       - package: NexusCore
     info:

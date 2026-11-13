@@ -10,7 +10,8 @@ let package = Package(
     products: [.library(name: "NexusCore", targets: ["NexusCore"])],
     dependencies: [.package(url: "https://github.com/jpsim/Yams.git", from: "5.1.0")],
     targets: [
-        .target(name: "NexusCore", dependencies: ["Yams"]),
+        // Resources/richcore.js: the laptop's rich-text converters (tools/richtext/build.mjs), run by RichWords.swift in JavaScriptCore
+        .target(name: "NexusCore", dependencies: ["Yams"], resources: [.copy("Resources/richcore.js")]),
         .testTarget(name: "NexusCoreTests", dependencies: ["NexusCore"], resources: [.copy("Fixtures")]),
     ]
 )

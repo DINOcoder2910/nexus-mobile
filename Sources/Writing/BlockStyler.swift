@@ -19,6 +19,10 @@ enum BlockStyler {
     /// On every mark that is shown faintly or drawn as a glyph: its colour is the mark's, not the words'.
     static let markKey = NSAttributedString.Key("nexusMark")
     static let faint = BlockLook.muted.withAlphaComponent(0.55)
+    /// On hidden marks that start a line ("## ", "> ", a task's "- "): laid out as zero-width control glyphs instead of null glyphs. A line
+    /// that began with null glyphs lost its paragraph's first-line indent and its spacing before and after (TextKit 1 took the words as a
+    /// second line of the paragraph), so a task's checkbox sat a step further in and headings, tasks and quotes ran together.
+    static let leadKey = NSAttributedString.Key("nexusLeadHidden")
     /// The line's own text colour (UIColor), for what MDLayoutManager draws on it (a bullet).
     static let textColorKey = NSAttributedString.Key("nexusLineColor")
     /// On the first character of a $maths$ span drawn by KaTeX (a MathBox); the rest of the span hides. MDLayoutManager makes that
@@ -108,6 +112,14 @@ enum BlockStyler {
             }
         }
 
+        // each line's leading run of hidden marks
+        for line in lines {
+            var k = line.range.location
+            let end = line.range.location + line.range.length
+            while k < end, hiddenAt.contains(k) { k += 1 }
+            if k > line.range.location { storage.addAttribute(leadKey, value: true, range: NSRange(location: line.range.location, length: k - line.range.location)) }
+        }
+
         // $$ blocks over several lines: drawn as one picture on the opening line, the rest folded away, while the caret is outside
         var mathOpen: [Int: MathBox] = [:]
         var mathFolded = IndexSet()
@@ -147,6 +159,11 @@ enum BlockStyler {
                 storage.addAttribute(.foregroundColor, value: faint, range: line.range)
             }
             storage.addAttribute(textColorKey, value: st.color, range: lineAll)
+            // a bullet's look by its level, as the rich-text editor has it: a dot, a ring, a square, and round again
+            if line.kind == .bullet, let mk = line.marker, mk.location < storage.length,
+               storage.attribute(glyphKey, at: mk.location, effectiveRange: nil) as? String == "bullet", line.level % 3 != 0 {
+                storage.addAttribute(glyphKey, value: line.level % 3 == 1 ? "ring" : "square", range: mk)
+            }
             if line.kind == .code || line.kind == .fence { storage.addAttribute(codeKey, value: true, range: lineAll) }
             if line.kind == .math { storage.addAttribute(.font, value: BlockLook.font(family: "serif", size: size, weight: .regular, italic: true), range: lineAll) }
             if line.quote > 0 { storage.addAttribute(quoteKey, value: line.quote, range: lineAll) }
@@ -216,13 +233,11 @@ enum BlockStyler {
                 ps.lineSpacing += max(0, below + font.descender)
             }
             if index > 0 { ps.paragraphSpacingBefore = st.before * s }
-            // body, quote and code space after a paragraph (the laptop's `p`), not after every line of it; headings after themselves
+            // a block's copy is one line a paragraph (renderer/src/board/richmd.js), so every line gets its style's space after, as each
+            // paragraph does in the rich-text editor (list items and quote lines too); only the lines of one fenced code, maths or table
+            // block run on without it; the last line gets none
             var after = st.after * s
-            if !isHeading(line), index + 1 < lines.count, !isHeading(lines[index + 1]), lines[index + 1].kind != .blank,
-               lineStyle(lines[index + 1]) == lineStyle(line) {
-                after = 0
-            }
-            if line.kind == .blank { after = 0 }
+            if index + 1 >= lines.count || (runsOn(line) && runsOn(lines[index + 1])) { after = 0 }
             ps.paragraphSpacing = after
             if let box = mathOpen[index], line.range.length > 0 {
                 storage.addAttribute(mathKey, value: box, range: NSRange(location: line.range.location, length: 1))
@@ -244,6 +259,14 @@ enum BlockStyler {
     }
 
     static func isHeading(_ line: MDLine) -> Bool { if case .heading = line.kind { return true }; return false }
+
+    /// A line of a block that spans several lines (fenced code, $$ maths, a table).
+    static func runsOn(_ line: MDLine) -> Bool {
+        switch line.kind {
+        case .code, .fence, .mathFence, .math, .table, .tableRule: return true
+        default: return false
+        }
+    }
 
     /// Which style a line is drawn in.
     static func lineStyle(_ line: MDLine) -> BlockStyle {

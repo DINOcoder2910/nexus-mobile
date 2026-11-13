@@ -200,6 +200,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        RichEditor.prewarm() // the rich-text editor's page loads while the board is looked at, so a block opens at once
         navigationController?.setNavigationBarHidden(true, animated: false)
         watchSystemStyle()
         applyTheme()
@@ -501,8 +502,11 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
             let ch = BoardFiles.changes(content)
             var wrote = Set(ch.tiles.keys.map(BoardFormat.tileFile) + ch.texts.keys.map(BoardFormat.textFile) + ch.removedTexts.map(BoardFormat.textFile))
             if content.meta != content.metaOnDisk { wrote.insert("board.json") }
+            let docsBefore = content.docsOnDisk
             content = try BoardFiles.save(content, to: boardURL, write: { url, text in try FolderAccess.write(url, text) },
                                           remove: { url in try FileManager.default.removeItem(at: url) })
+            // each block's .jsonl this save wrote or removed (NexusCore RichWords), so the next check doesn't read it back as someone else's
+            for id in Set(docsBefore.keys).union(content.docsOnDisk.keys) where docsBefore[id] != content.docsOnDisk[id] { wrote.insert(RichWords.docFile(id)) }
             dirty = false
             stamps = stampsAfterSave(wrote: wrote)
             afterReconcile(merged)

@@ -88,7 +88,26 @@ final class TextBlockView: UIView {
         }
         applyFill()
         setNeedsDisplay()
+        if TextBlockView.dumping {
+            // the UI test reads where each line's words and marks are drawn (UITests/RichTextTests.swift), to line the editor up with it
+            // on a near-invisible label on the window: the board's own views keep the blocks out of the accessibility tree
+            let text = md.replacingOccurrences(of: "\n", with: "⏎") + " ## " + l.text.dump()
+            DispatchQueue.main.async { [weak self] in
+                guard let w = self?.window else { return }
+                let label = (w.viewWithTag(0x6E5D) as? UILabel) ?? {
+                    let v = UILabel(frame: CGRect(x: 0, y: 0, width: 4, height: 4))
+                    v.tag = 0x6E5D; v.alpha = 0.02; v.isAccessibilityElement = true; v.accessibilityIdentifier = "blockdump"
+                    w.addSubview(v)
+                    return v
+                }()
+                w.bringSubviewToFront(label)
+                label.accessibilityLabel = text
+            }
+        }
     }
+
+    /// Launched with `-debug.blockDump YES` (the UI test): blocks describe their layout to accessibility.
+    static let dumping = UserDefaults.standard.bool(forKey: "debug.blockDump")
 
     static let chipTitle = UIFont.systemFont(ofSize: 15, weight: .semibold)
     static let chipLine = UIFont.systemFont(ofSize: 12)

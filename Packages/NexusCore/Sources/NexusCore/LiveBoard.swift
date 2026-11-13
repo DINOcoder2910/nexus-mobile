@@ -109,15 +109,17 @@ public enum LiveBoard {
         public var device: String
         public var date: String
         public var time: String
+        /// ".md", or ".jsonl" when the hub merged a rich block (text/<id>.jsonl) and kept this device's side of a clash beside it.
+        public var ext: String = ".md"
     }
 
-    /// A conflict copy of a block's words as the hub names it: `text/<id> (conflict <device> <YYYY-MM-DD HHmm>[ n]).md`.
+    /// A conflict copy of a block's words as the hub names it: `text/<id> (conflict <device> <YYYY-MM-DD HHmm>[ n]).md` (or `.jsonl`).
     public static func textConflict(_ rel: String) -> Conflict? {
-        guard let re = try? NSRegularExpression(pattern: #"^text/([a-z2-9]{5,}) \(conflict (.+) (\d{4}-\d\d-\d\d) (\d\d)(\d\d)(?: \d+)?\)\.md$"#) else { return nil }
+        guard let re = try? NSRegularExpression(pattern: #"^text/([a-z2-9]{5,}) \(conflict (.+) (\d{4}-\d\d-\d\d) (\d\d)(\d\d)(?: \d+)?\)(\.md|\.jsonl)$"#) else { return nil }
         let ns = rel as NSString
         guard let m = re.firstMatch(in: rel, range: NSRange(location: 0, length: ns.length)) else { return nil }
         let g = { (i: Int) in ns.substring(with: m.range(at: i)) }
-        return Conflict(id: g(1), device: g(2), date: g(3), time: g(4) + ":" + g(5))
+        return Conflict(id: g(1), device: g(2), date: g(3), time: g(4) + ":" + g(5), ext: g(6))
     }
 
     public static func clashName(_ device: String, _ time: String) -> String { "From \(device.isEmpty ? "the other device" : device)\(time.isEmpty ? "" : " " + time)" }
@@ -176,15 +178,18 @@ public enum LiveBoard {
             r.content.strokes += t.strokes
             r.content.items += t.items
             for it in t.items where it.type == "text" && r.content.texts[it.id] == nil {
-                let md = read(BoardFormat.textFile(it.id)) ?? ""
+                let md = RichWords.body(read(BoardFormat.textFile(it.id)) ?? "")
                 r.content.texts[it.id] = md; r.content.textsOnDisk[it.id] = md
+                r.content.docsStale.insert(it.id) // (its .jsonl is the other device's: written again, keeping its ids, on this save)
+                if let j = read(RichWords.docFile(it.id)), let w = RichWords.shared.words(j) { r.content.docsOnDisk[it.id] = j; r.content.docWords[it.id] = w }
             }
             r.content.tilesOnDisk[key] = disk
             r.mergedTiles.append(key)
         }
         let time: String = { let f = DateFormatter(); f.dateFormat = "HH:mm"; return f.string(from: now) }()
         for (id, mine) in ch.texts.sorted(by: { $0.key < $1.key }) {
-            guard let disk = read(BoardFormat.textFile(id)) else { continue }
+            guard let diskFile = read(BoardFormat.textFile(id)) else { continue }
+            let disk = RichWords.body(diskFile)
             let base = c.textsOnDisk[id]
             if disk == (base ?? "") || disk == mine { continue }
             if let merged = mergeBlock(base: base, mine: mine, theirs: disk) {
@@ -199,6 +204,27 @@ public enum LiveBoard {
                 r.drafts.append(name)
             }
             r.content.textsOnDisk[id] = disk
+        }
+        // a block's .jsonl written meanwhile without its copy (the hub's Google Docs bridge, or the other device's .jsonl arriving before its
+        // copy): its words are merged in the same way, and the .jsonl becomes the one this save follows (its ids and header kept)
+        for id in ch.docs where RichWords.isMain(id) {
+            guard let disk = read(RichWords.docFile(id)), disk != (c.docsOnDisk[id] ?? ""), let theirs = RichWords.shared.words(disk) else { continue }
+            let base = c.docWords[id] ?? c.textsOnDisk[id]
+            let mine = r.content.texts[id] ?? ""
+            r.content.docsOnDisk[id] = disk
+            r.content.docWords[id] = theirs
+            if theirs == mine || theirs == (base ?? "") { continue }
+            if let merged = mergeBlock(base: base, mine: mine, theirs: theirs) {
+                r.content.texts[id] = merged
+                if !r.mergedTexts.contains(id) { r.mergedTexts.append(id) }
+            } else if let k = r.content.items.firstIndex(where: { $0.id == id }) {
+                let name = clashName(device, time)
+                let d = clashDraft(r.content.items[k], name: name, now: now)
+                try write(d.file, theirs)
+                r.content.items[k] = d.item
+                if BoardFormat.features.contains("drafts"), let m = r.content.meta { r.content.meta = BoardFormat.withFeature(m, "drafts") }
+                r.drafts.append(name)
+            }
         }
         return r
     }
