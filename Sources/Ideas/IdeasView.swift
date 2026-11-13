@@ -89,7 +89,7 @@ struct IdeasView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(done ? "Not done" : "Done")
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(x.shownTitle).strikethrough(done).foregroundStyle(done ? .secondary : .primary)
+                    Text(x.shownTitle).strikethrough(done).foregroundStyle(done ? Color.secondary : Color.primary)
                     if let n = x.note { Text(n).font(.subheadline).foregroundStyle(.secondary) }
                     if x.originalShown { Text("You wrote: “\(x.text)”").font(.footnote).italic().foregroundStyle(.secondary) }
                     let facts = factsOf(x)

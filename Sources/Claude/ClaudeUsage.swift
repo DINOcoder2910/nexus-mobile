@@ -19,7 +19,7 @@ struct ClaudeUsage: View {
                         .accessibilityIdentifier("usage.api.bar")
                     Text(String(format: "$%.2f of $%.2f this month", m.usd, credit) + (m.calls > 0 ? " (\(m.calls) \(m.calls == 1 ? "reply" : "replies"))" : ""))
                         .font(.callout).monospacedDigit()
-                    Text(String(format: "%d%% used, $%.2f left", Int((m.usd / credit * 100).rounded()), max(0, credit - m.usd))).font(.caption).foregroundStyle(.secondary)
+                    Text(String(format: "%ld%% used, $%.2f left", Int((m.usd / credit * 100).rounded()), max(0, credit - m.usd))).font(.caption).foregroundStyle(.secondary)
                 } else {
                     Text(ClaudeSpend.text(m)).font(.callout)
                     Text("Type your monthly API credit below to see how much of it is used.").font(.caption).foregroundStyle(.secondary)

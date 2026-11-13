@@ -133,7 +133,7 @@ public enum Ideas {
         if let todo {
             guard let parsed = try? Yams.compose(yaml: todo) else { return [] }
             var list: [Node] = []
-            if let s = parsed?.sequence { list = Array(s) } else if let m = parsed?.mapping, let v = TaskFile.value(m, "todos"), let s = v.sequence { list = Array(s) }
+            if let s = parsed.sequence { list = Array(s) } else if let m = parsed.mapping, let v = TaskFile.value(m, "todos"), let s = v.sequence { list = Array(s) }
             for n in list {
                 if let s = n.scalar { let t = trim(s.string); if !t.isEmpty { todos.append(T(title: t)) }; continue }
                 guard let m = n.mapping else { continue }
@@ -201,7 +201,8 @@ public enum Ideas {
             case "\n": o += "\\n"
             case "\t": o += "\\t"
             default:
-                if u.value < 0x20 || u.value == 0x7f { o += String(format: "\\x%02X", u.value) } else { o.unicodeScalars.append(u) }
+                let named: [UInt32: String] = [0: "\\0", 7: "\\a", 8: "\\b", 11: "\\v", 12: "\\f", 13: "\\r", 27: "\\e"]
+                if let e = named[u.value] { o += e } else if u.value < 0x20 || u.value == 0x7f { o += String(format: "\\x%02X", u.value) } else { o.unicodeScalars.append(u) }
             }
         }
         return o + "\""

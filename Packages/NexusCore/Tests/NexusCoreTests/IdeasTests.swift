@@ -63,7 +63,7 @@ final class IdeasTests: XCTestCase {
             ("*x", "\"*x\""), ("'x", "\"'x\""), ("\"x", "'\"x'"), (" lead", "\" lead\""), ("trail ", "\"trail \""), ("it's", "it's"), ("say \"hi\"", "say \"hi\""),
             ("colon:end", "colon:end"), ("q?", "q?"), ("? x", "\"? x\""), ("x,y", "x,y"), ("", "\"\""), ("http://x.y", "http://x.y"), ("0x1F", "\"0x1F\""),
             ("1e3", "\"1e3\""), (".5", "\".5\""), ("-", "\"-\""), ("NaN", "NaN"), (".nan", "\".nan\""), ("on", "on"), ("12:30", "12:30"), ("a  b", "a  b"),
-            ("x\u{7}", "\"x\\x07\""), ("2026-11-13T17:05:11Z", "2026-11-13T17:05:11Z")]
+            ("x\u{7}", "\"x\\a\""), ("2026-11-13T17:05:11Z", "2026-11-13T17:05:11Z")]
         for (s, want) in cases { XCTAssertEqual(Ideas.scalar(s), want, s) }
     }
 
