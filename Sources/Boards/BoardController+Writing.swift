@@ -32,10 +32,22 @@ extension BoardController {
         pushedBy[it.id] = 0
         writing = session
         itemViews[it.id]?.alpha = 0
-        view.insertSubview(session.textView, aboveSubview: canvas)
+        view.insertSubview(session.editorView, aboveSubview: canvas)
         session.restyle()
         session.measure()
         session.place()
+        if session.rich != nil {
+            // the laptop's editor in a web view: the caret goes where the tap was (a point in the page), else at the end
+            var caret: Any = "end"
+            if let point {
+                let p = session.editorView.convert(viewPoint(board: point), from: view)
+                caret = ["x": Double(p.x), "y": Double(p.y)]
+            }
+            session.openRich(caret: caret)
+            session.focus()
+            updateBar()
+            return
+        }
         session.textView.becomeFirstResponder()
         let len = (session.text as NSString).length
         if let point {
@@ -54,8 +66,8 @@ extension BoardController {
     func endWriting() {
         guard let w = writing else { return }
         writing = nil
-        w.textView.resignFirstResponder()
-        w.textView.removeFromSuperview()
+        w.unfocus()
+        w.editorView.removeFromSuperview()
         w.tabs.removeFromSuperview()
         finish(w)
         if !readOnly { canvas.becomeFirstResponder() }
@@ -69,6 +81,7 @@ extension BoardController {
         let text = w.text
         if writingFull === w { writingFull = nil }
         w.stopTimers()
+        w.releaseRich()
         tellTyping(nil)
         itemViews[id]?.alpha = 1
         let pushed = (pushedBy[id] ?? 0) > 0.5
@@ -162,8 +175,10 @@ extension BoardController {
         }
         let before = w.before
         writing = nil
-        w.textView.resignFirstResponder()
-        w.textView.removeFromSuperview()
+        w.unfocus()
+        w.editorView.removeFromSuperview()
+        w.tabs.removeFromSuperview()
+        w.releaseRich()
         content.items.removeAll { $0.id == id }
         content.texts[id] = nil
         registerItemsUndo(before, "Delete text")

@@ -148,7 +148,8 @@ final class BoardTests: XCTestCase {
             written.append(url.path.replacingOccurrences(of: board.path + "/", with: ""))
             try text.write(to: url, atomically: true, encoding: .utf8)
         })
-        XCTAssertEqual(Set(written), ["tiles/0_0.json", "tiles/4_4.json", "text/txt22.md"])
+        // the block's words: its copy and, beside it, its .jsonl (RichWords, the laptop's rich-text file)
+        XCTAssertEqual(Set(written), ["tiles/0_0.json", "tiles/4_4.json", "text/txt22.md", "text/txt22.jsonl"])
         XCTAssertEqual(read("B.board/tiles/-1_1.json"), before)
         // 0_0 keeps its text item, the stroke is gone
         XCTAssertEqual(read("B.board/tiles/0_0.json"), BoardTests.fieldsLine + "\"strokes\":[],\n\"items\":[\n{\"id\":\"txt22\",\"type\":\"text\",\"x\":50,\"y\":50,\"w\":560}\n]}\n")
@@ -161,6 +162,7 @@ final class BoardTests: XCTestCase {
         c = try BoardFiles.save(c, to: board, write: { url, text in try text.write(to: url, atomically: true, encoding: .utf8) })
         XCTAssertEqual(read("B.board/tiles/0_0.json"), BoardTests.fieldsLine + "\"strokes\":[],\n\"items\":[]}\n")
         XCTAssertNil(read("B.board/text/txt22.md"))
+        XCTAssertNil(read("B.board/text/txt22.jsonl"))
         let again = try BoardFiles.load(board)
         XCTAssertEqual(Set(again.strokes.map(\.id)), ["bbbbb", "ccccc"])
     }

@@ -104,10 +104,18 @@ final class WritingViewController: UIViewController, UITableViewDataSource, UITa
         page.layer.shadowRadius = 12
         page.layer.shadowOffset = CGSize(width: 0, height: 2)
         view.addSubview(page)
-        let tv = session.textView
+        // the words: the laptop's editor in a web view (the page's padding is the margins), or the plain text view
+        let tv = session.editorView
         tv.translatesAutoresizingMaskIntoConstraints = false
-        tv.textContainerInset = UIEdgeInsets(top: 56, left: Self.margin, bottom: 280, right: Self.margin)
-        tv.alwaysBounceVertical = true
+        tv.transform = .identity
+        if let r = session.rich {
+            session.pageInsets = UIEdgeInsets(top: 56, left: Self.margin, bottom: 280, right: Self.margin)
+            r.web.scrollView.alwaysBounceVertical = true
+            r.web.scrollView.keyboardDismissMode = .none
+        } else {
+            session.textView.textContainerInset = UIEdgeInsets(top: 56, left: Self.margin, bottom: 280, right: Self.margin)
+            session.textView.alwaysBounceVertical = true
+        }
         tv.backgroundColor = .clear
         page.addSubview(tv)
 
@@ -169,7 +177,8 @@ final class WritingViewController: UIViewController, UITableViewDataSource, UITa
 
         session.onDone = { [weak self] in self?.close() }
         session.restyle()
-        scrollWatch = tv.observe(\.contentOffset) { [weak self] _, _ in DispatchQueue.main.async { self?.placeCards() } }
+        let scroller: UIScrollView = session.rich?.web.scrollView ?? session.textView
+        scrollWatch = scroller.observe(\.contentOffset) { [weak self] _, _ in DispatchQueue.main.async { self?.placeCards() } }
         refresh()
         // the outline, comments and count follow the words without redoing them on every key
         timer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: true) { [weak self] _ in self?.refresh() }
@@ -177,6 +186,11 @@ final class WritingViewController: UIViewController, UITableViewDataSource, UITa
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        if session.rich != nil {
+            session.openRich(caret: "end")
+            session.focus()
+            return
+        }
         session.textView.becomeFirstResponder()
         session.textView.selectedRange = NSRange(location: (session.text as NSString).length, length: 0)
         session.keepCaretVisible()
@@ -199,9 +213,12 @@ final class WritingViewController: UIViewController, UITableViewDataSource, UITa
         let showCards = (board?.marksShown ?? true) && !comments.isEmpty && w >= 1000
         let right = showCards ? Self.cardWidth + 40 : margin
         pageWidth?.constant = showCards ? 780 + right - Self.margin : 780
-        let tv = session.textView
         let inset = UIEdgeInsets(top: compact ? 24 : 56, left: margin, bottom: 280, right: right)
-        if tv.textContainerInset != inset { tv.textContainerInset = inset }
+        if session.rich != nil {
+            if session.pageInsets != inset { session.pageInsets = inset; session.restyle() }
+        } else if session.textView.textContainerInset != inset {
+            session.textView.textContainerInset = inset
+        }
         cards.isHidden = !showCards
         placeCards()
     }
@@ -219,7 +236,7 @@ final class WritingViewController: UIViewController, UITableViewDataSource, UITa
             }
         }
         let list = board.map { b in BoardMarks.marks(on: session.id, b.content.items).filter { !BoardMarks.isDone($0) && BoardMarks.kind($0) == "bubble" } } ?? []
-        let caret = session.textView.selectedRange.location
+        let caret = session.selectedRange.location
         let here = hs.lastIndex { $0.at <= caret } ?? -1
         let changed = hs.map(\.title) != headings.map(\.title) || hs.map(\.at) != headings.map(\.at)
             || list.map(\.json) != comments.map(\.json) || here != lastCaretHeading
@@ -250,7 +267,7 @@ final class WritingViewController: UIViewController, UITableViewDataSource, UITa
     func close() {
         timer?.invalidate()
         scrollWatch = nil
-        session.textView.resignFirstResponder()
+        session.unfocus()
         let board = session.board
         let s = session
         dismiss(animated: true) { board?.finish(s) }
@@ -279,6 +296,12 @@ final class WritingViewController: UIViewController, UITableViewDataSource, UITa
     }
 
     private func go(to r: NSRange) {
+        if session.rich != nil {
+            // the page puts the selection in view itself
+            session.selectedRange = r
+            session.restyle()
+            return
+        }
         let tv = session.textView
         tv.selectedRange = r
         let lm = tv.layoutManager
@@ -398,6 +421,22 @@ final class WritingViewController: UIViewController, UITableViewDataSource, UITa
     /// Each card beside its words' line, pushed down so none overlap.
     private func placeCards() {
         guard !cards.isHidden, cards.bounds.width > 0 else { return }
+        if let r = session.rich {
+            // where each comment's words are in the page, asked of the page (page points, not scrolled)
+            let list = cardViews.map { c in comments.first { $0.id == c.id }.flatMap { range(of: $0) } ?? NSRange(location: NSNotFound, length: 0) }
+            let asked = list.filter { $0.location != NSNotFound }
+            r.rects(asked) { [weak self] rects in
+                guard let self else { return }
+                var k = 0
+                let tops: [CGFloat?] = list.map { l in
+                    guard l.location != NSNotFound else { return nil }
+                    defer { k += 1 }
+                    return rects[k].map { $0.minY - r.web.scrollView.contentOffset.y - 4 }
+                }
+                self.stackCards(tops)
+            }
+            return
+        }
         let tv = session.textView
         let lm = tv.layoutManager
         var y: CGFloat = 0
@@ -410,6 +449,18 @@ final class WritingViewController: UIViewController, UITableViewDataSource, UITa
             }
             let size = v.systemLayoutSizeFitting(CGSize(width: cards.bounds.width, height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel)
             let at = max(want, y)
+            v.frame = CGRect(x: 0, y: at, width: cards.bounds.width, height: size.height)
+            y = at + size.height + 10
+        }
+    }
+
+    /// The cards at these heights (nil: under the one before), pushed down so none overlap.
+    private func stackCards(_ tops: [CGFloat?]) {
+        var y: CGFloat = 0
+        for (k, c) in cardViews.enumerated() {
+            let v = c.view
+            let size = v.systemLayoutSizeFitting(CGSize(width: cards.bounds.width, height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel)
+            let at = max((k < tops.count ? tops[k] : nil) ?? y, y)
             v.frame = CGRect(x: 0, y: at, width: cards.bounds.width, height: size.height)
             y = at + size.height + 10
         }
@@ -625,7 +676,7 @@ final class FindReplaceController: UIViewController, UITableViewDataSource, UITa
         dismiss(animated: true) {
             b.scroll(toBoard: CGPoint(x: it.x - 60, y: it.y - 80))
             b.beginWriting(it)
-            b.writing?.textView.selectedRange = hit.range
+            b.writing?.selectedRange = hit.range
         }
     }
 }

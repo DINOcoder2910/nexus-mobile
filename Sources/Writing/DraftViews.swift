@@ -31,7 +31,7 @@ final class DraftTabs: UIView {
             isHidden = true
             return
         }
-        if superview !== b.view { b.view.insertSubview(self, aboveSubview: s.textView); refresh() }
+        if superview !== b.view { b.view.insertSubview(self, aboveSubview: s.editorView); refresh() }
         isHidden = false
         let size = stack.systemLayoutSizeFitting(UIView.layoutFittingCompressedSize)
         self.frame = CGRect(x: frame.minX, y: frame.minY - size.height - 4, width: max(size.width, 40), height: size.height)
@@ -71,7 +71,7 @@ final class DraftTabs: UIView {
         add.accessibilityLabel = "New draft"
         add.addAction(UIAction { [weak b] _ in b?.newDraft(s.id) }, for: .touchUpInside)
         stack.addArrangedSubview(add)
-        if superview != nil, !isHidden { place(over: s.textView.frame) }
+        if superview != nil, !isHidden { place(over: s.editorView.frame) }
     }
 }
 

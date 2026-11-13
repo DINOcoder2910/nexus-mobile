@@ -208,6 +208,11 @@ public struct BoardContent {
     /// What each tile file held when read (or last written), to write only what changed.
     public var tilesOnDisk: [String: String] = [:]
     public var textsOnDisk: [String: String] = [:]
+    /// Each block's `text/<id>.jsonl` as read or last written, and the words it stands for (RichWords: the laptop's rich-text file).
+    public var docsOnDisk: [String: String] = [:]
+    public var docWords: [String: String] = [:]
+    /// Blocks whose .jsonl is missing or behind their words: written with the board's next save.
+    public var docsStale: Set<String> = []
     /// board.json as read (unknown keys kept), and what it was on disk: save writes it when the two differ (paper, features, ...).
     /// Change it with `BoardFormat.withFeature` or `setting`; nil for an ink test board until its first save.
     public var meta: JSONValue?
@@ -276,11 +281,7 @@ public enum BoardFiles {
             for it in t.items where !seen.contains(it.id) { seen.insert(it.id); c.items.append(it) }
         }
         for it in c.items where it.type == "text" {
-            if let d = try? Data(contentsOf: board.appendingPathComponent(BoardFormat.textFile(it.id))) {
-                let md = String(decoding: d, as: UTF8.self)
-                c.texts[it.id] = md
-                c.textsOnDisk[it.id] = md
-            } else { c.texts[it.id] = "" }
+            readWords(&c, board: board, id: it.id)
             // its other drafts and their snapshots (docs/data-format.md "Drafts")
             for key in BlockDrafts.fileKeys(it) {
                 guard let d = try? Data(contentsOf: board.appendingPathComponent(BoardFormat.textFile(key))) else { continue }
@@ -295,6 +296,44 @@ public enum BoardFiles {
             let id = BoardFormat.newId(taken: taken); taken.insert(id); c.strokes[i].id = id
         }
         return c
+    }
+
+    /// A block's words from its two files (nexus docs/rich-text.md): the .jsonl is what Nexus keeps and the .md its readable copy. Read as the
+    /// laptop reads them (RichWords.read): a copy edited outside Nexus is brought into the doc, a block from before the switch converted.
+    /// A .jsonl written after its copy (the hub's Google Docs bridge, which writes only the .jsonl) gives the words, and the copy is
+    /// written again with the next save. `textsOnDisk` keeps the copy as it is on disk, so a save writes it when the words differ.
+    static func readWords(_ c: inout BoardContent, board: URL, id: String) {
+        let mdURL = board.appendingPathComponent(BoardFormat.textFile(id)), docURL = board.appendingPathComponent(RichWords.docFile(id))
+        let file = (try? Data(contentsOf: mdURL)).map { String(decoding: $0, as: UTF8.self) }
+        let jsonl = RichWords.enabled ? (try? Data(contentsOf: docURL)).map { String(decoding: $0, as: UTF8.self) } : nil
+        if let file { c.textsOnDisk[id] = RichWords.body(file) }
+        guard let jsonl else {
+            c.texts[id] = file.map(RichWords.body) ?? ""
+            if file != nil, RichWords.enabled { c.docsStale.insert(id) }
+            return
+        }
+        let r = RichWords.shared.read(jsonl: jsonl, file: file, jsonlNewer: file != nil && newer(docURL, than: mdURL))
+        c.texts[id] = r.md
+        c.docsOnDisk[id] = jsonl
+        // the words the .jsonl stands for: its own, unless the read brought a hand edit of the copy in (then it is behind)
+        if r.how == "json" || r.how == "jsonl" { c.docWords[id] = r.md } else if let w = RichWords.shared.words(jsonl) { c.docWords[id] = w }
+        if r.stale || r.how == "outside" || r.how == "converted" { c.docsStale.insert(id) }
+    }
+
+    /// `a` was modified more than two seconds after `b` (a save writes the two together).
+    static func newer(_ a: URL, than b: URL) -> Bool {
+        let k: Set<URLResourceKey> = [.contentModificationDateKey]
+        guard let ta = (try? a.resourceValues(forKeys: k))?.contentModificationDate, let tb = (try? b.resourceValues(forKeys: k))?.contentModificationDate else { return false }
+        return ta.timeIntervalSince(tb) > 2
+    }
+
+    /// The .jsonl to write for block `id` now (its words in `c.texts`), or nil when the one on disk already says them.
+    public static func docToWrite(_ c: BoardContent, id: String) -> String? {
+        guard RichWords.enabled else { return nil }
+        let md = c.texts[id] ?? ""
+        if c.docWords[id] == md, c.docsOnDisk[id] != nil, !c.docsStale.contains(id) { return nil }
+        guard let jsonl = RichWords.shared.write(md: md, prevJsonl: c.docsOnDisk[id], prevMd: c.docWords[id]) else { return nil }
+        return jsonl == c.docsOnDisk[id] ? nil : jsonl
     }
 
     /// An ink test board (board.json `nexus-board-test/1` + strokes.json + its PDF): read as it is; the first save writes the new format.
@@ -319,7 +358,7 @@ public enum BoardFiles {
 
     /// The files to write for the board as it is now: every tile whose text differs from what is on disk (a tile left empty is
     /// written empty, as the laptop does), changed text blocks, and the text files of removed blocks to delete.
-    public static func changes(_ c: BoardContent) -> (tiles: [String: String], texts: [String: String], removedTexts: [String]) {
+    public static func changes(_ c: BoardContent) -> (tiles: [String: String], texts: [String: String], removedTexts: [String], docs: [String]) {
         var byKey: [String: (s: [BoardStroke], i: [BoardItem])] = [:]
         for s in c.strokes { byKey[s.tileKey, default: ([], [])].s.append(s) }
         for it in c.items { byKey[it.tileKey, default: ([], [])].i.append(it) }
@@ -341,7 +380,9 @@ public enum BoardFiles {
         let draftKeys = Set(textItems.flatMap(BlockDrafts.fileKeys))
         for key in draftKeys { if let md = c.texts[key], c.textsOnDisk[key] != md { texts[key] = md } }
         let removed = c.textsOnDisk.keys.filter { !textIds.contains($0) && !draftKeys.contains($0) }
-        return (tiles, texts, removed.sorted())
+        // blocks whose .jsonl may need writing: their words changed, or it is missing or behind them
+        let docs = RichWords.enabled ? textIds.filter { id in texts[id] != nil || c.docsStale.contains(id) || (c.docWords[id] != nil && c.docWords[id] != (c.texts[id] ?? "")) }.sorted() : []
+        return (tiles, texts, removed.sorted(), docs)
     }
 
     /// Writes what changed; returns the content with its on-disk record brought up to date. `write` does an atomic write of one file.
@@ -372,9 +413,22 @@ public enum BoardFiles {
             try write(board.appendingPathComponent(BoardFormat.textFile(id)), md)
             out.textsOnDisk[id] = md
         }
+        // each block's .jsonl beside its copy (drafts keep only their .md, as on the laptop)
+        for id in ch.docs {
+            guard let jsonl = docToWrite(c, id: id) else { out.docsStale.remove(id); continue }
+            try write(board.appendingPathComponent(RichWords.docFile(id)), jsonl)
+            out.docsOnDisk[id] = jsonl
+            out.docWords[id] = c.texts[id] ?? ""
+            out.docsStale.remove(id)
+        }
         for id in ch.removedTexts {
             try? remove(board.appendingPathComponent(BoardFormat.textFile(id)))
             out.textsOnDisk[id] = nil
+            if RichWords.isMain(id), out.docsOnDisk[id] != nil || fm.fileExists(atPath: board.appendingPathComponent(RichWords.docFile(id)).path) {
+                try? remove(board.appendingPathComponent(RichWords.docFile(id)))
+                out.docsOnDisk[id] = nil
+                out.docWords[id] = nil
+            }
         }
         return out
     }
