@@ -30,7 +30,8 @@ final class MDLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
         for i in 0..<glyphRange.length {
             let ci = charIndexes[i]
             var p = props[i]
-            if ci < storage.length, storage.attribute(BlockStyler.mathKey, at: ci, effectiveRange: nil) != nil {
+            if ci < storage.length, storage.attribute(BlockStyler.mathKey, at: ci, effectiveRange: nil) != nil
+                || storage.attribute(BlockStyler.leadKey, at: ci, effectiveRange: nil) != nil {
                 p = .controlCharacter
                 changed = true
             } else if ci < storage.length, storage.attribute(BlockStyler.hiddenKey, at: ci, effectiveRange: nil) != nil {
@@ -54,6 +55,9 @@ final class MDLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
                        forControlCharacterAt charIndex: Int) -> NSLayoutManager.ControlCharacterAction {
         if let storage = textStorage, charIndex < storage.length, storage.attribute(BlockStyler.mathKey, at: charIndex, effectiveRange: nil) != nil {
             return .whitespace
+        }
+        if let storage = textStorage, charIndex < storage.length, storage.attribute(BlockStyler.leadKey, at: charIndex, effectiveRange: nil) != nil {
+            return .zeroAdvancement
         }
         return action
     }
@@ -151,12 +155,24 @@ final class MDLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
             let baseline = frag.minY + location(forGlyphAt: g.location).y
             let color = (storage.attribute(BlockStyler.textColorKey, at: range.location, effectiveRange: nil) as? UIColor) ?? BlockLook.ink
             switch kind {
-            case "bullet":
+            case "bullet", "ring", "square":
                 let d = max(2, font.pointSize * 0.32)
                 let cy = origin.y + baseline - font.xHeight / 2
                 let cx = origin.x + box.minX + max(d / 2, box.width / 2)
-                ctx.setFillColor(color.cgColor)
-                ctx.fillEllipse(in: CGRect(x: cx - d / 2, y: cy - d / 2, width: d, height: d))
+                let r = CGRect(x: cx - d / 2, y: cy - d / 2, width: d, height: d)
+                switch kind {
+                case "ring":
+                    let w = max(1, font.pointSize * 0.06)
+                    ctx.setStrokeColor(color.cgColor)
+                    ctx.setLineWidth(w)
+                    ctx.strokeEllipse(in: r.insetBy(dx: w / 2, dy: w / 2))
+                case "square":
+                    ctx.setFillColor(color.cgColor)
+                    ctx.fill(r)
+                default:
+                    ctx.setFillColor(color.cgColor)
+                    ctx.fillEllipse(in: r)
+                }
             case "box", "boxdone":
                 let side = font.pointSize * 0.9
                 let cy = origin.y + baseline - font.capHeight / 2
@@ -270,6 +286,36 @@ final class BlockTextLayout {
         guard glyphs.length > 0 else { return }
         manager.drawBackground(forGlyphRange: glyphs, at: padding)
         manager.drawGlyphs(forGlyphRange: glyphs, at: padding)
+    }
+
+    /// Each line's place for the UI test: its fragment's top and height, its used height, where its first shown character is drawn and
+    /// where its marks are (container coordinates, points).
+    func dump() -> String {
+        let ns = storage.string as NSString
+        let f = { (v: CGFloat) in String(format: "%.1f", v) }
+        var out: [String] = []
+        var loc = 0
+        for (i, piece) in storage.string.components(separatedBy: "\n").enumerated() {
+            let len = (piece as NSString).length
+            defer { loc += len + 1 }
+            guard loc < ns.length else { break }
+            var k = loc
+            while k < loc + len, storage.attribute(BlockStyler.hiddenKey, at: k, effectiveRange: nil) != nil || storage.attribute(BlockStyler.glyphKey, at: k, effectiveRange: nil) != nil { k += 1 }
+            let g = manager.glyphIndexForCharacter(at: min(k, ns.length - 1))
+            guard g < manager.numberOfGlyphs else { continue }
+            let frag = manager.lineFragmentRect(forGlyphAt: g, effectiveRange: nil)
+            let used = manager.lineFragmentUsedRect(forGlyphAt: g, effectiveRange: nil)
+            var s = "\(i):y\(f(frag.minY)) h\(f(frag.height)) u\(f(used.height)) x\(f(frag.minX + manager.location(forGlyphAt: g).x))"
+            if len > 0 {
+                storage.enumerateAttribute(BlockStyler.glyphKey, in: NSRange(location: loc, length: len), options: []) { v, r, _ in
+                    guard let v = v as? String else { return }
+                    let b = manager.boundingRect(forGlyphRange: manager.glyphRange(forCharacterRange: r, actualCharacterRange: nil), in: container)
+                    s += " \(v)@\(f(b.minX))+\(f(b.width))"
+                }
+            }
+            out.append(s)
+        }
+        return out.joined(separator: " | ")
     }
 
     /// The task line under a point (block coordinates), or nil.

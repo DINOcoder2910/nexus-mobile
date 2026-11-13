@@ -1,0 +1,18 @@
+{"format":"nexus-doc/1","tabs":[{"id":"t1","title":""}],"google":{"doc":"1AbC","url":"https://docs.google.com/document/d/1AbC/edit","title":"Essay","tabs":{"t1":"t.0"}}}
+{"id":"3243v","type":"paragraph","attrs":{"style":"title","by":"laptop","at":"2026-11-12T10:00:00.000Z"},"content":[{"type":"text","text":"Why chemistry"}]}
+{"id":"2joua","type":"paragraph","attrs":{"by":"laptop","at":"2026-11-12T10:00:00.000Z"}}
+{"id":"39gb9","type":"paragraph","attrs":{"by":"laptop","at":"2026-11-12T10:00:00.000Z"},"content":[{"type":"text","text":"The "},{"type":"text","text":"reaction","marks":[{"type":"b"}]},{"type":"text","text":" is "},{"type":"text","text":"fast","marks":[{"type":"i"}]},{"type":"text","text":". "},{"type":"text","text":"Red","marks":[{"type":"color","attrs":{"c":"red"}}]},{"type":"text","text":" words and "},{"type":"text","text":"yellow","marks":[{"type":"hl"}]},{"type":"text","text":" and "},{"type":"text","text":"under","marks":[{"type":"u"}]},{"type":"text","text":"."}]}
+{"id":"4wcnp","type":"paragraph","attrs":{"by":"laptop","at":"2026-11-12T10:00:00.000Z"}}
+{"id":"eqeyi","type":"paragraph","attrs":{"align":"center","by":"laptop","at":"2026-11-12T10:00:00.000Z"},"content":[{"type":"text","text":"Centred line."}]}
+{"id":"yvkjd","type":"paragraph","attrs":{"by":"laptop","at":"2026-11-12T10:00:00.000Z"}}
+{"id":"363tn","type":"paragraph","attrs":{"list":"bullet","by":"laptop","at":"2026-11-12T10:00:00.000Z"},"content":[{"type":"text","text":"one"}]}
+{"id":"pssf8","type":"paragraph","attrs":{"list":"bullet","level":1,"by":"laptop","at":"2026-11-12T10:00:00.000Z"},"content":[{"type":"text","text":"two"}]}
+{"id":"opti6","type":"paragraph","attrs":{"list":"check","by":"laptop","at":"2026-11-12T10:00:00.000Z"},"content":[{"type":"text","text":"three"}]}
+{"id":"fcpde","type":"paragraph","attrs":{"list":"check","checked":true,"by":"laptop","at":"2026-11-12T10:00:00.000Z"},"content":[{"type":"text","text":"four"}]}
+{"id":"xp69p","type":"paragraph","attrs":{"by":"laptop","at":"2026-11-12T10:00:00.000Z"}}
+{"id":"2nemk","type":"paragraph","attrs":{"list":"number","by":"laptop","at":"2026-11-12T10:00:00.000Z"},"content":[{"type":"text","text":"first"}]}
+{"id":"8qqbk","type":"paragraph","attrs":{"list":"number","by":"laptop","at":"2026-11-12T10:00:00.000Z"},"content":[{"type":"text","text":"second"}]}
+{"id":"m8zoc","type":"paragraph","attrs":{"by":"laptop","at":"2026-11-12T10:00:00.000Z"}}
+{"id":"xc6aw","type":"paragraph","attrs":{"style":"quote","by":"laptop","at":"2026-11-12T10:00:00.000Z"},"content":[{"type":"text","text":"A quote"}]}
+{"id":"pfah7","type":"paragraph","attrs":{"by":"laptop","at":"2026-11-12T10:00:00.000Z"}}
+{"id":"aarsb","type":"paragraph","attrs":{"by":"laptop","at":"2026-11-12T10:00:00.000Z"},"content":[{"type":"text","text":"H₂O and "},{"type":"mathin","attrs":{"tex":"x^2"}},{"type":"text","text":" and a "},{"type":"text","text":"link","marks":[{"type":"link","attrs":{"href":"https://example.com"}}]},{"type":"text","text":"."}]}
