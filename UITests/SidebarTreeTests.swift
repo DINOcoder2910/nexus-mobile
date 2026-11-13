@@ -73,13 +73,13 @@ final class SidebarTreeTests: XCTestCase {
         expand("R3 Energetics")
         expand("Week 1")
         XCTAssertTrue(app.staticTexts["Calorimetry"].firstMatch.waitForExistence(timeout: 5), "Week 1's boards aren't listed")
-        // OneNote's order (notebook.json), not by name: Week 2 before Week 1, its notebooks before its boards, Hess's law before Bond
-        XCTAssertLessThan(y("Week 2"), y("Week 1"))
-        XCTAssertLessThan(y("Week 1"), y("Calorimetry"))
-        XCTAssertLessThan(y("Calorimetry"), y("Hess's law"))
-        XCTAssertLessThan(y("Hess's law"), y("Bond enthalpy"))
-        XCTAssertLessThan(y("R3 Energetics"), y("R1 Structure"))
-        XCTAssertLessThan(y("Chemistry"), y("Biology"))
+        // the whole open tree on screen (rows below the fold aren't there to find)
+        reach(app.staticTexts["Biology"].firstMatch, "Biology")
+        // OneNote's order (notebook.json), not by name: Week 2 before Week 1, a notebook's notebooks before its boards, Hess's law
+        // before Bond enthalpy, R3 before R1, Chemistry's boards after its notebooks, Biology after Chemistry
+        let order = ["R3 Energetics", "Week 2", "Week 1", "Calorimetry", "Hess's law", "Bond enthalpy", "R1 Structure", "Syllabus", "Biology"]
+        for name in order { XCTAssertTrue(app.staticTexts[name].firstMatch.exists, name + " isn't in the sidebar") }
+        for (a, b) in zip(order, order.dropFirst()) { XCTAssertLessThan(y(a), y(b), a + " should come before " + b) }
         // a board sits further in than its notebook
         XCTAssertGreaterThan(app.staticTexts["Calorimetry"].firstMatch.frame.minX, app.staticTexts["Week 1"].firstMatch.frame.minX)
         sleep(1)

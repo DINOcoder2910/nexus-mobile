@@ -150,36 +150,82 @@ jobs:
             echo "SHOT-END"
           done < zoomshots.txt
 
-      # The iPhone: every UI test class named "…PhoneTests" (each skips itself on the iPad above) runs again on an iPhone simulator,
-      # from the same build; its screenshots whose name has "phone" are printed in the log like the iPad's.
-      - name: iPhone run ("…PhoneTests" classes) and its screenshots in the log
+      - uses: actions/upload-artifact@v4
         if: always()
+        with:
+          name: ui-check
+          path: |
+            shots
+            samples
+            ui.log
+            ui.xcresult
+
+      - name: Result
+        if: always()
+        run: exit $(cat status.txt 2>/dev/null || echo 1)
+
+  # The iPhone, beside the iPad job: every UI test class named "…PhoneTests" (each skips itself on the iPad) on an iPhone simulator.
+  # Its screenshots whose name has "phone" are printed in the log like the iPad's.
+  phone:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate the Xcode project
         run: |
-          ONLY=$(grep -ho "class [A-Za-z0-9_]*PhoneTests" UITests/*.swift | awk '{print "-only-testing:NexusMobileUITests/" $2}' | sort -u | tr '\n' ' ')
-          [ -n "$ONLY" ] || { echo "no iPhone tests"; exit 0; }
-          PHONE=$(xcrun simctl list devices available -j | python3 -c '
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Pick an iPhone simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c '
           import json,sys
           d=json.load(sys.stdin)["devices"]
-          c=[x for k,v in d.items() if "iOS" in k for x in v if "iPhone" in x["name"]]
-          c.sort(key=lambda x: (("Pro" not in x["name"]), x["name"]))
-          print(c[0]["udid"] if c else "")')
-          [ -n "$PHONE" ] || { echo "no iPhone simulator"; exit 0; }
-          xcrun simctl boot "$PHONE" || true
+          c=[x for k,v in d.items() if "iOS" in k for x in v if x["name"].startswith("iPhone")]
+          c.sort(key=lambda x: (("Pro" not in x["name"]) or ("Max" in x["name"]), x["name"]))
+          print(c[0]["udid"])')
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$UDID" || true
+
+      - name: Build for testing
+        run: |
+          set -o pipefail
+          xcodebuild build-for-testing -project NexusMobile.xcodeproj -scheme NexusMobileUITests \
+            -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" -derivedDataPath DerivedData \
+            CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- 2>&1 | grep -E "error:|BUILD|\*\*" | head -n 100
+
+      - name: Run the iPhone tests
+        timeout-minutes: 25
+        run: |
+          echo 1 > status.txt
+          ONLY=$(grep -ho "class [A-Za-z0-9_]*PhoneTests" UITests/*.swift | awk '{print "-only-testing:NexusMobileUITests/" $2}' | sort -u | tr '\n' ' ')
+          [ -n "$ONLY" ] || { echo "no iPhone tests"; echo 0 > status.txt; exit 0; }
+          echo "running: $ONLY"
           set +e
           xcodebuild test-without-building -project NexusMobile.xcodeproj -scheme NexusMobileUITests \
-            -destination "platform=iOS Simulator,id=$PHONE" -derivedDataPath DerivedData $ONLY \
-            -resultBundlePath phone.xcresult 2>&1 | tee phone.log | grep -E "UISTEP|Test Case|error|failed|passed" | head -n 200
-          PSTATUS=${PIPESTATUS[0]}
-          echo "iPhone run exited $PSTATUS"
-          [ "$PSTATUS" = "0" ] || echo 1 > status.txt
+            -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" -derivedDataPath DerivedData $ONLY \
+            -resultBundlePath phone.xcresult 2>&1 | tee phone.log | grep -E "UISTEP|Test Case|error|failed|passed|skipped"
+          STATUS=${PIPESTATUS[0]}
+          echo "xcodebuild test exited $STATUS"
+          echo "$STATUS" > status.txt
+
+      - name: The test log's end (when it stopped early)
+        if: always()
+        run: tail -n 40 phone.log 2>/dev/null | cut -c1-300 || true
+
+      - name: iPhone screenshots in the log (base64 JPEG)
+        if: always()
+        run: |
           mkdir -p phoneshots
-          xcrun xcresulttool export attachments --path phone.xcresult --output-path phoneshots 2>&1 | tail -n 3
+          xcrun xcresulttool export attachments --path phone.xcresult --output-path phoneshots 2>&1 | tail -n 3 || true
           python3 -c '
           import json
           for t in json.load(open("phoneshots/manifest.json")):
               for a in t.get("attachments",[]):
                   n=a.get("suggestedHumanReadableName","")
-                  if "phone" in n: print(a["exportedFileName"] + "\t" + n.split("_")[0])' > phonewanted.txt 2>/dev/null
+                  if "phone" in n: print(a["exportedFileName"] + "\t" + n.split("_")[0])' > phonewanted.txt 2>/dev/null || true
           while IFS=$'\t' read -r F N; do
             [ -f "phoneshots/$F" ] || continue
             sips -Z 1400 -s format jpeg -s formatOptions 60 "phoneshots/$F" --out "$N.jpg" >/dev/null || continue
@@ -187,19 +233,14 @@ jobs:
             base64 -i "$N.jpg" | fold -w 3000
             echo "SHOT-END"
           done < phonewanted.txt
-          exit 0
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ui-check
+          name: ui-check-phone
           path: |
-            shots
             phoneshots
-            samples
-            ui.log
             phone.log
-            ui.xcresult
 
       - name: Result
         if: always()
