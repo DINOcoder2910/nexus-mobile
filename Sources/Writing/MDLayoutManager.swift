@@ -30,7 +30,8 @@ final class MDLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
         for i in 0..<glyphRange.length {
             let ci = charIndexes[i]
             var p = props[i]
-            if ci < storage.length, storage.attribute(BlockStyler.mathKey, at: ci, effectiveRange: nil) != nil {
+            if ci < storage.length, storage.attribute(BlockStyler.mathKey, at: ci, effectiveRange: nil) != nil
+                || storage.attribute(BlockStyler.leadKey, at: ci, effectiveRange: nil) != nil {
                 p = .controlCharacter
                 changed = true
             } else if ci < storage.length, storage.attribute(BlockStyler.hiddenKey, at: ci, effectiveRange: nil) != nil {
@@ -54,6 +55,9 @@ final class MDLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
                        forControlCharacterAt charIndex: Int) -> NSLayoutManager.ControlCharacterAction {
         if let storage = textStorage, charIndex < storage.length, storage.attribute(BlockStyler.mathKey, at: charIndex, effectiveRange: nil) != nil {
             return .whitespace
+        }
+        if let storage = textStorage, charIndex < storage.length, storage.attribute(BlockStyler.leadKey, at: charIndex, effectiveRange: nil) != nil {
+            return .zeroAdvancement
         }
         return action
     }

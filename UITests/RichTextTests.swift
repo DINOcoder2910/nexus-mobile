@@ -91,7 +91,7 @@ final class RichTextTests: XCTestCase {
         XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: 10), "the block didn't open again")
         sleep(2)
         step("reopened on the board")
-        // the whole block, closed and open, at the same place: Done, Show everything, then open it again by a tap in its middle
+        // the whole block, closed and open, at the same place: Done, Show everything, then open it again by a tap on its title (above the keyboard, so the board stays put)
         app.buttons["Done"].firstMatch.tap()
         sleep(1)
         let zoom = app.buttons["100%"].firstMatch
@@ -103,8 +103,8 @@ final class RichTextTests: XCTestCase {
         sleep(2)
         step("whole block closed")
         dumpBlock("whole")
-        app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.57)).tap()
-        XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: 10), "the block didn't open in the middle")
+        app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.38)).tap()
+        XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: 10), "the block didn't open at its title")
         sleep(2)
         step("whole block reopened")
     }

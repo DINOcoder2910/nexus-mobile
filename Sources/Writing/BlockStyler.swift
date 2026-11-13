@@ -19,6 +19,10 @@ enum BlockStyler {
     /// On every mark that is shown faintly or drawn as a glyph: its colour is the mark's, not the words'.
     static let markKey = NSAttributedString.Key("nexusMark")
     static let faint = BlockLook.muted.withAlphaComponent(0.55)
+    /// On hidden marks that start a line ("## ", "> ", a task's "- "): laid out as zero-width control glyphs instead of null glyphs. A line
+    /// that began with null glyphs lost its paragraph's first-line indent and its spacing before and after (TextKit 1 took the words as a
+    /// second line of the paragraph), so a task's checkbox sat a step further in and headings, tasks and quotes ran together.
+    static let leadKey = NSAttributedString.Key("nexusLeadHidden")
     /// The line's own text colour (UIColor), for what MDLayoutManager draws on it (a bullet).
     static let textColorKey = NSAttributedString.Key("nexusLineColor")
     /// On the first character of a $maths$ span drawn by KaTeX (a MathBox); the rest of the span hides. MDLayoutManager makes that
@@ -106,6 +110,14 @@ enum BlockStyler {
                 case .none: break
                 }
             }
+        }
+
+        // each line's leading run of hidden marks
+        for line in lines {
+            var k = line.range.location
+            let end = line.range.location + line.range.length
+            while k < end, hiddenAt.contains(k) { k += 1 }
+            if k > line.range.location { storage.addAttribute(leadKey, value: true, range: NSRange(location: line.range.location, length: k - line.range.location)) }
         }
 
         // $$ blocks over several lines: drawn as one picture on the opening line, the rest folded away, while the caret is outside
