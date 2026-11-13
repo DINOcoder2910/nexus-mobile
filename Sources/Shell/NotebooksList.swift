@@ -58,9 +58,10 @@ struct NotebookTreeLine: View {
             if row.depth > 0 { Color.clear.frame(width: CGFloat(row.depth) * Self.step, height: 1) }
             if row.hasChildren {
                 Button(action: toggle) {
+                    // Color's grey, not .secondary: in a button that is the tint's (green) secondary
                     Image(systemName: "chevron.right")
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.secondary)
                         .rotationEffect(.degrees(row.isOpen ? 90 : 0))
                         .frame(width: Self.arrowWidth, height: 30)
                         .contentShape(Rectangle())
@@ -105,7 +106,7 @@ struct NotebookTreeLine: View {
 
     private var boardLabel: some View {
         HStack(spacing: 8) {
-            Image(systemName: "scribble").foregroundStyle(.secondary).font(.footnote).frame(width: 18)
+            Image(systemName: "scribble").foregroundStyle(Color.secondary).font(.footnote).frame(width: 18)
             Text(row.name).lineLimit(1)
             Spacer(minLength: 4)
         }
@@ -117,7 +118,7 @@ struct NotebookTreeLine: View {
         let ref = Notebook.BoardRef(name: row.name, path: row.path)
         if pushes {
             Button { store.openBoard = .init(path: row.path, focus: nil) } label: {
-                HStack(spacing: 0) { lead; boardLabel }.foregroundStyle(.primary)
+                HStack(spacing: 0) { lead; boardLabel }.foregroundStyle(Color.primary)
             }
             .boardRowExtras(ref, actions: actions)
         } else {
