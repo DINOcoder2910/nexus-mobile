@@ -309,6 +309,22 @@ final class BoardTests: XCTestCase {
         XCTAssertEqual(nbs[1].boards.map(\.path), ["notebooks/Spanish/Verbs.board"])
     }
 
+    func testNotebookOrderFromNotebookJson() throws {
+        // the laptop's OneNote import: notebook.json `order` holds OneNote's order of sections and pages
+        for p in ["notebooks/Chem/R3.2/R3.2.1-2.board", "notebooks/Chem/R3.2/Notes.board", "notebooks/Chem/R3.2/Untitled Page.board",
+                  "notebooks/Chem/R3.2/Untitled Page 2.board", "notebooks/Chem/R3.2/Added later.board", "notebooks/Chem/R3.1", "notebooks/Chem/A intro"] {
+            try FileManager.default.createDirectory(at: dir.appendingPathComponent(p), withIntermediateDirectories: true)
+        }
+        try write("notebooks/Chem/R3.2/notebook.json", #"{"order": ["R3.2.1-2.board", "Notes.board", "untitled page.board", "Untitled Page 2.board", "Gone.board"]}"#)
+        try write("notebooks/Chem/notebook.json", ##"{"color": "#2769B7", "order": ["R3.2", "R3.1"]}"##)
+        let chem = Notebook.list(dir)[0]
+        XCTAssertEqual(chem.color, "#2769B7")
+        XCTAssertEqual(chem.notebooks.map(\.name), ["R3.2", "R3.1", "A intro"])
+        XCTAssertEqual(chem.notebooks[0].boards.map(\.name), ["R3.2.1-2", "Notes", "Untitled Page", "Untitled Page 2", "Added later"])
+        XCTAssertEqual(NotebookMeta.order(nil), [])
+        XCTAssertEqual(NotebookMeta.order(#"{"order": "no"}"#), [])
+    }
+
     func testNotebooksNestToAnyDepth() throws {
         for p in ["notebooks/School/Chem/R3/Week 1/Lesson 1.board", "notebooks/School/Chem/Intro.board", "notebooks/School/Chem/R3/Notes.board"] {
             try FileManager.default.createDirectory(at: dir.appendingPathComponent(p), withIntermediateDirectories: true)
