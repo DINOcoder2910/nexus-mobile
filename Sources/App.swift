@@ -225,6 +225,7 @@ struct RootView: View {
             if case .board(let path)? = start { store.openBoard = .init(path: path) }
             answerRouter()
             InkBoardMove.runIfNeeded(store)
+            TestHooks.run(store)
             // Another writer (sync, the Files app) can change the folder at any time: look every few seconds while open,
             // and tell the other stores (and sync) what changed.
             while !Task.isCancelled {

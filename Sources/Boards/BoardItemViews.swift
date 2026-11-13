@@ -194,6 +194,8 @@ final class SelectionView: UIView {
 /// A PDF printout on the board: its pages down from the item's x, y, each `w` wide and `gap` apart, with any room opened in it
 /// (board.json's `space`: above a page, after it, or the page opened in two). Each piece of a page is its own view showing that
 /// part of the page's picture. Only pages near the view are drawn, and pages far away are freed, so long PDFs stay light.
+/// A page's picture is sharp up to 150 %; closer in, a close-up of just the part on screen is drawn over it once the board stops
+/// moving (NexusCore `PdfSharpness`), so deep zoom never asks for a picture of the whole page bigger than the iPad can hold.
 final class PdfPrintout {
     struct OutlineItem { let title: String; let page: Int; let depth: Int }
 
@@ -204,10 +206,22 @@ final class PdfPrintout {
     private(set) var frames: [CGRect] = []
     private(set) var segments: [BoardFiles.PdfSegment] = []
     private var sizes: [(w: Double, h: Double)] = []
-    private var views: [(outer: UIView, clip: UIView, image: UIImageView)] = []
+    private var views: [(outer: UIView, clip: UIView, image: UIImageView, shade: UIView)] = []
     private var images: [UIImage?] = []
+    /// Pixels per board unit of each page's picture on show (0: none).
     private var rendered: [CGFloat] = []
+    /// Pages being drawn.
     private var pending = Set<Int>()
+    /// Bumped when a page's picture is let go, so a draw still under way for it is dropped when it lands.
+    private var generation: [Int] = []
+    /// When a page's draw last failed (out of memory): it is tried again a little later, not on every move.
+    private var failedAt: [Int: Date] = [:]
+    /// The close-up over each piece of a page in view at deep zoom, by segment index: its view, the board rect it shows, its sharpness.
+    private var closeUps: [Int: (view: UIImageView, rect: CGRect, scale: CGFloat)] = [:]
+    private var closeUpGen = 0
+    private var closeUpWork: DispatchWorkItem?
+    private var last: (visible: CGRect, zoom: CGFloat, screenScale: CGFloat)?
+    private var memoryWatch: NSObjectProtocol?
     private var dim = false
     private static let queue = DispatchQueue(label: "app.nexus.pdf-render", qos: .userInitiated)
 
@@ -222,7 +236,16 @@ final class PdfPrintout {
         }
         images = Array(repeating: nil, count: doc.pageCount)
         rendered = Array(repeating: 0, count: doc.pageCount)
+        generation = Array(repeating: 0, count: doc.pageCount)
         layOut()
+        memoryWatch = NotificationCenter.default.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.lowMemory()
+        }
+    }
+
+    deinit {
+        if let memoryWatch { NotificationCenter.default.removeObserver(memoryWatch) }
+        closeUpWork?.cancel()
     }
 
     static func displaySize(_ page: PDFPage?) -> CGSize {
@@ -246,19 +269,31 @@ final class PdfPrintout {
         CGFloat(s.bottom > s.top ? s.h / (s.bottom - s.top) : s.h)
     }
 
+    /// Page `i`'s own size (PDF points, turned as shown) and its size on the board.
+    private func pageSize(_ i: Int) -> CGSize { CGSize(width: sizes[i].w, height: sizes[i].h) }
+    private func boardSize(_ i: Int) -> CGSize {
+        let w = CGFloat(item.w ?? BoardFormat.pdfWidth)
+        return CGSize(width: w, height: w * CGFloat(sizes[i].h / max(1, sizes[i].w)))
+    }
+
     /// Moved, resized or opened up: the pages follow.
     func update(_ it: BoardItem) {
         item = it
         layOut()
+        dropCloseUps()
+        scheduleCloseUps()
     }
 
     func setDim(_ on: Bool) {
         dim = on
-        for v in views { v.outer.alpha = on ? 0.85 : 1 }
+        // a shade over the page rather than see-through views: a see-through view with views inside is drawn off screen first,
+        // which at deep zoom is a huge extra picture
+        for v in views { v.shade.alpha = on ? 0.15 : 0 }
     }
 
     /// Puts the page pieces in `container` (canvas units: board + offset).
     func place(in container: UIView, offset: CGPoint) {
+        if views.count != segments.count { dropCloseUps() }
         while views.count < segments.count {
             let f = UIView()
             f.isUserInteractionEnabled = false
@@ -266,16 +301,20 @@ final class PdfPrintout {
             f.layer.shadowOpacity = 0.12
             f.layer.shadowRadius = 5
             f.layer.shadowOffset = CGSize(width: 0, height: 2)
-            f.alpha = dim ? 0.85 : 1
             let clip = UIView()
             clip.clipsToBounds = true
             clip.backgroundColor = .white
             let v = UIImageView()
             v.contentMode = .scaleToFill
             clip.addSubview(v)
+            let shade = UIView()
+            shade.backgroundColor = .black
+            shade.alpha = dim ? 0.15 : 0
+            shade.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            clip.addSubview(shade)
             f.addSubview(clip)
             container.addSubview(f)
-            views.append((f, clip, v))
+            views.append((f, clip, v, shade))
         }
         while views.count > segments.count { views.removeLast().outer.removeFromSuperview() }
         for (i, s) in segments.enumerated() {
@@ -284,6 +323,7 @@ final class PdfPrintout {
             if v.outer.frame != r {
                 v.outer.frame = r
                 v.clip.frame = CGRect(origin: .zero, size: r.size)
+                v.shade.frame = v.clip.bounds
                 v.outer.layer.shadowPath = UIBezierPath(rect: CGRect(origin: .zero, size: r.size)).cgPath
             }
             let ph = pageHeight(s)
@@ -293,10 +333,14 @@ final class PdfPrintout {
     }
 
     func remove() {
+        closeUpWork?.cancel()
+        dropCloseUps()
         views.forEach { $0.outer.removeFromSuperview() }
         views = []
         images = Array(repeating: nil, count: doc.pageCount)
         rendered = Array(repeating: 0, count: doc.pageCount)
+        generation = generation.map { $0 + 1 }
+        pending = []
     }
 
     private func show(_ page: Int, _ image: UIImage?) {
@@ -304,61 +348,164 @@ final class PdfPrintout {
         for (i, s) in segments.enumerated() where s.page == page && i < views.count { views[i].image.image = image }
     }
 
+    /// Lets page `i`'s picture go (a draw under way for it is dropped when it lands).
+    private func free(_ i: Int) {
+        generation[i] += 1
+        pending.remove(i)
+        rendered[i] = 0
+        show(i, nil)
+    }
+
     /// Draws the pages near `visible` (board units) sharp enough for `zoom`, frees the far ones; returns the first page on screen (0 = none).
     @discardableResult
     func refresh(visible: CGRect, zoom: CGFloat, screenScale: CGFloat) -> Int {
+        last = (visible, zoom, screenScale)
         let near = visible.insetBy(dx: 0, dy: -visible.height)
         let keep = visible.insetBy(dx: 0, dy: -visible.height * 3)
-        let want = min(max(zoom, 1), 3) * screenScale
         var first = 0
         for (i, f) in frames.enumerated() where i < rendered.count {
             if first == 0, f.intersects(visible) { first = i + 1 }
             if f.intersects(near) {
-                if rendered[i] < want * 0.75 { render(i, scale: want) }
-            } else if !f.intersects(keep), rendered[i] > 0 {
-                show(i, nil)
-                rendered[i] = 0
+                if pending.contains(i) { continue }
+                if let t = failedAt[i], Date().timeIntervalSince(t) < 1 { continue }
+                let want = pageScale(i, zoom: zoom, screenScale: screenScale)
+                if PdfSharpness.needsRedraw(have: Double(rendered[i]), want: Double(want)) { render(i, scale: want) }
+            } else if !f.intersects(keep), rendered[i] > 0 || pending.contains(i) {
+                free(i)
             }
         }
+        scheduleCloseUps()
         return first
     }
 
+    /// The pixels per board unit page `i`'s whole picture should have at `zoom`.
+    private func pageScale(_ i: Int, zoom: CGFloat, screenScale: CGFloat) -> CGFloat {
+        let b = boardSize(i)
+        return CGFloat(PdfSharpness.pageScale(zoom: Double(zoom), screenScale: Double(screenScale), w: Double(b.width), h: Double(b.height)))
+    }
+
     private func render(_ i: Int, scale: CGFloat) {
-        if pending.contains(i) { return }
         pending.insert(i)
-        let w = CGFloat(item.w ?? BoardFormat.pdfWidth)
-        let pageSize = PdfPrintout.displaySize(doc.page(at: i))
-        let frame = CGSize(width: w, height: w * pageSize.height / max(1, pageSize.width))
-        var target = CGSize(width: frame.width * scale, height: frame.height * scale)
-        let cap: CGFloat = 16_000_000
-        if target.width * target.height > cap {
-            let s = (cap / (target.width * target.height)).squareRoot()
-            target = CGSize(width: target.width * s, height: target.height * s)
-        }
-        target = CGSize(width: max(1, target.width.rounded()), height: max(1, target.height.rounded()))
-        rendered[i] = target.width / max(frame.width, 1)
-        let doc = self.doc
+        let frame = boardSize(i), size = pageSize(i)
+        let target = CGSize(width: max(1, (frame.width * scale).rounded()), height: max(1, (frame.height * scale).rounded()))
+        let gen = generation[i], doc = self.doc
         PdfPrintout.queue.async { [weak self] in
-            var image: UIImage?
-            if let page = doc.page(at: i) {
-                let format = UIGraphicsImageRendererFormat()
-                format.scale = 1
-                format.opaque = true
-                image = UIGraphicsImageRenderer(size: target, format: format).image { ctx in
-                    UIColor.white.setFill()
-                    ctx.fill(CGRect(origin: .zero, size: target))
-                    let cg = ctx.cgContext
-                    cg.translateBy(x: 0, y: target.height)
-                    cg.scaleBy(x: target.width / pageSize.width, y: -target.height / pageSize.height)
-                    page.draw(with: .mediaBox, to: cg)
-                }
-            }
+            let image = PdfPrintout.draw(doc, page: i, pageSize: size, target: target, pageRect: CGRect(origin: .zero, size: target))
             DispatchQueue.main.async {
-                guard let self else { return }
+                guard let self, i < self.generation.count, self.generation[i] == gen else { return }
                 self.pending.remove(i)
-                if i < self.rendered.count, self.rendered[i] > 0 { self.show(i, image) }
+                guard let image else { return self.failed(i) }
+                self.failedAt[i] = nil
+                // what was actually drawn counts, so the page is only drawn again when the zoom changes enough
+                self.rendered[i] = target.width / max(frame.width, 1)
+                self.show(i, image)
             }
         }
+    }
+
+    /// A draw came back empty (the iPad was short of memory): the old picture stays, and it is tried again in a second.
+    private func failed(_ i: Int) {
+        failedAt[i] = Date()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.1) { [weak self] in
+            guard let self, let last = self.last else { return }
+            self.refresh(visible: last.visible, zoom: last.zoom, screenScale: last.screenScale)
+        }
+    }
+
+    /// Draws a page so that the whole page lands on `pageRect` (pixels) of a `target`-sized picture (only the part inside is kept);
+    /// nil when there wasn't memory for it.
+    private static func draw(_ doc: PDFDocument, page i: Int, pageSize: CGSize, target: CGSize, pageRect: CGRect) -> UIImage? {
+        autoreleasepool { () -> UIImage? in
+            guard let page = doc.page(at: i) else { return nil }
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 1
+            format.opaque = true
+            let image = UIGraphicsImageRenderer(size: target, format: format).image { ctx in
+                UIColor.white.setFill()
+                ctx.fill(CGRect(origin: .zero, size: target))
+                let cg = ctx.cgContext
+                cg.translateBy(x: pageRect.minX, y: pageRect.maxY)
+                cg.scaleBy(x: pageRect.width / pageSize.width, y: -pageRect.height / pageSize.height)
+                page.draw(with: .mediaBox, to: cg)
+            }
+            guard let cg = image.cgImage, cg.width > 0, cg.height > 0 else { return nil }
+            return image
+        }
+    }
+
+    // MARK: close-ups at deep zoom
+
+    /// Once the board has stopped moving for a moment, draws close-ups of the pieces in view (or lets them go when not needed).
+    private func scheduleCloseUps() {
+        closeUpWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.drawCloseUps() }
+        closeUpWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: work)
+    }
+
+    private func drawCloseUps() {
+        guard let last else { return }
+        let visible = last.visible
+        closeUpGen += 1
+        let gen = closeUpGen
+        var wanted = Set<Int>()
+        for (si, s) in segments.enumerated() where si < views.count && s.page < sizes.count {
+            let r = PdfPrintout.rect(s)
+            guard r.intersects(visible) else { continue }
+            let pageHave = max(rendered[s.page], pageScale(s.page, zoom: last.zoom, screenScale: last.screenScale))
+            guard let c = PdfSharpness.closeUp(segment: (Double(r.minX), Double(r.minY), Double(r.width), Double(r.height)),
+                                               visible: (Double(visible.minX), Double(visible.minY), Double(visible.width), Double(visible.height)),
+                                               zoom: Double(last.zoom), screenScale: Double(last.screenScale), pageHave: Double(pageHave)) else { continue }
+            wanted.insert(si)
+            let rect = CGRect(x: c.rect.x, y: c.rect.y, width: c.rect.w, height: c.rect.h)
+            let scale = CGFloat(c.scale)
+            // the one on show still covers what's in view, sharply enough
+            if let have = closeUps[si], have.rect.contains(r.intersection(visible)), have.scale >= scale * 0.85 { continue }
+            drawCloseUp(si, s, rect: rect, scale: scale, gen: gen)
+        }
+        for si in Array(closeUps.keys) where !wanted.contains(si) {
+            closeUps[si]?.view.removeFromSuperview()
+            closeUps[si] = nil
+        }
+    }
+
+    private func drawCloseUp(_ si: Int, _ s: BoardFiles.PdfSegment, rect: CGRect, scale: CGFloat, gen: Int) {
+        let target = CGSize(width: max(1, (rect.width * scale).rounded()), height: max(1, (rect.height * scale).rounded()))
+        let kx = target.width / rect.width, ky = target.height / rect.height
+        let ph = pageHeight(s)
+        let page = CGRect(x: CGFloat(s.x), y: CGFloat(s.y) - CGFloat(s.top) * ph, width: CGFloat(s.w), height: ph) // the whole page on the board
+        let pageRect = CGRect(x: (page.minX - rect.minX) * kx, y: (page.minY - rect.minY) * ky, width: page.width * kx, height: page.height * ky)
+        let size = pageSize(s.page), doc = self.doc
+        PdfPrintout.queue.async { [weak self] in
+            let image = PdfPrintout.draw(doc, page: s.page, pageSize: size, target: target, pageRect: pageRect)
+            DispatchQueue.main.async {
+                guard let self, self.closeUpGen == gen, si < self.views.count, si < self.segments.count, self.segments[si] == s, let image else { return }
+                let v: UIImageView
+                if let have = self.closeUps[si] { v = have.view } else {
+                    v = UIImageView()
+                    v.contentMode = .scaleToFill
+                    let clip = self.views[si].clip
+                    clip.insertSubview(v, belowSubview: self.views[si].shade)
+                }
+                v.image = image
+                v.frame = rect.offsetBy(dx: -CGFloat(s.x), dy: -CGFloat(s.y)) // the clip's own units: the piece's top left is 0, 0
+                self.closeUps[si] = (v, rect, scale)
+            }
+        }
+    }
+
+    private func dropCloseUps() {
+        closeUpGen += 1
+        for c in closeUps.values { c.view.removeFromSuperview() }
+        closeUps = [:]
+    }
+
+    /// The iPad is short of memory: keep only what's on screen.
+    private func lowMemory() {
+        dropCloseUps()
+        guard let last else { return }
+        for (i, f) in frames.enumerated() where i < rendered.count && !f.intersects(last.visible) && (rendered[i] > 0 || pending.contains(i)) { free(i) }
+        scheduleCloseUps()
     }
 
     /// The PDF's own chapter list.

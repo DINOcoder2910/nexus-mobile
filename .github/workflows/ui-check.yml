@@ -127,6 +127,24 @@ jobs:
             echo "SHOT-END"
           done < rich/list.txt
 
+      - name: PDF zoom screenshots in the log (base64 JPEG)
+        if: always()
+        run: |
+          python3 -c '
+          import json
+          m=json.load(open("shots/manifest.json"))
+          for t in m:
+              for a in t.get("attachments",[]):
+                  n=a.get("suggestedHumanReadableName","")
+                  if n.startswith("zoom-"): print(a["exportedFileName"] + "\t" + n)' 2>/dev/null > zoomshots.txt || true
+          while IFS=$'\t' read -r F N; do
+            [ -n "$F" ] || continue
+            sips -Z 1200 -s format jpeg -s formatOptions 60 "shots/$F" --out z.jpg >/dev/null
+            echo "SHOT-BEGIN $N $(stat -f%z z.jpg)"
+            base64 -i z.jpg | fold -w 3000
+            echo "SHOT-END"
+          done < zoomshots.txt
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
