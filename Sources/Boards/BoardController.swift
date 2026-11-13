@@ -186,6 +186,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         super.viewDidLayoutSubviews()
         guard view.bounds.width > 0 else { return }
         layOutBar()
+        layOutTutorPanel()
         // the Tools panel follows resizes that aren't turns (the Side by side divider, the sidebar), but not while it slides in or out
         if let p = toolPanel, p.view.transform == .identity, p.view.frame != toolPanelFrame { placeToolPanel() }
         if !didFirstLayout {
