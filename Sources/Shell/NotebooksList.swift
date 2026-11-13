@@ -5,64 +5,150 @@ import UniformTypeIdentifiers
 import NexusCore
 
 /// The sidebar's notebooks, as the laptop's (nexus docs/data-format.md "The board redesign's additions", Notebooks): every plain folder
-/// under `notebooks/` is a notebook, to any depth; a `<name>.board` folder in one is a board. The sidebar shows the notebooks (a
-/// top-level one with its colour); tapping one opens its page (NotebookPage), which shows its notebooks and its boards as cards.
-/// Press and hold a notebook for Rename, Move, Colour, New notebook inside, Delete; drop a board's card on one to move it there.
+/// under `notebooks/` is a notebook, to any depth; a `<name>.board` folder in one is a board. The sidebar shows them as a tree
+/// (NexusCore NotebookTree): each notebook with an arrow to open it, and inside it its notebooks, then its boards, in the notebook
+/// page's order (notebook.json `order`, OneNote's, then by name). Tapping a notebook opens its page (NotebookPage); tapping a board
+/// opens the board, and the open board's row is the one selected. Press and hold a notebook for Rename, Move, Colour, New notebook
+/// inside, Delete, a board for Open in a new window, Rename, Move, Delete; drop a board on a notebook to move it there.
 struct NotebooksList: View {
     @Environment(NexusStore.self) private var store
     @Bindable var actions: NotebookActions
+    /// The iPhone's list (rows push onto the stack; a board opens over everything) rather than the iPad's selectable sidebar.
+    var pushes = false
+    /// The open notebooks' paths ("a|b"), remembered.
+    @AppStorage("openNotebooks") private var openList = ""
 
     var body: some View {
         let _ = store.notebooksVersion
-        ForEach(Notebook.list(store.folder)) { NotebookRow(nb: $0, actions: actions) }
+        let tree = Notebook.list(store.folder)
+        let byPath = Dictionary(tree.flatMap(\.allNotebooks).map { ($0.path, $0) }, uniquingKeysWith: { a, _ in a })
+        ForEach(NotebookTree.rows(tree, open: NotebookTree.parse(openList))) { r in
+            NotebookTreeLine(row: r, nb: byPath[r.path], pushes: pushes, actions: actions) {
+                withAnimation(.snappy(duration: 0.25)) { openList = NotebookTree.setting(r.path, open: !r.isOpen, in: openList) }
+            }
+            // the iPad's selection: a notebook's page, or the board (selected while it is open)
+            .tag(r.kind == .board ? SidebarItem.board(r.path) : SidebarItem.screen(.notebook(r.path)))
+        }
         Button { actions.ask(.notebook, in: BoardFormat.notebooks) } label: {
             Label("New notebook…", systemImage: "plus").foregroundStyle(.secondary)
         }
     }
 }
 
-/// One notebook in the sidebar, with the notebooks inside it below a disclosure arrow.
-struct NotebookRow: View {
-    let nb: Notebook
+/// One row of the notebook tree: indented by its depth, an arrow when it has anything inside, then the notebook or the board.
+struct NotebookTreeLine: View {
+    let row: NotebookTreeRow
+    /// The notebook itself (for its menu); nil for a board.
+    let nb: Notebook?
+    let pushes: Bool
     @Bindable var actions: NotebookActions
+    let toggle: () -> Void
     @Environment(NexusStore.self) private var store
-    @AppStorage("openNotebooks") private var openList = ""
+
+    /// Each level's step in, and the arrow's width (kept empty where there is no arrow, so the names line up).
+    static let step: CGFloat = 14
+    static let arrowWidth: CGFloat = 22
 
     var body: some View {
-        if nb.notebooks.isEmpty {
-            link
-        } else {
-            DisclosureGroup(isExpanded: open(nb.path)) {
-                ForEach(nb.notebooks) { NotebookRow(nb: $0, actions: actions) }
-            } label: { link }
-        }
+        if row.kind == .board { board } else { notebook }
     }
 
-    private var link: some View {
-        NavigationLink(value: Screen.notebook(nb.path)) {
-            HStack(spacing: 10) {
-                if nb.depth == 0, let c = nb.color {
-                    Circle().fill(Color(uiColor: InkConvert.color(c))).frame(width: 9, height: 9)
-                } else {
-                    Image(systemName: "book.closed").foregroundStyle(.secondary).font(.footnote)
+    private var lead: some View {
+        HStack(spacing: 2) {
+            if row.depth > 0 { Color.clear.frame(width: CGFloat(row.depth) * Self.step, height: 1) }
+            if row.hasChildren {
+                Button(action: toggle) {
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(row.isOpen ? 90 : 0))
+                        .frame(width: Self.arrowWidth, height: 30)
+                        .contentShape(Rectangle())
                 }
-                Text(nb.name).lineLimit(1)
-                Spacer()
-                let n = nb.allBoards.count
-                if n > 0 { Text("\(n)").font(.caption).foregroundStyle(.secondary) }
+                .buttonStyle(.borderless)
+                .accessibilityLabel((row.isOpen ? "Collapse " : "Expand ") + row.name)
+            } else {
+                Color.clear.frame(width: Self.arrowWidth, height: 1)
             }
         }
-        .contextMenu { NotebookMenu(nb: nb, actions: actions) }
-        .dropDestination(for: String.self) { paths, _ in actions.move(paths, into: nb.path, store) }
     }
 
-    private func open(_ path: String) -> Binding<Bool> {
-        Binding(get: { openList.split(separator: "|").contains(Substring(path)) },
-                set: { isOpen in
-                    var set = Set(openList.split(separator: "|").map(String.init))
-                    if isOpen { set.insert(path) } else { set.remove(path) }
-                    openList = set.sorted().joined(separator: "|")
-                })
+    // MARK: a notebook
+
+    private var notebookLabel: some View {
+        HStack(spacing: 8) {
+            if let c = row.color {
+                Circle().fill(Color(uiColor: InkConvert.color(c))).frame(width: 9, height: 9).frame(width: 18)
+            } else {
+                Image(systemName: "book.closed").foregroundStyle(.secondary).font(.footnote).frame(width: 18)
+            }
+            Text(row.name).lineLimit(1)
+            Spacer(minLength: 4)
+            if row.boardCount > 0 { Text("\(row.boardCount)").font(.caption).foregroundStyle(.secondary) }
+        }
+        .contentShape(Rectangle())
+    }
+
+    private var notebook: some View {
+        HStack(spacing: 0) {
+            lead
+            if pushes {
+                NavigationLink(value: Screen.notebook(row.path)) { notebookLabel }
+            } else {
+                notebookLabel
+            }
+        }
+        .notebookRowExtras(nb, actions: actions, store: store)
+    }
+
+    // MARK: a board
+
+    private var boardLabel: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "scribble").foregroundStyle(.secondary).font(.footnote).frame(width: 18)
+            Text(row.name).lineLimit(1)
+            Spacer(minLength: 4)
+        }
+        .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private var board: some View {
+        let ref = Notebook.BoardRef(name: row.name, path: row.path)
+        if pushes {
+            Button { store.openBoard = .init(path: row.path, focus: nil) } label: {
+                HStack(spacing: 0) { lead; boardLabel }.foregroundStyle(.primary)
+            }
+            .boardRowExtras(ref, actions: actions)
+        } else {
+            HStack(spacing: 0) { lead; boardLabel }
+                .boardRowExtras(ref, actions: actions)
+        }
+    }
+}
+
+private extension View {
+    /// A notebook row's long-press menu, and a board dropped on it moves there.
+    @ViewBuilder
+    func notebookRowExtras(_ nb: Notebook?, actions: NotebookActions, store: NexusStore) -> some View {
+        if let nb {
+            self.contextMenu { NotebookMenu(nb: nb, actions: actions) }
+                .dropDestination(for: String.self) { paths, _ in actions.move(paths, into: nb.path, store) }
+        } else {
+            self
+        }
+    }
+
+    /// A board row's long-press menu (the card's main ones), and it can be dragged onto a notebook.
+    func boardRowExtras(_ b: Notebook.BoardRef, actions: NotebookActions) -> some View {
+        self.draggable(b.path)
+            .contextMenu {
+                NewWindowButton(start: .board(b.path))
+                Button { actions.ask(.rename, in: b.path, name: b.name) } label: { Label("Rename…", systemImage: "pencil") }
+                Button { actions.moving = b.path } label: { Label("Move to…", systemImage: "folder") }
+                Divider()
+                Button(role: .destructive) { actions.removing = b } label: { Label("Delete…", systemImage: "trash") }
+            }
     }
 }
 
