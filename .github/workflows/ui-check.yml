@@ -97,7 +97,7 @@ jobs:
           for t in m:
               for a in t.get("attachments",[]):
                   n=a.get("suggestedHumanReadableName","")
-                  if n.startswith("sidebar") or n.startswith("tutor-"): print(a["exportedFileName"] + "\t" + n.split("_")[0])' > wanted.txt 2>/dev/null || true
+                  if n.startswith("sidebar") or n.startswith("tutor-") or n.startswith("ideas-"): print(a["exportedFileName"] + "\t" + n.split("_")[0])' > wanted.txt 2>/dev/null || true
           [ -s wanted.txt ] || { echo "no shots to print"; exit 0; }
           while IFS="$(printf '\t')" read -r F N; do
             sips -Z 1400 -s format jpeg -s formatOptions 60 "shots/$F" --out "$N.jpg" >/dev/null || continue
