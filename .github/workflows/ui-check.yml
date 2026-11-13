@@ -97,7 +97,7 @@ jobs:
           for t in m:
               for a in t.get("attachments",[]):
                   n=a.get("suggestedHumanReadableName","")
-                  if n.startswith("sidebar") or n.startswith("tutor-"): print(a["exportedFileName"] + "\t" + n.split("_")[0])' > wanted.txt 2>/dev/null || true
+                  if n.startswith("sidebar") or n.startswith("tutor-") or n.startswith("ideas-"): print(a["exportedFileName"] + "\t" + n.split("_")[0])' > wanted.txt 2>/dev/null || true
           [ -s wanted.txt ] || { echo "no shots to print"; exit 0; }
           while IFS="$(printf '\t')" read -r F N; do
             sips -Z 1400 -s format jpeg -s formatOptions 60 "shots/$F" --out "$N.jpg" >/dev/null || continue
@@ -150,14 +150,55 @@ jobs:
             echo "SHOT-END"
           done < zoomshots.txt
 
+      # The iPhone: every UI test class named "…PhoneTests" (each skips itself on the iPad above) runs again on an iPhone simulator,
+      # from the same build; its screenshots whose name has "phone" are printed in the log like the iPad's.
+      - name: iPhone run ("…PhoneTests" classes) and its screenshots in the log
+        if: always()
+        run: |
+          ONLY=$(grep -ho "class [A-Za-z0-9_]*PhoneTests" UITests/*.swift | awk '{print "-only-testing:NexusMobileUITests/" $2}' | sort -u | tr '\n' ' ')
+          [ -n "$ONLY" ] || { echo "no iPhone tests"; exit 0; }
+          PHONE=$(xcrun simctl list devices available -j | python3 -c '
+          import json,sys
+          d=json.load(sys.stdin)["devices"]
+          c=[x for k,v in d.items() if "iOS" in k for x in v if "iPhone" in x["name"]]
+          c.sort(key=lambda x: (("Pro" not in x["name"]), x["name"]))
+          print(c[0]["udid"] if c else "")')
+          [ -n "$PHONE" ] || { echo "no iPhone simulator"; exit 0; }
+          xcrun simctl boot "$PHONE" || true
+          set +e
+          xcodebuild test-without-building -project NexusMobile.xcodeproj -scheme NexusMobileUITests \
+            -destination "platform=iOS Simulator,id=$PHONE" -derivedDataPath DerivedData $ONLY \
+            -resultBundlePath phone.xcresult 2>&1 | tee phone.log | grep -E "UISTEP|Test Case|error|failed|passed" | head -n 200
+          PSTATUS=${PIPESTATUS[0]}
+          echo "iPhone run exited $PSTATUS"
+          [ "$PSTATUS" = "0" ] || echo 1 > status.txt
+          mkdir -p phoneshots
+          xcrun xcresulttool export attachments --path phone.xcresult --output-path phoneshots 2>&1 | tail -n 3
+          python3 -c '
+          import json
+          for t in json.load(open("phoneshots/manifest.json")):
+              for a in t.get("attachments",[]):
+                  n=a.get("suggestedHumanReadableName","")
+                  if "phone" in n: print(a["exportedFileName"] + "\t" + n.split("_")[0])' > phonewanted.txt 2>/dev/null
+          while IFS=$'\t' read -r F N; do
+            [ -f "phoneshots/$F" ] || continue
+            sips -Z 1400 -s format jpeg -s formatOptions 60 "phoneshots/$F" --out "$N.jpg" >/dev/null || continue
+            echo "SHOT-BEGIN $N.jpg $(stat -f%z "$N.jpg")"
+            base64 -i "$N.jpg" | fold -w 3000
+            echo "SHOT-END"
+          done < phonewanted.txt
+          exit 0
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: ui-check
           path: |
             shots
+            phoneshots
             samples
             ui.log
+            phone.log
             ui.xcresult
 
       - name: Result

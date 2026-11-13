@@ -144,7 +144,7 @@ struct WindowRoot: View {
 
 /// Where the sidebar can take you.
 enum Screen: Hashable {
-    case today, planner, calendar, tasks, someday, inbox, workstream(String), boards, boardSearch, settings, study
+    case today, planner, calendar, tasks, someday, inbox, workstream(String), boards, boardSearch, settings, study, ideas
     /// A notebook's page (its path in the data folder, "notebooks/Chem").
     case notebook(String)
 }
@@ -334,6 +334,7 @@ struct RootView: View {
             case .notebook(let path): NotebookPage(path: path, go: go)
             case .settings: SettingsView()
             case .study: StudyHome()
+            case .ideas: IdeasView()
             }
         }
     }
