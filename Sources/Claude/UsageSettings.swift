@@ -4,7 +4,7 @@ import NexusCore
 /// Settings › Usage on the iPad: what this iPad spent through the API key this month as a bar against the monthly credit the user types
 /// (Anthropic doesn't tell an API key its balance), and the Claude plan's usage, which only Claude Code can read: it runs on the laptop,
 /// so here the section says where to see it instead of showing a number it doesn't have (the laptop's Settings › Claude › Usage).
-struct ClaudeUsage: View {
+struct UsageSettings: View {
     private var account: ClaudeAccount { .shared }
     @AppStorage("apiMonthlyCredit") private var credit: Double = 0
 

@@ -59,7 +59,7 @@ struct SettingsView: View {
 
             ClaudeSettings()
 
-            ClaudeUsage()
+            UsageSettings()
 
             TutorSettings()
 
