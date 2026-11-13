@@ -542,8 +542,8 @@ public struct Notebook: Identifiable, Hashable {
                 .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
         }
         func node(_ rel: String, _ depth: Int) -> Notebook {
-            let kids = dirs(rel)
             let meta = try? String(contentsOf: root.appendingPathComponent(rel).appendingPathComponent(NotebookMeta.file), encoding: .utf8)
+            let kids = NotebookMeta.ordered(dirs(rel), NotebookMeta.order(meta))
             return Notebook(name: (rel as NSString).lastPathComponent, path: rel, depth: depth, color: NotebookMeta.color(meta),
                             boards: kids.filter { $0.lowercased().hasSuffix(".board") }.map { BoardRef(name: String($0.dropLast(6)), path: rel + "/" + $0) },
                             notebooks: kids.filter { !$0.lowercased().hasSuffix(".board") }.map { node(rel + "/" + $0, depth + 1) })
@@ -574,6 +574,24 @@ public enum NotebookMeta {
         guard let text, let v = try? JSONValue.parse(text), let c = v["color"]?.string,
               c.range(of: #"^#[0-9a-fA-F]{6}$"#, options: .regularExpression) != nil else { return nil }
         return c
+    }
+
+    /// `order`: the folder's notebooks and boards (folder names, "<name>.board") in the order they were made in, as the laptop's
+    /// OneNote import writes it (OneNote's order of sections and pages); empty when there is none.
+    public static func order(_ text: String?) -> [String] {
+        guard let text, let v = try? JSONValue.parse(text), let a = v["order"]?.array else { return [] }
+        return a.compactMap(\.string)
+    }
+
+    /// `names` (sorted by name) with the ones in `order` first, in that order (case-blind, as Windows names are); the rest after, as they were.
+    public static func ordered(_ names: [String], _ order: [String]) -> [String] {
+        guard !order.isEmpty else { return names }
+        var rank: [String: Int] = [:]
+        for (i, n) in order.enumerated() where rank[n.lowercased()] == nil { rank[n.lowercased()] = i }
+        return names.enumerated().sorted { a, b in
+            let ra = rank[a.element.lowercased()] ?? Int.max, rb = rank[b.element.lowercased()] ?? Int.max
+            return ra != rb ? ra < rb : a.offset < b.offset
+        }.map(\.element)
     }
 
     /// The file's text with `color` set (nil removes it), keeping the other fields; as the laptop writes it (2-space JSON).
