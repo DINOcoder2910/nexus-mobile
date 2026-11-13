@@ -7,6 +7,7 @@ enum TestHooks {
     /// `-NexusTestPdfBoard`: sample data, then a notebook "PDF zoom" with a board made from a 3-page PDF of fine print, opened
     /// (UITests/PdfZoomTests: zoomed-in pages must stay drawn).
     static func run(_ store: NexusStore) {
+        nestedNotebooks(store)
         guard ProcessInfo.processInfo.arguments.contains("-NexusTestPdfBoard") else { return }
         if !store.snapshot.isDataFolder { store.makeSample() }
         let dir = "notebooks/PDF zoom"
@@ -14,6 +15,51 @@ enum TestHooks {
         if NotebookActions.names(in: url).contains(where: { $0.hasSuffix(".board") }) { return }
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         try? NotebookActions().newBoard(pdfData: finePrint(), named: "Zoom test", in: dir, store)
+    }
+
+    /// `-NexusTestNestedNotebooks`: sample data, then notebooks nested three deep with boards at each level and notebook.json
+    /// orders that are not by name, as the laptop's OneNote import writes them, every notebook closed in the sidebar and no Recent
+    /// boards (UITests/SidebarTreeTests). `-NexusTestDark` puts the window in dark mode.
+    static func nestedNotebooks(_ store: NexusStore) {
+        let args = ProcessInfo.processInfo.arguments
+        if args.contains("-NexusTestDark") {
+            for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
+                scene.windows.forEach { $0.overrideUserInterfaceStyle = .dark }
+            }
+        }
+        guard args.contains("-NexusTestNestedNotebooks") else { return }
+        if !store.snapshot.isDataFolder { store.makeSample() }
+        UserDefaults.standard.removeObject(forKey: "openNotebooks")
+        UserDefaults.standard.removeObject(forKey: RecentBoards.key)
+        let root = store.folder
+        guard !FileManager.default.fileExists(atPath: root.appendingPathComponent("notebooks/School").path) else { return }
+        let boards = [
+            "notebooks/School/Chemistry/R3 Energetics/Week 2/Lattice enthalpy.board",
+            "notebooks/School/Chemistry/R3 Energetics/Week 2/Born-Haber cycles.board",
+            "notebooks/School/Chemistry/R3 Energetics/Week 1/Calorimetry.board",
+            "notebooks/School/Chemistry/R3 Energetics/Week 1/Enthalpy of combustion.board",
+            "notebooks/School/Chemistry/R3 Energetics/Hess's law.board",
+            "notebooks/School/Chemistry/R3 Energetics/Bond enthalpy.board",
+            "notebooks/School/Chemistry/R1 Structure/Ions.board",
+            "notebooks/School/Chemistry/Syllabus.board",
+            "notebooks/School/Biology/Cells.board",
+            "notebooks/Spanish/Verbs.board",
+            "notebooks/Spanish/Vocab.board",
+        ]
+        let metas = [
+            "notebooks/School": ##"{"format": "nexus-notebook/1", "color": "#007F43", "order": ["Chemistry", "Biology"]}"##,
+            "notebooks/School/Chemistry": #"{"order": ["R3 Energetics", "R1 Structure", "Syllabus.board"]}"#,
+            "notebooks/School/Chemistry/R3 Energetics": #"{"order": ["Week 2", "Week 1", "Hess's law.board", "Bond enthalpy.board"]}"#,
+            "notebooks/School/Chemistry/R3 Energetics/Week 2": #"{"order": ["Lattice enthalpy.board", "Born-Haber cycles.board"]}"#,
+            "notebooks/Spanish": ##"{"format": "nexus-notebook/1", "color": "#A14174"}"##,
+        ]
+        for b in boards {
+            try? FolderAccess.write(root.appendingPathComponent(b).appendingPathComponent("board.json"), BoardFormat.boardJSON())
+        }
+        for (dir, json) in metas {
+            try? FolderAccess.write(root.appendingPathComponent(dir).appendingPathComponent(NotebookMeta.file), json + "\n")
+        }
+        store.boardsChanged(listChanged: true)
     }
 
     /// Three letter pages of small numbered lines and a fine grid, so a blurry or missing page shows at any zoom.
