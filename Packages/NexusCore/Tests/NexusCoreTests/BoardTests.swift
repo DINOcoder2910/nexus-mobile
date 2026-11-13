@@ -316,7 +316,7 @@ final class BoardTests: XCTestCase {
             try FileManager.default.createDirectory(at: dir.appendingPathComponent(p), withIntermediateDirectories: true)
         }
         try write("notebooks/Chem/R3.2/notebook.json", #"{"order": ["R3.2.1-2.board", "Notes.board", "untitled page.board", "Untitled Page 2.board", "Gone.board"]}"#)
-        try write("notebooks/Chem/notebook.json", #"{"color": "#2769B7", "order": ["R3.2", "R3.1"]}"#)
+        try write("notebooks/Chem/notebook.json", ##"{"color": "#2769B7", "order": ["R3.2", "R3.1"]}"##)
         let chem = Notebook.list(dir)[0]
         XCTAssertEqual(chem.color, "#2769B7")
         XCTAssertEqual(chem.notebooks.map(\.name), ["R3.2", "R3.1", "A intro"])
