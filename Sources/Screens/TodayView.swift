@@ -40,6 +40,18 @@ struct TodayView: View {
             ToolbarItem(placement: .primaryAction) {
                 Button { store.capture = .init(workstream: nil, parent: nil, plan: store.today) } label: { Label("Add for today", systemImage: "plus") }
             }
+            if Device.isPhone && store.snapshot.isDataFolder {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button { PlanWithClaude.shared.start(store, calendar: cal) } label: { Label("Plan with Claude", systemImage: "sparkles") }
+                            .disabled(PlanWithClaude.shared.running)
+                        Button { ClaudeChatSession.open(looking: "Today") } label: { Label("Ask Claude about today", systemImage: "bubble.left.and.text.bubble.right") }
+                    } label: {
+                        Label("Claude", systemImage: "sparkles")
+                    }
+                    .accessibilityIdentifier("today-claude")
+                }
+            }
         }
     }
 
@@ -64,6 +76,11 @@ struct TodayView: View {
                         .lineLimit(1)
                 }
                 .buttonStyle(.plain)
+            }
+            // Plan with Claude (the laptop's on Today): in view on the iPad; on the iPhone it is in the ✦ menu, and its progress and
+            // result show here once started
+            if store.snapshot.isDataFolder && (!Device.isPhone || PlanWithClaude.shared.run != nil) {
+                PlanWithClaudeButton().padding(.top, 8)
             }
         }
     }
