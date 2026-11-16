@@ -3,6 +3,7 @@ import NexusCore
 
 /// Day, 3 days and Week: the days side by side on one time grid, midnight to midnight, opened scrolled to the hour before now.
 /// All-day events and deadlines sit in a strip above the grid. Overlapping things share the column's width.
+/// Five or more days on a phone-width screen draw narrow: a thin hour gutter, the weekday over the date, smaller blocks without the time.
 struct TimeGridView: View {
     let days: [String]
     let today: String
@@ -17,7 +18,9 @@ struct TimeGridView: View {
     @State private var targetDay: String?
 
     private var hourHeight: CGFloat { sizeClass == .compact ? 48 : 56 }
-    private let gutter: CGFloat = 48
+    /// The iPhone's Week: seven columns of about 50 points each.
+    private var narrow: Bool { sizeClass == .compact && days.count >= 5 }
+    private var gutter: CGFloat { narrow ? 30 : 48 }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -51,7 +54,7 @@ struct TimeGridView: View {
             Color.clear.frame(width: gutter, height: 1)
             ForEach(days, id: \.self) { day in
                 let things = allDay(day)
-                let room = days.count == 1 ? 6 : 2
+                let room = days.count == 1 ? 6 : narrow ? 3 : 2
                 VStack(spacing: 4) {
                     Button { openDay(day) } label: { dayLabel(day) }
                         .buttonStyle(.plain)
@@ -60,11 +63,11 @@ struct TimeGridView: View {
                         Button { tap(th) } label: { pill(th) }.buttonStyle(.plain)
                     }
                     if things.count > room {
-                        Button("+\(things.count - room) more") { openDay(day) }
+                        Button(narrow ? "+\(things.count - room)" : "+\(things.count - room) more") { openDay(day) }
                             .font(.caption2).buttonStyle(.plain).foregroundStyle(.secondary)
                     }
                 }
-                .padding(.horizontal, 2)
+                .padding(.horizontal, narrow ? 1 : 2)
                 .padding(.vertical, 6)
                 .frame(maxWidth: .infinity, alignment: .top)
             }
@@ -74,23 +77,35 @@ struct TimeGridView: View {
     private func dayLabel(_ day: String) -> some View {
         let parts = Days.label(day).split(separator: " ")
         let isToday = day == today
-        return HStack(spacing: 5) {
-            Text(parts.first.map { String($0) } ?? "").font(.caption.weight(.semibold)).foregroundStyle(isToday ? Theme.accent : .secondary)
-            Text(parts.count > 1 ? String(parts[1]) : "")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(isToday ? Color.white : .primary)
-                .frame(minWidth: 26, minHeight: 26)
-                .background(isToday ? Theme.accent : Color.clear, in: Circle())
+        let weekday = parts.first.map { String($0) } ?? ""
+        let date = Text(parts.count > 1 ? String(parts[1]) : "")
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(isToday ? Color.white : .primary)
+            .frame(minWidth: 26, minHeight: 26)
+            .background(isToday ? Theme.accent : Color.clear, in: Circle())
+        return Group {
+            if narrow {
+                // the weekday over the date: a seventh of a phone has no room for both on one line
+                VStack(spacing: 2) {
+                    Text(String(weekday.prefix(1))).font(.caption2.weight(.semibold)).foregroundStyle(isToday ? Theme.accent : .secondary)
+                    date
+                }
+            } else {
+                HStack(spacing: 5) {
+                    Text(weekday).font(.caption.weight(.semibold)).foregroundStyle(isToday ? Theme.accent : .secondary)
+                    date
+                }
+            }
         }
     }
 
     private func pill(_ th: CalThing) -> some View {
         HStack(spacing: 3) {
-            if case .deadline = th.kind { Image(systemName: "flag.fill").imageScale(.small) }
+            if !narrow, case .deadline = th.kind { Image(systemName: "flag.fill").imageScale(.small) }
             Text(th.title).lineLimit(1)
         }
-        .font(.caption2.weight(.medium))
-        .padding(.horizontal, 5)
+        .font(narrow ? .system(size: 9, weight: .medium) : .caption2.weight(.medium))
+        .padding(.horizontal, narrow ? 2 : 5)
         .padding(.vertical, 2)
         .frame(maxWidth: .infinity, alignment: .leading)
         .foregroundStyle(th.task == nil ? Color.primary : th.color)
@@ -104,7 +119,7 @@ struct TimeGridView: View {
             ForEach(0..<24, id: \.self) { h in
                 Text(h == 0 ? "" : hourText(h))
                     .font(.caption2).foregroundStyle(.secondary).monospacedDigit()
-                    .frame(width: gutter - 6, height: hourHeight, alignment: .topTrailing)
+                    .frame(width: gutter - (narrow ? 3 : 6), height: hourHeight, alignment: .topTrailing)
                     .offset(y: -7)
                     .id("h\(h)")
             }
@@ -114,7 +129,7 @@ struct TimeGridView: View {
 
     private func hourText(_ h: Int) -> String {
         let d = Calendar.current.date(bySettingHour: h, minute: 0, second: 0, of: Date()) ?? Date()
-        return d.formatted(.dateTime.hour())
+        return narrow ? d.formatted(.dateTime.hour(.defaultDigits(amPM: .narrow))) : d.formatted(.dateTime.hour())
     }
 
     private func column(_ day: String) -> some View {
@@ -176,15 +191,17 @@ struct TimeGridView: View {
         let isTask = th.task != nil
         let base = VStack(alignment: .leading, spacing: 1) {
             HStack(alignment: .firstTextBaseline, spacing: 3) {
-                if isTask { Image(systemName: "circle").font(.system(size: 8, weight: .bold)) }
-                Text(th.title).font(.caption.weight(.semibold)).lineLimit(tall ? 3 : 1)
+                if isTask && !narrow { Image(systemName: "circle").font(.system(size: 8, weight: .bold)) }
+                Text(th.title)
+                    .font(narrow ? .system(size: 10, weight: .semibold) : .caption.weight(.semibold))
+                    .lineLimit(tall ? (narrow ? 4 : 3) : 1)
             }
-            if tall {
+            if tall && !narrow {
                 Text(th.timeText).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
             }
         }
-        .padding(.leading, 6)
-        .padding(.trailing, 3)
+        .padding(.leading, narrow ? 4 : 6)
+        .padding(.trailing, narrow ? 1 : 3)
         .padding(.vertical, 2)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(th.color.opacity(isTask ? 0.10 : 0.22))
