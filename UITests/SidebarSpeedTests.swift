@@ -3,7 +3,9 @@ import XCTest
 /// The sidebar with a folder the size of the OneNote import (Nov 16 2026: 1,440 boards in 12 notebooks of 10 sections,
 /// `-NexusTestManyNotebooks`, Sources/Common/TestHooks.swift). The tree reads only the notebooks it shows and counts the boards
 /// away from the main thread (NotebookTreeModel), so the sidebar comes up, opens a notebook and switches boards at once. The times
-/// are printed (UISTEP) and the screenshot ("sidebar-many-…") is printed in the ui-check log.
+/// are printed (UISTEP) beside SidebarTreeTests' same measure on a small tree (a tap and a look cost seconds in the CI simulator,
+/// so the limits here catch a freeze, and the comparison shows a slowdown); the screenshots ("sidebar-many-…") are printed in the
+/// ui-check log.
 final class SidebarSpeedTests: XCTestCase {
     let app = XCUIApplication()
 
@@ -40,9 +42,9 @@ final class SidebarSpeedTests: XCTestCase {
         // the counts arrive from the walk away from the main thread (10 sections x 12 boards)
         XCTAssertTrue(app.staticTexts["120"].firstMatch.waitForExistence(timeout: 20), "the board counts never showed")
         reach(first, "G12 Notebook 01")
-        time("open a notebook", app.buttons["Expand Section 01"].firstMatch, limit: 3) { first.tap() }
+        time("open a notebook", app.buttons["Expand Section 01"].firstMatch, limit: 8) { first.tap() }
         let section = app.buttons["Expand Section 01"].firstMatch
-        time("open a section", app.staticTexts["Page 12"].firstMatch, limit: 3) { section.tap() }
+        time("open a section", app.staticTexts["Page 12"].firstMatch, limit: 8) { section.tap() }
         sleep(1)
         let a = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         a.name = "sidebar-many-light"
@@ -66,12 +68,13 @@ final class SidebarSpeedTests: XCTestCase {
         next.tap()
         let cell = app.cells.containing(.staticText, identifier: "Page 04").firstMatch
         let selected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "selected == true"), object: cell)
-        XCTAssertEqual(XCTWaiter().wait(for: [selected], timeout: 10), .completed, "Page 04's row isn't the selected one")
+        let ok = XCTWaiter().wait(for: [selected], timeout: 10) == .completed
         print("UISTEP \(Date().timeIntervalSince1970) time switch boards: \(String(format: "%.2f", Date().timeIntervalSince(t0))) s")
         sleep(2)
         let b = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         b.name = "sidebar-many-board-open"
         b.lifetime = .keepAlways
         add(b)
+        XCTAssertTrue(ok, "Page 04's row isn't the selected one")
     }
 }

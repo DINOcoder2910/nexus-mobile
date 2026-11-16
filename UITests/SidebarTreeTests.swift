@@ -38,8 +38,11 @@ final class SidebarTreeTests: XCTestCase {
     func expand(_ name: String) {
         let arrow = app.buttons["Expand " + name].firstMatch
         reach(arrow, "the arrow of " + name)
+        let t0 = Date()
         arrow.tap()
         XCTAssertTrue(app.buttons["Collapse " + name].firstMatch.waitForExistence(timeout: 5), name + " didn't open")
+        // the same measure as SidebarSpeedTests', on a small tree: what a tap and a look cost in the simulator
+        print("UISTEP \(Date().timeIntervalSince1970) time open \(name) (small tree): \(String(format: "%.2f", Date().timeIntervalSince(t0))) s")
     }
 
     func y(_ name: String) -> CGFloat { app.staticTexts[name].firstMatch.frame.minY }
@@ -59,6 +62,12 @@ final class SidebarTreeTests: XCTestCase {
             sleep(2)
         }
         let cell = app.cells.containing(.staticText, identifier: board).firstMatch
+        if !cell.waitForExistence(timeout: 5) {
+            shot("sidebar-missing-\(board)")
+            let rows = app.staticTexts.allElementsBoundByIndex.prefix(40).map(\.label).joined(separator: " | ")
+            XCTFail("no sidebar row for \(board) after opening it; texts: \(rows)")
+            return
+        }
         print("UISTEP \(board) row selected: \(cell.isSelected)")
     }
 
