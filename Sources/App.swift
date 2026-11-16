@@ -184,9 +184,7 @@ struct RootView: View {
             if let id = store.openTaskId { TaskDetailView(taskId: id).id(id) }
         }
         .sheet(item: $store.capture) { start in CaptureSheet(start: start) }
-        .onChange(of: store.openBoard?.id) { old, now in
-            // from one board straight to another (the sidebar's notebook tree, search): the sidebar stays as it is
-            if old != nil && now != nil { return }
+        .onChange(of: store.openBoard?.id) { _, now in
             withAnimation { columns = now == nil ? .all : .detailOnly }
         }
         .onChange(of: screen) { _, now in

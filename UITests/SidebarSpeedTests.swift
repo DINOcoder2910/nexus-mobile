@@ -44,7 +44,8 @@ final class SidebarSpeedTests: XCTestCase {
         reach(first, "G12 Notebook 01")
         time("open a notebook", app.buttons["Expand Section 01"].firstMatch, limit: 8) { first.tap() }
         let section = app.buttons["Expand Section 01"].firstMatch
-        time("open a section", app.staticTexts["Page 12"].firstMatch, limit: 8) { section.tap() }
+        // its first board (the last ones are below the fold, where the list hasn't made their rows)
+        time("open a section", app.staticTexts["Page 01"].firstMatch, limit: 8) { section.tap() }
         sleep(1)
         let a = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         a.name = "sidebar-many-light"
