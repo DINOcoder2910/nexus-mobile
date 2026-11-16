@@ -22,10 +22,14 @@ extension BoardController {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in self?.runSaveBench(label) }
     }
 
+    /// One step at a time with the main thread free between them: a UI test can't read the screen while the app is busy, and the
+    /// whole bench in one go held it for over a minute in the simulator's debug build.
     private func runSaveBench(_ label: UILabel) {
         var times: [Double] = []
+        var oldMs = 0.0
         let base = visibleBoard
-        for i in 0..<10 {
+        func save(_ i: Int) {
+            guard i < 10 else { return oldStep(0) }
             // a written letter: one new stroke near the top left of the screen
             let x = base.minX + 120 + CGFloat(i) * 20 + offset.x, y = base.minY + 140 + offset.y
             let pts = (0..<40).map { k -> PKStrokePoint in
@@ -40,20 +44,30 @@ extension BoardController {
             let t0 = CACurrentMediaTime()
             saveNow()
             times.append((CACurrentMediaTime() - t0) * 1000)
+            label.text = "save bench: \(i + 1) of 10 saves, waiting"
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { save(i + 1) }
         }
-        // what a save used to cost here: every tile as text, three times, and every canvas stroke turned into the files' form
-        let t1 = CACurrentMediaTime()
-        for _ in 0..<3 {
-            var byKey: [String: (s: [BoardStroke], i: [BoardItem])] = [:]
-            for s in content.strokes { byKey[s.tileKey, default: ([], [])].s.append(s) }
-            for it in content.items { byKey[it.tileKey, default: ([], [])].i.append(it) }
-            for (_, t) in byKey { _ = BoardFiles.tileJSON(strokes: t.s, items: t.i) }
+        // what a save used to cost here: every tile as text, three times, and every canvas stroke turned into the files' form (each
+        // part its own step)
+        func oldStep(_ n: Int) {
+            let t1 = CACurrentMediaTime()
+            if n < 3 {
+                var byKey: [String: (s: [BoardStroke], i: [BoardItem])] = [:]
+                for s in content.strokes { byKey[s.tileKey, default: ([], [])].s.append(s) }
+                for it in content.items { byKey[it.tileKey, default: ([], [])].i.append(it) }
+                for (_, t) in byKey { _ = BoardFiles.tileJSON(strokes: t.s, items: t.i) }
+            } else {
+                for k in canvas.drawing.strokes { _ = InkConvert.boardStroke(k, offset: offset, id: "") }
+            }
+            oldMs += (CACurrentMediaTime() - t1) * 1000
+            if n < 3 { DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { oldStep(n + 1) } } else { done() }
         }
-        for k in canvas.drawing.strokes { _ = InkConvert.boardStroke(k, offset: offset, id: "") }
-        let old = (CACurrentMediaTime() - t1) * 1000
-        let sorted = times.sorted()
-        let median = sorted[sorted.count / 2], worst = sorted.last ?? 0
-        label.text = String(format: "save bench, %d strokes: a save now takes %.0f ms (median), %.0f ms at worst; the old way's extra work alone: %.0f ms",
-                            canvas.drawing.strokes.count, median, worst, old)
+        func done() {
+            let sorted = times.sorted()
+            let median = sorted[sorted.count / 2], worst = sorted.last ?? 0
+            label.text = String(format: "save bench, %d strokes: a save now takes %.0f ms (median), %.0f ms at worst; the old way's extra work alone: %.0f ms",
+                                canvas.drawing.strokes.count, median, worst, oldMs)
+        }
+        save(0)
     }
 }

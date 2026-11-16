@@ -22,6 +22,9 @@ final class BoardSaveSpeedTests: XCTestCase {
     }
 
     func testAFullBoardSavesQuickly() {
+        // the app writes the big board and opens it as it starts (seconds in the simulator's debug build): the screen can't be read
+        // while it is busy, so give it that time before the first look
+        sleep(20)
         let insert = app.buttons["Insert"].firstMatch
         XCTAssertTrue(insert.waitForExistence(timeout: 60), "the big board didn't open")
         if app.staticTexts["Planner"].firstMatch.isHittable {
@@ -31,7 +34,7 @@ final class BoardSaveSpeedTests: XCTestCase {
         let bench = app.staticTexts["save-bench"].firstMatch
         XCTAssertTrue(bench.waitForExistence(timeout: 30), "no save bench on the board")
         var tries = 0
-        while bench.label.hasSuffix("waiting") && tries < 60 { sleep(1); tries += 1 }
+        while bench.label.hasSuffix("waiting") && tries < 180 { sleep(1); tries += 1 }
         print("UISTEP BENCH \(bench.label)")
         shot("speed-1 full board after ten saves")
         // the app still answers: the Insert menu opens at once
