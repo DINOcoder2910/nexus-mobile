@@ -107,7 +107,7 @@ struct NotebookTreeLine: View {
     private var boardLabel: some View {
         HStack(spacing: 8) {
             Image(systemName: "scribble").foregroundStyle(Color.secondary).font(.footnote).frame(width: 18)
-            Text(row.name).lineLimit(1)
+            Text(row.name).lineLimit(2)  // OneNote page names run long: two lines before they are cut
             Spacer(minLength: 4)
         }
         .contentShape(Rectangle())
