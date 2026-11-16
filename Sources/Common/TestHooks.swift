@@ -8,6 +8,7 @@ enum TestHooks {
     /// (UITests/PdfZoomTests: zoomed-in pages must stay drawn).
     static func run(_ store: NexusStore) {
         nestedNotebooks(store)
+        manyNotebooks(store)
         guard ProcessInfo.processInfo.arguments.contains("-NexusTestPdfBoard") else { return }
         if !store.snapshot.isDataFolder { store.makeSample() }
         let dir = "notebooks/PDF zoom"
@@ -58,6 +59,32 @@ enum TestHooks {
         }
         for (dir, json) in metas {
             try? FolderAccess.write(root.appendingPathComponent(dir).appendingPathComponent(NotebookMeta.file), json + "\n")
+        }
+        store.boardsChanged(listChanged: true)
+    }
+
+    /// `-NexusTestManyNotebooks`: sample data, then a folder the size of the OneNote import (12 notebooks of 10 sections, 12 boards
+    /// in each: 1,440 boards, each with a PDF beside it in its section as the import leaves them), every notebook closed
+    /// (UITests/SidebarSpeedTests: the sidebar must stay quick).
+    static func manyNotebooks(_ store: NexusStore) {
+        guard ProcessInfo.processInfo.arguments.contains("-NexusTestManyNotebooks") else { return }
+        if !store.snapshot.isDataFolder { store.makeSample() }
+        UserDefaults.standard.removeObject(forKey: "openNotebooks")
+        UserDefaults.standard.removeObject(forKey: RecentBoards.key)
+        let root = store.folder
+        guard !FileManager.default.fileExists(atPath: root.appendingPathComponent("notebooks/G12 Notebook 01").path) else { return }
+        let board = Data(BoardFormat.boardJSON().utf8), fm = FileManager.default
+        for n in 1...12 {
+            let nb = String(format: "notebooks/G12 Notebook %02d", n)
+            for s in 1...10 {
+                let sec = nb + String(format: "/Section %02d", s)
+                for b in 1...12 {
+                    let dir = root.appendingPathComponent(sec + String(format: "/Page %02d.board", b))
+                    try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+                    try? board.write(to: dir.appendingPathComponent("board.json"))
+                }
+                try? Data("%PDF-1.4\n".utf8).write(to: root.appendingPathComponent(sec + "/Handout.pdf"))
+            }
         }
         store.boardsChanged(listChanged: true)
     }

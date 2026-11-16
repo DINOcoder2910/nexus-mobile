@@ -14,25 +14,38 @@ struct Sidebar: View {
     /// The notebook tree's open notebooks (NotebooksList): the open board's notebooks are opened, so its row shows.
     @AppStorage("openNotebooks") private var openNotebooks = ""
     @State private var notebookActions = NotebookActions()
+    /// The notebook tree's view of the folder, read lazily (NotebookTreeModel).
+    @State private var notebookTree = NotebookTreeModel()
+    @Environment(\.scenePhase) private var phase
 
     var body: some View {
         let s = store.snapshot
-        Group {
-            if pushes {
-                List { sections }.listStyle(.insetGrouped)
-            } else {
-                List(selection: listSelection) { sections }.listStyle(.sidebar)
+        ScrollViewReader { proxy in
+            Group {
+                if pushes {
+                    List { sections }.listStyle(.insetGrouped)
+                } else {
+                    List(selection: listSelection) { sections }.listStyle(.sidebar)
+                }
+            }
+            .onChange(of: store.openBoard?.path, initial: true) { _, p in
+                guard let p else { return }
+                RecentBoards.add(p)
+                let shown = NotebookTree.revealing(p, in: openNotebooks)
+                if shown != openNotebooks { openNotebooks = shown }
+                // a board opened from elsewhere (search, Recent, a link): its row comes into view, ready for the next tap
+                if !pushes { DispatchQueue.main.async { proxy.scrollTo(p) } }
             }
         }
         .notebookPrompts(notebookActions, store: store)
         .onChange(of: ShortcutCenter.shared.notebookRequest) { _, _ in
             if s.isDataFolder && !pushes { notebookActions.ask(.notebook, in: BoardFormat.notebooks) }
         }
-        .onChange(of: store.openBoard?.path, initial: true) { _, p in
-            guard let p else { return }
-            RecentBoards.add(p)
-            openNotebooks = NotebookTree.revealing(p, in: openNotebooks)
-        }
+        // the app made, renamed, moved or deleted a notebook or board: the tree reads it all again; another writer (sync, another
+        // window) or coming back to the app: it looks for what changed, away from the main thread
+        .onChange(of: store.notebooksVersion) { _, _ in notebookTree.dropAll() }
+        .onReceive(NotificationCenter.default.publisher(for: NexusStore.readAgain)) { _ in notebookTree.check() }
+        .onChange(of: phase) { _, now in if now == .active { notebookTree.check() } }
         .navigationTitle(title)
         .toolbar {
             if !notebooksOnly {
@@ -46,7 +59,7 @@ struct Sidebar: View {
                 }
             }
         }
-        .refreshable { store.reload() }
+        .refreshable { store.reload(); notebookTree.dropAll() }
         // the study decks: read with the folder (their due count is the Study row's number)
         .task(id: store.snapshot.loadedAt) { StudyLibrary.shared.refreshIfChanged(store) }
     }
@@ -105,7 +118,7 @@ struct Sidebar: View {
             }
 
             Section("Notebooks") {
-                if s.isDataFolder { NotebooksList(actions: notebookActions, pushes: pushes) }
+                if s.isDataFolder { NotebooksList(actions: notebookActions, pushes: pushes, tree: notebookTree) }
                 row(.boardSearch, "Search boards", "text.magnifyingglass", count: nil)
             }
 

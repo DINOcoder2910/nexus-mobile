@@ -532,24 +532,45 @@ public struct Notebook: Identifiable, Hashable {
         return nil
     }
 
-    /// Reads `notebooks/` of a data folder.
+    public init(name: String, path: String, depth: Int, color: String? = nil, boards: [BoardRef] = [], notebooks: [Notebook] = []) {
+        self.name = name; self.path = path; self.depth = depth; self.color = color; self.boards = boards; self.notebooks = notebooks
+    }
+
+    /// Reads `notebooks/` of a data folder: every notebook, to any depth (a walk of every notebook folder; the sidebar reads only
+    /// the levels it shows, `level`).
     public static func list(_ root: URL) -> [Notebook] {
-        let fm = FileManager.default
-        func dirs(_ rel: String) -> [String] {
-            let url = root.appendingPathComponent(rel)
-            let items = (try? fm.contentsOfDirectory(at: url, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles])) ?? []
-            return items.filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }.map(\.lastPathComponent)
-                .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
-        }
-        func node(_ rel: String, _ depth: Int) -> Notebook {
-            let meta = try? String(contentsOf: root.appendingPathComponent(rel).appendingPathComponent(NotebookMeta.file), encoding: .utf8)
-            let kids = NotebookMeta.ordered(dirs(rel), NotebookMeta.order(meta))
-            return Notebook(name: (rel as NSString).lastPathComponent, path: rel, depth: depth, color: NotebookMeta.color(meta),
-                            boards: kids.filter { $0.lowercased().hasSuffix(".board") }.map { BoardRef(name: String($0.dropLast(6)), path: rel + "/" + $0) },
-                            notebooks: kids.filter { !$0.lowercased().hasSuffix(".board") }.map { node(rel + "/" + $0, depth + 1) })
-        }
+        top(root).map { read(root, $0) }
+    }
+
+    /// The top-level notebooks' paths ("notebooks/Chem"), by name.
+    public static func top(_ root: URL) -> [String] {
         let base = BoardFormat.notebooks
-        return dirs(base).filter { !$0.lowercased().hasSuffix(".board") }.map { node(base + "/" + $0, 0) }
+        return folders(root, base).filter { !$0.lowercased().hasSuffix(".board") }.map { base + "/" + $0 }
+    }
+
+    /// The notebook at `rel` and every notebook inside it (any depth).
+    public static func read(_ root: URL, _ rel: String) -> Notebook {
+        let l = level(root, rel)
+        return Notebook(name: l.name, path: rel, depth: l.depth, color: l.color, boards: l.boards,
+                        notebooks: l.notebooks.map { read(root, $0) })
+    }
+
+    /// One notebook folder on its own: its colour and order (`notebook.json`), the notebooks in it and its boards, in the notebook
+    /// page's order (notebook.json `order`, then by name). One listing of one folder: nothing inside the notebooks in it is read.
+    public static func level(_ root: URL, _ rel: String) -> NotebookLevel {
+        let meta = try? String(contentsOf: root.appendingPathComponent(rel).appendingPathComponent(NotebookMeta.file), encoding: .utf8)
+        let kids = NotebookMeta.ordered(folders(root, rel), NotebookMeta.order(meta))
+        return NotebookLevel(path: rel, color: NotebookMeta.color(meta),
+                             notebooks: kids.filter { !$0.lowercased().hasSuffix(".board") }.map { rel + "/" + $0 },
+                             boards: kids.filter { $0.lowercased().hasSuffix(".board") }.map { BoardRef(name: String($0.dropLast(6)), path: rel + "/" + $0) })
+    }
+
+    /// The folders in `rel` (not hidden ones), by name.
+    static func folders(_ root: URL, _ rel: String) -> [String] {
+        let url = root.appendingPathComponent(rel)
+        let items = (try? FileManager.default.contentsOfDirectory(at: url, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles])) ?? []
+        return items.filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }.map(\.lastPathComponent)
+            .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
     }
 
     /// May `from` (a notebook or a board) move into the notebook `to`? Not into itself, below itself, or where it already is.

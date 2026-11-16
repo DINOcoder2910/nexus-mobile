@@ -18,12 +18,12 @@ struct NotebooksList: View {
     /// The open notebooks' paths ("a|b"), remembered.
     @AppStorage("openNotebooks") private var openList = ""
 
+    /// What the tree has read of the folder (lazily: only the levels that show; counts away from the main thread).
+    let tree: NotebookTreeModel
+
     var body: some View {
-        let _ = store.notebooksVersion
-        let tree = Notebook.list(store.folder)
-        let byPath = Dictionary(tree.flatMap(\.allNotebooks).map { ($0.path, $0) }, uniquingKeysWith: { a, _ in a })
-        ForEach(NotebookTree.rows(tree, open: NotebookTree.parse(openList))) { r in
-            NotebookTreeLine(row: r, nb: byPath[r.path], pushes: pushes, actions: actions) {
+        ForEach(tree.rows(store.folder, open: NotebookTree.parse(openList))) { r in
+            NotebookTreeLine(row: r, nb: r.kind == .notebook ? tree.notebook(r.path) : nil, pushes: pushes, actions: actions) {
                 withAnimation(.snappy(duration: 0.25)) { openList = NotebookTree.setting(r.path, open: !r.isOpen, in: openList) }
             }
             // the iPad's selection: a notebook's page, or the board (selected while it is open)
@@ -85,7 +85,7 @@ struct NotebookTreeLine: View {
             }
             Text(row.name).lineLimit(1)
             Spacer(minLength: 4)
-            if row.boardCount > 0 { Text("\(row.boardCount)").font(.caption).foregroundStyle(.secondary) }
+            if let n = row.boardCount, n > 0 { Text("\(n)").font(.caption).foregroundStyle(.secondary).monospacedDigit() }
         }
         .contentShape(Rectangle())
     }
@@ -196,6 +196,10 @@ enum RecentBoards {
             return p
         }
         UserDefaults.standard.set(l, forKey: key)
+        // the sidebar's open notebooks follow a renamed or moved notebook
+        let open = UserDefaults.standard.string(forKey: "openNotebooks") ?? ""
+        let moved = NotebookTree.renaming(from, to: to, in: open)
+        if moved != open { UserDefaults.standard.set(moved, forKey: "openNotebooks") }
     }
 }
 
@@ -444,7 +448,7 @@ extension View {
                 Button("Delete", role: .destructive) { if let nb = actions.removingNotebook { actions.delete(nb, store) } }
                 Button("Cancel", role: .cancel) { actions.removingNotebook = nil }
             } message: {
-                Text(deleteMessage(actions.removingNotebook))
+                Text(deleteMessage(actions.removingNotebook, root: store.folder))
             }
             .sheet(isPresented: Binding(get: { actions.moving != nil }, set: { if !$0 { actions.moving = nil } })) {
                 if let p = actions.moving { MoveSheet(path: p, actions: actions).environment(store) }
@@ -455,8 +459,10 @@ extension View {
     }
 }
 
-private func deleteMessage(_ nb: Notebook?) -> String {
-    guard let nb else { return "" }
+private func deleteMessage(_ shown: Notebook?, root: URL) -> String {
+    guard let shown else { return "" }
+    // the sidebar's notebook has only its own level read: the whole of it, now that it is asked
+    let nb = Notebook.read(root, shown.path)
     let b = nb.allBoards.count, n = nb.allNotebooks.count - 1
     var what: [String] = []
     if b > 0 { what.append(b == 1 ? "its 1 board" : "its \(b) boards") }
