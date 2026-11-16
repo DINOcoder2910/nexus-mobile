@@ -160,6 +160,7 @@ struct SpanishSkillsList: View {
             Text(s.rule).font(.caption2).foregroundStyle(.tertiary).lineLimit(2)
         }
         .padding(.vertical, 2)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("spanish-skill-\(s.id)")
     }
 }

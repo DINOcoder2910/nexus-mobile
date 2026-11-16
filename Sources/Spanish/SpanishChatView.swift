@@ -105,6 +105,8 @@ struct SpanishChatBody: View {
     }
 
     static func markdown(_ text: String) -> some View {
+        // a card or check block taken out of the middle leaves blank lines behind
+        let text = text.replacingOccurrences(of: "\n{3,}", with: "\n\n", options: .regularExpression)
         let a = (try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(text)
         return Text(a).textSelection(.enabled)
     }
@@ -114,8 +116,9 @@ struct SpanishChatBody: View {
             Text(c.front).bold() + Text(" = \(c.back)")
             Text(Spanish.decks.first { $0.id == c.deck }?.title ?? c.deck).font(.caption).foregroundStyle(.secondary)
             Spacer()
-            Button { actions.addCard(c) } label: { Label("Add to deck", systemImage: "plus") }
+            Button { actions.addCard(c) } label: { Label("Add to deck", systemImage: "plus").lineLimit(1) }
                 .buttonStyle(.bordered).controlSize(.small)
+                .fixedSize()
         }
         .font(.callout)
         .padding(8)
@@ -137,6 +140,7 @@ struct SpanishChatBody: View {
         .padding(12)
         .background(Theme.claudeTint, in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.claude.opacity(0.25)))
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("spanish-check-card")
     }
 
@@ -224,6 +228,7 @@ struct SpanishMemoryReview: View {
         }
         .frame(maxHeight: 420)
         .background(Color.secondary.opacity(0.05))
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("spanish-memory-review")
     }
 
