@@ -3,7 +3,7 @@ import NexusCore
 
 /// The sidebar, the laptop's in iPad form: the places, the workstreams by group (Inbox and Someday last), the notebooks, Settings.
 /// On the iPhone the same list is the More tab (`pushes`: its rows push onto the tab's stack) and, cut to the notebooks, the
-/// Notebooks tab (`notebooksOnly`).
+/// Notebooks tab (`notebooksOnly`). The notebooks are a tree with their boards (NotebooksList).
 struct Sidebar: View {
     @Environment(NexusStore.self) private var store
     @Binding var selection: Screen?
@@ -11,22 +11,41 @@ struct Sidebar: View {
     var notebooksOnly = false
     var title = "Nexus"
     @AppStorage("closedGroups") private var closedGroups = ""
+    /// The notebook tree's open notebooks (NotebooksList): the open board's notebooks are opened, so its row shows.
+    @AppStorage("openNotebooks") private var openNotebooks = ""
     @State private var notebookActions = NotebookActions()
+    /// The notebook tree's view of the folder, read lazily (NotebookTreeModel).
+    @State private var notebookTree = NotebookTreeModel()
+    @Environment(\.scenePhase) private var phase
 
     var body: some View {
         let s = store.snapshot
-        Group {
-            if pushes {
-                List { sections }.listStyle(.insetGrouped)
-            } else {
-                List(selection: $selection) { sections }.listStyle(.sidebar)
+        ScrollViewReader { proxy in
+            Group {
+                if pushes {
+                    List { sections }.listStyle(.insetGrouped)
+                } else {
+                    List(selection: listSelection) { sections }.listStyle(.sidebar)
+                }
+            }
+            .onChange(of: store.openBoard?.path, initial: true) { _, p in
+                guard let p else { return }
+                RecentBoards.add(p)
+                let shown = NotebookTree.revealing(p, in: openNotebooks)
+                if shown != openNotebooks { openNotebooks = shown }
+                // a board opened from elsewhere (search, Recent, a link): its row comes into view, ready for the next tap
+                if !pushes { DispatchQueue.main.async { proxy.scrollTo(p) } }
             }
         }
         .notebookPrompts(notebookActions, store: store)
         .onChange(of: ShortcutCenter.shared.notebookRequest) { _, _ in
             if s.isDataFolder && !pushes { notebookActions.ask(.notebook, in: BoardFormat.notebooks) }
         }
-        .onChange(of: store.openBoard?.path) { _, p in if let p { RecentBoards.add(p) } }
+        // the app made, renamed, moved or deleted a notebook or board: the tree reads it all again; another writer (sync, another
+        // window) or coming back to the app: it looks for what changed, away from the main thread
+        .onChange(of: store.notebooksVersion) { _, _ in notebookTree.dropAll() }
+        .onReceive(NotificationCenter.default.publisher(for: NexusStore.readAgain)) { _ in notebookTree.check() }
+        .onChange(of: phase) { _, now in if now == .active { notebookTree.check() } }
         .navigationTitle(title)
         .toolbar {
             if !notebooksOnly {
@@ -40,7 +59,7 @@ struct Sidebar: View {
                 }
             }
         }
-        .refreshable { store.reload() }
+        .refreshable { store.reload(); notebookTree.dropAll() }
         // the study decks: read with the folder (their due count is the Study row's number)
         .task(id: store.snapshot.loadedAt) { StudyLibrary.shared.refreshIfChanged(store) }
     }
@@ -60,6 +79,10 @@ struct Sidebar: View {
                     row(.study, "Study", "rectangle.on.rectangle.angled", count: StudyLibrary.shared.dueTotal)
                 }
                 row(.ideas, "Ideas", "lightbulb", count: nil)
+                if s.isDataFolder {
+                    row(.claude, "Claude", "sparkles", count: ClaudeChatSession.shared.conversation("main").pendingCount)
+                        .accessibilityIdentifier("sidebar-claude")
+                }
             }
 
             if s.isDataFolder {
@@ -67,7 +90,7 @@ struct Sidebar: View {
                     ForEach(s.groups) { g in
                         DisclosureGroup(isExpanded: open(g.id)) {
                             ForEach(s.workstreams(in: g).filter { !$0.finished }) { w in
-                                NavigationLink(value: Screen.workstream(w.id)) {
+                                link(.workstream(w.id)) {
                                     HStack(spacing: 10) {
                                         Circle().fill(store.color(workstream: w.id)).frame(width: 9, height: 9)
                                         Text(w.name).lineLimit(1).foregroundStyle(w.parked ? .secondary : .primary)
@@ -101,7 +124,7 @@ struct Sidebar: View {
             }
 
             Section("Notebooks") {
-                if s.isDataFolder { NotebooksList(actions: notebookActions) }
+                if s.isDataFolder { NotebooksList(actions: notebookActions, pushes: pushes, tree: notebookTree) }
                 row(.boardSearch, "Search boards", "text.magnifyingglass", count: nil)
             }
 
@@ -117,10 +140,40 @@ struct Sidebar: View {
     }
 
     private func row(_ screen: Screen, _ title: String, _ icon: String, count: Int?) -> some View {
-        NavigationLink(value: screen) {
+        link(screen) {
             Label(title, systemImage: icon)
                 .badge(count ?? 0)
         }
+    }
+
+    /// A row that goes to a screen: on the iPad it selects it (the split view shows it), on the iPhone it pushes it.
+    @ViewBuilder
+    private func link<L: View>(_ screen: Screen, @ViewBuilder _ label: () -> L) -> some View {
+        if pushes {
+            NavigationLink(value: screen, label: label)
+        } else {
+            NavigationLink(value: SidebarItem.screen(screen), label: label)
+        }
+    }
+
+    /// The iPad's selection: the open board's row while a board is open, else the screen's. Picking a board opens it; picking a
+    /// screen shows it (and closes the board, also when it is the screen that was showing under the board).
+    private var listSelection: Binding<SidebarItem?> {
+        Binding<SidebarItem?>(get: {
+            if let b = store.openBoard { return SidebarItem.board(b.path) }
+            return selection.map { SidebarItem.screen($0) }
+        }, set: { new in
+            switch new {
+            case .board(let p)?:
+                if store.openBoard?.path != p { store.openBoard = .init(path: p, focus: nil) }
+            case .screen(let s)?:
+                if s == selection { store.openBoard = nil } else { selection = s }
+            case nil:
+                // the collapsed split view (a narrow window) going back to the sidebar
+                selection = nil
+                if store.openBoard != nil { store.openBoard = nil }
+            }
+        })
     }
 
     /// Groups are open unless closed; the closed ones are remembered.
@@ -132,4 +185,10 @@ struct Sidebar: View {
                     closedGroups = set.sorted().joined(separator: "|")
                 })
     }
+}
+
+/// What a row of the iPad's sidebar stands for: a screen, or a board (its row is the selected one while it is open).
+enum SidebarItem: Hashable {
+    case screen(Screen)
+    case board(String)
 }

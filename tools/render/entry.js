@@ -17,7 +17,7 @@ window.nexusMath = async (tex, display, size, color, maxW, maxH) => {
   out.style.color = color || '#000';
   const lay = async (px) => {
     out.style.fontSize = px + 'px';
-    await document.fonts.ready; // the fonts this formula uses load now; measure once they're in
+    await facesIn(out);
     return out.getBoundingClientRect();
   };
   try { out.innerHTML = katex.renderToString(String(tex), { displayMode: !!display, throwOnError: true, strict: 'ignore' }); } catch (e) { out.innerHTML = ''; return { ok: false, error: String(e && e.message || e) }; }
@@ -29,6 +29,24 @@ window.nexusMath = async (tex, display, size, color, maxW, maxH) => {
   return { ok: true, x: r.left, y: r.top, w: Math.ceil(r.width), h: Math.ceil(r.height), k };
 };
 window.nexusFontsReady = () => document.fonts.ready.then(() => true);
+
+// Every KaTeX face the formula in `el` uses, loaded before it is measured. WebKit starts a face's download only when a layout needs it,
+// and document.fonts.ready doesn't wait for a load that hasn't started, so awaiting it alone measured the first formula in the fallback
+// font: the photograph, taken once KaTeX's font was in, was cut at the narrower width (the "4" of "2x + 6 = 14" lost its right half).
+async function facesIn(el) {
+  const seen = new Set(), loads = [];
+  for (const e of [el, ...el.querySelectorAll('*')]) {
+    const words = [...e.childNodes].filter((n) => n.nodeType === 3).map((n) => n.data).join('');
+    if (!words.trim()) continue;
+    const cs = getComputedStyle(e);
+    const face = `${cs.fontStyle} ${cs.fontWeight} 16px ${cs.fontFamily.split(',')[0].trim()}`;
+    if (seen.has(face)) continue;
+    seen.add(face);
+    loads.push(document.fonts.load(face, words).catch(() => []));
+  }
+  await Promise.all(loads);
+  await document.fonts.ready;
+}
 
 // ---- chemistry diagrams
 const SUB = { 0: '₀', 1: '₁', 2: '₂', 3: '₃', 4: '₄', 5: '₅', 6: '₆', 7: '₇', 8: '₈', 9: '₉' };

@@ -19,7 +19,9 @@ struct HomeView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: wide ? 22 : 16) {
                     header(p, wide: wide)
-                    // DAY BRIEF: DayBriefCard() + PlanWithClaudeButton() go here ("Bring Claude chat to iPhone and iPad" builds them)
+                    // the day brief (Claude's, or the plain one) and Plan with Claude, as at the top of the laptop's Home
+                    DayBriefCard()
+                    PlanWithClaudeButton(prominent: true)
                     if wide {
                         if !p.keyDates.isEmpty { keyStrip(p) }
                         HStack(alignment: .top, spacing: 18) {
@@ -221,7 +223,7 @@ struct HomeView: View {
             HStack {
                 Button("Open Inbox") { go(.inbox) }.font(.callout.weight(.medium))
                 Spacer()
-                // FILE MY INBOX: FileInboxButton() goes here when the Claude thread builds it
+                FileInboxButton().font(.callout.weight(.medium)).buttonStyle(.borderless)
             }
             .padding(.top, 4)
         }
