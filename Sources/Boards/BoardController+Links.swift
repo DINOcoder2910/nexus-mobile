@@ -20,6 +20,8 @@ struct LinkState {
     var passage: Passage?
     /// Links shown for a moment after they were made or found.
     var flash: [String: Date] = [:]
+    /// Links growing out of the end that was touched: when each came into view, and from which side ("a" or "b").
+    var grow: [String: (t0: Date, from: String)] = [:]
     /// Tasks read from the folder when the board has no store (a board opened on its own).
     var tasks: [String: NexusTask]?
     /// Study cards' fronts read for labels ("" when not found), by "deck#card".
@@ -68,12 +70,30 @@ final class LinkOverlay: UIView {
         for (k, b) in pool where !used.contains(k) { b.removeFromSuperview(); pool[k] = nil }
     }
 
-    func add(_ path: UIBezierPath, fill: UIColor? = nil, stroke: UIColor? = nil, dash: Bool = false) {
+    /// A band filled with a gradient from p to q (the bridge: stronger at the ends, lighter in the middle).
+    func addGradient(_ path: UIBezierPath, from p: CGPoint, to q: CGPoint, colors: [UIColor]) {
+        let box = path.bounds.insetBy(dx: -1, dy: -1)
+        guard box.width > 0, box.height > 0 else { return }
+        let g = CAGradientLayer()
+        g.frame = box
+        g.colors = colors.map(\.cgColor)
+        g.startPoint = CGPoint(x: (p.x - box.minX) / box.width, y: (p.y - box.minY) / box.height)
+        g.endPoint = CGPoint(x: (q.x - box.minX) / box.width, y: (q.y - box.minY) / box.height)
+        let m = CAShapeLayer()
+        let moved = UIBezierPath(cgPath: path.cgPath)
+        moved.apply(CGAffineTransform(translationX: -box.minX, y: -box.minY))
+        m.path = moved.cgPath
+        g.mask = m
+        ribbons.addSublayer(g)
+    }
+
+    func add(_ path: UIBezierPath, fill: UIColor? = nil, stroke: UIColor? = nil, dash: Bool = false, width: CGFloat = 1.5) {
         let l = CAShapeLayer()
         l.path = path.cgPath
         l.fillColor = fill?.cgColor ?? UIColor.clear.cgColor
         l.strokeColor = stroke?.cgColor
-        l.lineWidth = stroke == nil ? 0 : 1.5
+        l.lineWidth = stroke == nil ? 0 : width
+        l.lineCap = .round
         if dash { l.lineDashPattern = [5, 4] }
         ribbons.addSublayer(l)
     }
@@ -251,7 +271,13 @@ extension BoardController {
         let shown = all.filter { l in
             links.showAll || links.flash[l.id] != nil || focusIds.contains { BoardLinks.side(l, on: $0) != nil }
         }
-        let obstacles: [CGRect] = content.items.filter { !BoardLinks.isLink($0) && $0.type != "pdf" }.map { screenRect(box(of: $0)) }.filter { $0.intersects(vis) }
+        let shownIds = Set(shown.map(\.id))
+        links.grow = links.grow.filter { shownIds.contains($0.key) }
+        for l in shown where links.grow[l.id] == nil {
+            let touchedB = focusIds.contains { BoardLinks.side(l, on: $0) == "b" } && !focusIds.contains { BoardLinks.side(l, on: $0) == "a" }
+            links.grow[l.id] = (now, touchedB ? "b" : "a")
+        }
+        var growing = false
         var tabsAt: [String: Int] = [:]
         for l in shown {
             let color = InkConvert.color(l.string("color") ?? BoardLinks.colors[0])
@@ -265,14 +291,14 @@ extension BoardController {
                 let aIn = a.intersects(vis), bIn = b.intersects(vis)
                 if !aIn && !bIn { continue }
                 if aIn && bIn {
-                    ribbon(from: a, to: b, color: color, obstacles: obstacles.filter { $0 != a && $0 != b })
+                    growing = ribbon(l, from: a, to: b, color: color, now: now) || growing
                 } else {
                     // one end off the screen: the ribbon runs to the edge, where a tab takes you to it
                     let (near, far, side) = aIn ? (a, b, "b") : (b, a, "a")
                     let p0 = BoardLinks.edgePoint(rect(near), toward: (Double(far.midX), Double(far.midY)))
                     let q = BoardLinks.clamp(p0, (Double(far.midX), Double(far.midY)), view: rect(vis), pad: 30)
                     let tab = goTab(l, side, color: color, at: CGPoint(x: q.0, y: q.1))
-                    ribbon(from: near, to: tab.frame, color: color, obstacles: [])
+                    growing = ribbon(l, from: side == "b" ? near : tab.frame, to: side == "b" ? tab.frame : near, color: color, now: now) || growing
                 }
             case let (a?, nil), let (nil, a?):
                 guard a.intersects(vis) else { continue }
@@ -284,7 +310,7 @@ extension BoardController {
                 let x = min(vis.maxX - tab.frame.width - 8, a.maxX + 36), y = min(vis.maxY - 40, max(vis.minY + 8, a.minY + CGFloat(n) * 36 - 4))
                 tab.frame.origin = CGPoint(x: max(8, x), y: y)
                 if x <= a.maxX { tab.frame.origin.y = min(vis.maxY - 40, a.maxY + 10 + CGFloat(n) * 36) }
-                ribbon(from: a, to: tab.frame, color: color, obstacles: [])
+                growing = ribbon(l, from: side == "b" ? a : tab.frame, to: side == "b" ? tab.frame : a, color: color, now: now) || growing
             default:
                 continue
             }
@@ -303,6 +329,8 @@ extension BoardController {
             o.add(UIBezierPath(roundedRect: screenRect(p.box), cornerRadius: 2), fill: UIColor.systemYellow.withAlphaComponent(0.28), stroke: .systemOrange)
         }
         o.end()
+        // a link still growing out of its end: draw again next frame
+        if growing { DispatchQueue.main.asyncAfter(deadline: .now() + 1.0 / 60) { [weak self] in self?.paintLinks() } }
     }
 
     func rect(_ r: CGRect) -> [Double] { [Double(r.minX), Double(r.minY), Double(r.maxX), Double(r.maxY)] }
@@ -313,21 +341,36 @@ extension BoardController {
         return l.id
     }
 
-    /// A soft band between two boxes (screen points), bending around the things in its way.
-    func ribbon(from a: CGRect, to b: CGRect, color: UIColor, obstacles: [CGRect]) {
-        let p = BoardLinks.edgePoint(rect(a), toward: (Double(b.midX), Double(b.midY)))
-        let q = BoardLinks.edgePoint(rect(b), toward: (Double(a.midX), Double(a.midY)))
-        let z = Double(max(0.6, min(1.4, canvas.zoomScale)))
-        let c = BoardLinks.curve(p, q, obstacles: obstacles.map(rect))
-        let pts = BoardLinks.band(p, q, c, w0: 9 * z, w1: 3.5 * z)
+    /// A link's ribbon between two boxes (screen points), the bridge look (the laptop's boardlinks.js): a band that holds the whole
+    /// facing side of each end and narrows between them, stronger at the ends, growing out of the end that was touched when it first
+    /// shows (not with Reduce Motion). Returns whether it is still growing.
+    @discardableResult
+    func ribbon(_ l: BoardItem, from a: CGRect, to b: CGRect, color: UIColor, now: Date) -> Bool {
+        let f = BoardLinks.facingSides(rect(a), rect(b))
+        let c = BoardLinks.bridgeCurve(f.a.p, f.a.n, f.b.p, f.b.n)
+        let g = links.grow[l.id] ?? (now, "a")
+        let raw = UIAccessibility.isReduceMotionEnabled ? 1 : min(1, now.timeIntervalSince(g.t0) / 0.28)
+        let t = 1 - pow(1 - raw, 3)
+        let (t0, t1) = g.from == "a" ? (0.0, t) : (1 - t, 1.0)
+        let pts = BoardLinks.band(f.a.p, f.b.p, c, wa: f.a.w, wb: f.b.w, wm: 5, t0: t0, t1: t1)
         let path = UIBezierPath()
         for (i, pt) in pts.enumerated() {
             let cg = CGPoint(x: pt.0, y: pt.1)
             if i == 0 { path.move(to: cg) } else { path.addLine(to: cg) }
         }
         path.close()
-        linkOverlay.add(path, fill: color.withAlphaComponent(0.55))
-        for e in [p, q] { linkOverlay.add(UIBezierPath(ovalIn: CGRect(x: e.0 - 3.5, y: e.1 - 3.5, width: 7, height: 7)), fill: color) }
+        let p = CGPoint(x: f.a.p.0, y: f.a.p.1), q = CGPoint(x: f.b.p.0, y: f.b.p.1)
+        linkOverlay.addGradient(path, from: p, to: q, colors: [color.withAlphaComponent(0.42), color.withAlphaComponent(0.2), color.withAlphaComponent(0.42)])
+        if raw >= 1 {
+            // a firm line along each side the bridge holds
+            for e in [f.a, f.b] {
+                let grip = UIBezierPath()
+                grip.move(to: CGPoint(x: e.p.0 - e.n.1 * e.w / 2, y: e.p.1 - e.n.0 * e.w / 2))
+                grip.addLine(to: CGPoint(x: e.p.0 + e.n.1 * e.w / 2, y: e.p.1 + e.n.0 * e.w / 2))
+                linkOverlay.add(grip, stroke: color.withAlphaComponent(0.75), width: 2.5)
+            }
+        }
+        return raw < 1
     }
 
     func tabButton(_ key: String) -> UIButton {
@@ -848,7 +891,7 @@ extension BoardController {
             actions.append(.init(title: "Remove link", destructive: true) { [weak self] in self?.removeLink(link) })
         }
         let host = UIHostingController(rootView: LinkPeek(title: title, detail: detail, text: body, actions: actions,
-                                                         close: { [weak self] in self?.dismiss(animated: true) }))
+                                                         close: { [weak self] in self?.dismiss(animated: true) }).tint(Theme.accent))
         host.modalPresentationStyle = .popover
         host.preferredContentSize = CGSize(width: 380, height: 420)
         if let link, let side, let b = linkOverlay.subviews.first(where: { $0.accessibilityIdentifier == "far:\(link):\(side)" }) {
@@ -884,7 +927,7 @@ extension BoardController {
                                           if let end { self.makeLinkHere(from, end) }
                                       },
                                       onCancel: { [weak self] in self?.dismiss(animated: true) })
-        let host = UIHostingController(rootView: picker)
+        let host = UIHostingController(rootView: picker.tint(Theme.accent))
         host.modalPresentationStyle = .formSheet
         present(host, animated: true)
     }
@@ -995,7 +1038,8 @@ extension BoardController {
                              onRemove: { [weak self] row in self?.removeLink(row.id) },
                              onColor: { [weak self] row, hex in self?.recolor(row.id, hex) },
                              onClose: { [weak self] in self?.dismiss(animated: true) })
-        let host = UIHostingController(rootView: list)
+        // the app's tint (a hosted sheet doesn't get it from the SwiftUI root): without it Done was a white pill on the white sheet
+        let host = UIHostingController(rootView: list.tint(Theme.accent))
         host.modalPresentationStyle = .formSheet
         present(host, animated: true)
     }
