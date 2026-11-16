@@ -50,6 +50,14 @@ final class HandwritingIndex {
         var signature: String
         var lines: [Line]
         var indexed: Date
+        /// The handwritten lines of each chunk with a fingerprint of the ink in it, so a board read again after an edit reads only the
+        /// chunks whose ink changed (nil in an index kept before this was).
+        var chunks: [String: ChunkLines]?
+    }
+
+    struct ChunkLines: Codable {
+        var sig: String
+        var lines: [Line]
     }
 
     /// Reading boards now.
@@ -79,10 +87,29 @@ final class HandwritingIndex {
     /// Reads every board again, even unchanged ones (the Re-read button). What is found stays searchable meanwhile.
     func reread(root: URL) { start(root: root, force: true) }
 
+    /// A board was saved: it is read again once it has been left alone for `settle` seconds (a save comes 600 ms after each stroke, and
+    /// reading a whole board with Vision after each one kept the iPad busy the whole time you wrote, until the Pencil lagged).
+    func boardSaved(_ path: String, root: URL) {
+        pendingBoards[path]?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            self?.pendingBoards[path] = nil
+            self?.refresh(board: path, root: root)
+        }
+        pendingBoards[path] = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + HandwritingIndex.settle, execute: work)
+    }
+
+    /// Seconds a board must be left alone before its handwriting is read again.
+    static let settle: Double = 20
+    @ObservationIgnored private var pendingBoards: [String: DispatchWorkItem] = [:]
+
     /// One board, e.g. right after it was saved. `path` is relative to the data folder ("notebooks/Chem/R3/Lesson 1.board").
     func refresh(board path: String, root: URL) {
+        // already waiting in the queue: that run reads the board as it is then
+        guard worker.markWaiting(path) else { return }
         worker.queue.async { [weak self] in
             guard let self else { return }
+            self.worker.dequeued(path)
             self.worker.use(root: root, publish: self.publishAll)
             let np = HandwritingIndex.nameAndPlace(path)
             let ref = BoardRef(path: path, name: np.name, place: np.place)
@@ -251,6 +278,18 @@ extension HandwritingIndex {
     final class Worker {
         let queue = DispatchQueue(label: "app.nexus.handwriting-index", qos: .utility)
         let generation = Generation()
+        private let waitingLock = NSLock()
+        private var waiting: Set<String> = []
+
+        /// Marks `path` as waiting to be read; false when it already is.
+        func markWaiting(_ path: String) -> Bool {
+            waitingLock.lock(); defer { waitingLock.unlock() }
+            return waiting.insert(path).inserted
+        }
+
+        func dequeued(_ path: String) {
+            waitingLock.lock(); waiting.remove(path); waitingLock.unlock()
+        }
         var entries: [String: BoardEntry] = [:]
         private var fileURL: URL?
 
@@ -330,8 +369,12 @@ extension HandwritingIndex {
                 return entries.removeValue(forKey: ref.path) != nil
             }
             var lines = Worker.typedLines(content)
-            lines.append(contentsOf: Worker.handwrittenLines(content.strokes))
-            entries[ref.path] = BoardEntry(path: ref.path, name: ref.name, place: ref.place, signature: sig, lines: lines, indexed: Date())
+            // chunks whose ink didn't change keep what was read in them (not on a forced re-read)
+            let before = force ? nil : entries[ref.path]?.chunks
+            let hw = Worker.handwrittenLines(content.strokes, reuse: before ?? [:])
+            lines.append(contentsOf: hw.lines)
+            entries[ref.path] = BoardEntry(path: ref.path, name: ref.name, place: ref.place, signature: sig, lines: lines, indexed: Date(),
+                                           chunks: hw.chunks)
             return true
         }
 
@@ -395,19 +438,49 @@ extension HandwritingIndex {
 
         // MARK: handwriting
 
+        /// One piece of ink as the reader draws it: its points (board units) and how thick it is.
+        struct Piece {
+            var points: [CGPoint]
+            var width: CGFloat
+            var bounds: CGRect
+        }
+
+        /// A stroke's pieces: the whole stroke, or each kept part of a partly erased one.
+        static func pieces(_ s: BoardStroke) -> [Piece] {
+            let all = s.points
+            guard !all.isEmpty else { return [] }
+            let spans: [ClosedRange<Int>] = (s.ranges?.isEmpty == false) ? InkConvert.parts(s) : [0...(all.count - 1)]
+            var w: Double = 0
+            for p in all { w += p.count > 6 && p[6].isFinite ? p[6] : 2 }
+            let width = CGFloat(min(8, max(1.5, w / Double(all.count))))
+            return spans.compactMap { r in
+                let pts = all[r].compactMap { p -> CGPoint? in
+                    guard p.count >= 2, p[0].isFinite, p[1].isFinite else { return nil }
+                    return CGPoint(x: p[0], y: p[1])
+                }
+                guard let first = pts.first else { return nil }
+                var minX = first.x, maxX = first.x, minY = first.y, maxY = first.y
+                for q in pts { minX = min(minX, q.x); maxX = max(maxX, q.x); minY = min(minY, q.y); maxY = max(maxY, q.y) }
+                let b = CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY).insetBy(dx: -width, dy: -width)
+                return Piece(points: pts, width: width, bounds: b)
+            }
+        }
+
         /// The ink drawn black on white, one chunk (a 1024 square with ink, plus a margin so a line on the edge is read whole) at a
         /// time; each line is kept by the chunk its middle falls in. Highlighter strokes are left out (they cover the writing).
-        static func handwrittenLines(_ strokes: [BoardStroke]) -> [Line] {
-            var byChunk: [String: [PKStroke]] = [:]
+        /// A chunk whose ink is the same as when it was last read (`reuse`) keeps its lines without being read again.
+        static func handwrittenLines(_ strokes: [BoardStroke], reuse: [String: ChunkLines] = [:]) -> (lines: [Line], chunks: [String: ChunkLines]) {
+            var byChunk: [String: [Piece]] = [:]
             var origins: [String: CGPoint] = [:]
+            var sigs: [String: Hash] = [:]
+            let far: CGFloat = 1_000_000_000
             for s in strokes where s.ink != "com.apple.ink.marker" {
-                var black = s
-                black.color = "#000000FF"
-                for k in InkConvert.pkStrokes(black, offset: .zero) {
-                    let b = k.renderBounds
-                    let far: CGFloat = 1_000_000_000
-                    guard !b.isNull, !b.isInfinite, b.minX.isFinite, b.minY.isFinite, b.maxX.isFinite, b.maxY.isFinite,
-                          abs(b.minX) < far, abs(b.minY) < far, abs(b.maxX) < far, abs(b.maxY) < far else { continue }
+                // what the chunk's picture is made of: each stroke by id, size, ends and kept parts
+                let a = s.points.first ?? [], z = s.points.last ?? []
+                let ink = "\(s.id)|\(s.points.count)|\(a.prefix(2))|\(z.prefix(2))|\(s.ranges ?? [])"
+                for piece in pieces(s) {
+                    let b = piece.bounds
+                    guard !b.isNull, !b.isInfinite, abs(b.minX) < far, abs(b.minY) < far, abs(b.maxX) < far, abs(b.maxY) < far else { continue }
                     let grown = b.insetBy(dx: -margin, dy: -margin)
                     let x0 = Int(floor(grown.minX / chunk)), x1 = Int(floor(grown.maxX / chunk))
                     let y0 = Int(floor(grown.minY / chunk)), y1 = Int(floor(grown.maxY / chunk))
@@ -416,31 +489,41 @@ extension HandwritingIndex {
                         for tx in x0...x1 { for ty in y0...y1 { cells.append((tx, ty)) } }
                     } else {
                         // a stroke across a huge area (a long line, a frame) is read in the chunks of its ends only
-                        let ends: [[Double]?] = [black.points.first, black.points.last]
-                        for end in ends {
-                            guard let p = end, p.count >= 2, abs(p[0]) < Double(far), abs(p[1]) < Double(far) else { continue }
-                            let cell: (Int, Int) = (Int(floor(p[0] / Double(chunk))), Int(floor(p[1] / Double(chunk))))
+                        for p in [piece.points.first, piece.points.last] {
+                            guard let p else { continue }
+                            let cell: (Int, Int) = (Int(floor(p.x / chunk)), Int(floor(p.y / chunk)))
                             if !cells.contains(where: { $0.0 == cell.0 && $0.1 == cell.1 }) { cells.append(cell) }
                         }
                     }
                     for (tx, ty) in cells {
                         let key = "\(tx)_\(ty)"
-                        byChunk[key, default: []].append(k)
+                        byChunk[key, default: []].append(piece)
                         origins[key] = CGPoint(x: CGFloat(tx) * chunk, y: CGFloat(ty) * chunk)
+                        sigs[key, default: Hash()].add(ink)
                     }
                 }
             }
-            let request = makeRequest()
+            var request: VNRecognizeTextRequest?
             var out: [Line] = []
+            var chunks: [String: ChunkLines] = [:]
             for key in byChunk.keys.sorted() {
-                guard let pks = byChunk[key], let origin = origins[key] else { continue }
+                guard let pieces = byChunk[key], let origin = origins[key] else { continue }
+                let sig = sigs[key]?.hex ?? ""
+                if let kept = reuse[key], kept.sig == sig {
+                    chunks[key] = kept
+                    out.append(contentsOf: kept.lines)
+                    continue
+                }
                 let core = CGRect(x: origin.x, y: origin.y, width: chunk, height: chunk)
                 // a chunk whose ink only reaches in from a neighbour's margin has nothing of its own to read
-                guard pks.contains(where: { $0.renderBounds.intersects(core) }) else { continue }
-                let found: [Line] = autoreleasepool { read(pks, core: core, group: key, request: request) }
+                guard pieces.contains(where: { $0.bounds.intersects(core) }) else { chunks[key] = ChunkLines(sig: sig, lines: []); continue }
+                let req = request ?? makeRequest()
+                request = req
+                let found: [Line] = autoreleasepool { read(pieces, core: core, group: key, request: req) }
+                chunks[key] = ChunkLines(sig: sig, lines: found)
                 out.append(contentsOf: found)
             }
-            return out
+            return (out, chunks)
         }
 
         static func makeRequest() -> VNRecognizeTextRequest {
@@ -456,9 +539,9 @@ extension HandwritingIndex {
         }
 
         /// Renders one chunk (with its margin) and reads its lines.
-        static func read(_ pks: [PKStroke], core: CGRect, group: String, request: VNRecognizeTextRequest) -> [Line] {
+        static func read(_ pieces: [Piece], core: CGRect, group: String, request: VNRecognizeTextRequest) -> [Line] {
             let rect = core.insetBy(dx: -margin, dy: -margin)
-            guard let cg = render(pks, rect: rect) else { return [] }
+            guard let cg = render(pieces, rect: rect) else { return [] }
             let handler = VNImageRequestHandler(cgImage: cg, options: [:])
             do { try handler.perform([request]) } catch { return [] }
             let observations: [VNRecognizedTextObservation] = request.results ?? []
@@ -481,25 +564,36 @@ extension HandwritingIndex {
             return out
         }
 
-        /// The strokes in `rect` (board units) as an opaque image, black ink on white, at `scale` pixels per unit.
-        static func render(_ pks: [PKStroke], rect: CGRect) -> CGImage? {
-            let drawing = PKDrawing(strokes: pks)
-            // PencilKit draws ink for the current appearance (black turns white in dark mode): ask for light
-            var ink: UIImage?
-            UITraitCollection(userInterfaceStyle: .light).performAsCurrent {
-                ink = drawing.image(from: rect, scale: scale)
+        /// The ink in `rect` (board units) as a grey picture, black lines on white, at `scale` pixels per unit. Drawn with Core Graphics
+        /// into a plain bitmap: PencilKit's own pictures, drawn here away from the main thread, crashed the app twice on Nov 14 (an
+        /// empty graphics surface read while the picture was copied, in UIGraphicsImageRenderer).
+        static func render(_ pieces: [Piece], rect: CGRect) -> CGImage? {
+            let w = Int((rect.width * scale).rounded()), h = Int((rect.height * scale).rounded())
+            guard w > 0, h > 0,
+                  let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue) else { return nil }
+            ctx.setFillColor(gray: 1, alpha: 1)
+            ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
+            // board units, y down, onto the bitmap's pixels (Core Graphics is y up)
+            ctx.translateBy(x: 0, y: CGFloat(h))
+            ctx.scaleBy(x: scale, y: -scale)
+            ctx.translateBy(x: -rect.minX, y: -rect.minY)
+            ctx.setStrokeColor(gray: 0, alpha: 1)
+            ctx.setFillColor(gray: 0, alpha: 1)
+            ctx.setLineCap(.round)
+            ctx.setLineJoin(.round)
+            for p in pieces where p.bounds.intersects(rect) {
+                if p.points.count == 1 {
+                    let c = p.points[0]
+                    ctx.fillEllipse(in: CGRect(x: c.x - p.width / 2, y: c.y - p.width / 2, width: p.width, height: p.width))
+                    continue
+                }
+                ctx.setLineWidth(p.width)
+                ctx.beginPath()
+                ctx.addLines(between: p.points)
+                ctx.strokePath()
             }
-            guard let ink else { return nil }
-            let format = UIGraphicsImageRendererFormat()
-            format.scale = scale
-            format.opaque = true
-            let renderer = UIGraphicsImageRenderer(size: rect.size, format: format)
-            let image = renderer.image { ctx in
-                UIColor.white.setFill()
-                ctx.fill(CGRect(origin: .zero, size: rect.size))
-                ink.draw(in: CGRect(origin: .zero, size: rect.size))
-            }
-            return image.cgImage
+            return ctx.makeImage()
         }
     }
 

@@ -95,6 +95,60 @@ final class TutorPanelTests: XCTestCase {
         XCTAssertTrue(app.buttons["Minimise the tutor"].firstMatch.waitForExistence(timeout: 10), "the pill doesn't open the panel again")
     }
 
+    /// The ask box keeps what you typed across a pause (Nov 16: typing, stopping a few seconds and typing on lost the first part),
+    /// both while the tutor is quiet and while it talks (the panel redraws with every sentence then).
+    func testTypingSurvivesAPause() {
+        launch()
+        openBoard("Tutor typing")
+        openTutor()
+        let box = app.descendants(matching: .any)["tutor-ask"].firstMatch
+        XCTAssertTrue(box.waitForExistence(timeout: 10), "no ask box")
+
+        box.tap()
+        box.typeText("What is a mole")
+        sleep(6)
+        box.typeText(" and how do I use it")
+        sleep(1)
+        XCTAssertEqual(box.value as? String, "What is a mole and how do I use it", "the first part was lost after a pause (quiet)")
+        shot("tutor-6-typed")
+
+        // clear it, then the same while it talks
+        app.buttons["Ask"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["Pause"].firstMatch.waitForExistence(timeout: 20), "no talking bar while it answers")
+        box.tap()
+        box.typeText("Wait, why")
+        sleep(6)
+        box.typeText(" is it divided by two")
+        sleep(1)
+        XCTAssertEqual(box.value as? String, "Wait, why is it divided by two", "the first part was lost after a pause (talking)")
+        shot("tutor-7-typed-while-talking")
+        waitForAnswer("typed question")
+        XCTAssertEqual(box.value as? String, "Wait, why is it divided by two", "the box lost its words when the answer ended")
+    }
+
+    /// Talking with a pause in it keeps the whole question (Nov 16). The demo's listening plays the recogniser's results for "What is a
+    /// mole", a pause, then its text starting over with "And how do I use it?", as Apple's does.
+    func testTalkingSurvivesAPause() {
+        launch()
+        openBoard("Tutor talking")
+        openTutor()
+        let mic = app.buttons["Talk to the tutor"].firstMatch
+        XCTAssertTrue(mic.waitForExistence(timeout: 10), "no microphone in the panel")
+        mic.tap() // (a tap: it listens until tapped again)
+        let said = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'use it'")).firstMatch
+        let found = said.waitForExistence(timeout: 15)
+        sleep(1)
+        shot("tutor-8-listening")
+        let labels = app.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }
+        print("UISTEP texts: " + labels.joined(separator: " | "))
+        XCTAssertTrue(found, "the words after the pause never showed")
+        XCTAssertTrue(app.staticTexts["What is a mole And how do I use it?"].firstMatch.exists, "what was said before the pause is gone")
+        app.buttons["Send what you said"].firstMatch.tap()
+        waitForAnswer("asked out loud")
+        XCTAssertTrue(app.staticTexts["What is a mole And how do I use it?"].firstMatch.exists, "the asked question isn't the whole of it")
+        shot("tutor-9-asked")
+    }
+
     func testTutorChatDark() {
         launch(["-board.dark", "always"])
         openBoard("Tutor dark")

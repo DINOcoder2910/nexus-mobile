@@ -244,7 +244,7 @@ final class BoardTutor {
         drawer.turn(at: frame)
         let image = snapshot(visible: visible, frame: frame, area: area)
         let strokes = board.content.strokes.filter { st in st.points.contains { visible.contains(CGPoint(x: $0[0], y: $0[1])) } }
-        let lines: [HandwritingIndex.Line] = await Task.detached(priority: .userInitiated) { HandwritingIndex.Worker.handwrittenLines(strokes) }.value
+        let lines: [HandwritingIndex.Line] = await Task.detached(priority: .userInitiated) { HandwritingIndex.Worker.handwrittenLines(strokes).lines }.value
         let rel = { (x: Double, y: Double, w: Double, h: Double) in TutorBox(x - frame[0], y - frame[1], w, h) }
         let handwriting = lines.map { TutorPrompt.Seen(text: $0.text, box: rel($0.x, $0.y, $0.w, $0.h)) }
         let typed: [TutorPrompt.Seen] = board.content.items.filter { $0.type == "text" }.compactMap { it in

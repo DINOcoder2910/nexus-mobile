@@ -323,27 +323,37 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
 
     func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
         picker.dismiss(animated: true)
-        guard let provider = results.first?.itemProvider, provider.canLoadObject(ofClass: UIImage.self) else { return }
-        provider.loadObject(ofClass: UIImage.self) { [weak self] obj, _ in
-            guard let img = obj as? UIImage else { return }
-            DispatchQueue.main.async { self?.insertImage(img) }
+        guard let provider = results.first?.itemProvider else { return }
+        HangWatch.note("board: image picked")
+        let done: (BoardImage.Prepared?) -> Void = { [weak self] p in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                guard let p else { self.tell("That image couldn't be read."); return }
+                self.insertImage(p)
+            }
+        }
+        // the photo's file, shrunk and encoded away from the main thread (a camera photo is 12 MP or more: decoding and encoding it
+        // on the main thread froze the board for a second or more)
+        if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
+            provider.loadDataRepresentation(forTypeIdentifier: UTType.image.identifier) { data, _ in
+                done(data.flatMap(BoardImage.prepare(data:)))
+            }
+        } else if provider.canLoadObject(ofClass: UIImage.self) {
+            provider.loadObject(ofClass: UIImage.self) { obj, _ in
+                done((obj as? UIImage).flatMap(BoardImage.prepare(image:)))
+            }
         }
     }
 
-    func insertImage(_ img: UIImage) {
-        let hasAlpha: Bool = {
-            guard let a = img.cgImage?.alphaInfo else { return false }
-            return a == .first || a == .last || a == .premultipliedFirst || a == .premultipliedLast
-        }()
-        guard let data = hasAlpha ? img.pngData() : img.jpegData(compressionQuality: 0.85) else { tell("That image couldn't be read."); return }
-        let ext = hasAlpha ? ".png" : ".jpg"
+    /// An image (already shrunk and encoded, BoardImage.prepare) saved in the board's files and put on the board.
+    func insertImage(_ img: BoardImage.Prepared) {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyy-MM-dd HHmm"
         let filesDir = boardURL.appendingPathComponent("files", isDirectory: true)
         let taken = Set((try? FileManager.default.contentsOfDirectory(atPath: filesDir.path)) ?? [])
-        let name = BoardFormat.freeName("image " + f.string(from: Date()), taken: taken, suffix: ext)
-        do { try FolderAccess.writeData(filesDir.appendingPathComponent(name), data) } catch { tell("Couldn't add the image: \(error.localizedDescription)"); return }
+        let name = BoardFormat.freeName("image " + f.string(from: Date()), taken: taken, suffix: img.ext)
+        do { try FolderAccess.writeData(filesDir.appendingPathComponent(name), img.data) } catch { tell("Couldn't add the image: \(error.localizedDescription)"); return }
         let id = BoardFormat.newId(taken: allIds)
         let p = insertPoint
         let w = min(600, Double(img.size.width)), h = (w * Double(img.size.height) / max(Double(img.size.width), 1)).rounded()
