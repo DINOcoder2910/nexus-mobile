@@ -63,6 +63,18 @@ struct WorkstreamView: View {
                 Button(action: add) { Label("Add a task", systemImage: "plus") }
                     .disabled(store.snapshot.readOnlyReason != nil)
             }
+            // Claude, behind the ⋯ menu: about this workstream, and File my Inbox on the Inbox
+            ToolbarItem(placement: .secondaryAction) {
+                Button {
+                    let w = store.workstream(workstreamId)
+                    ClaudeChatSession.open(looking: w.map { "\($0.name) (\($0.folder))" } ?? "the Inbox (inbox.yaml)")
+                } label: {
+                    Label("Ask Claude about this", systemImage: "sparkles")
+                }
+            }
+            if workstreamId == nil {
+                ToolbarItem(placement: .secondaryAction) { FileInboxButton() }
+            }
         }
     }
 

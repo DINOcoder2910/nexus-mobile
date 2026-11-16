@@ -3,7 +3,7 @@
 // the iPad reads and writes the same .jsonl the laptop and the hub's Google Docs bridge do, keeping paragraph ids, who wrote what and the
 // header (the Google link, tabs). Built by tools/richtext/build.mjs from a nexus checkout into Packages/NexusCore/Sources/NexusCore/Resources.
 // Every function takes and gives strings (JSON for objects), so the Swift side needs nothing but JSValue.toString.
-import { readWords, writeWords, docForMd, copyBody, splitCopy } from 'nexus/board/richblock.js';
+import { readWords, writeWords, docForMd, copyBody, copyText, splitCopy } from 'nexus/board/richblock.js';
 import { readDoc } from 'nexus/board/richfile.js';
 import { docToMd } from 'nexus/board/richmd.js';
 
@@ -47,4 +47,6 @@ globalThis.NexusRichCore = {
   },
   // a copy's file -> { body, nexus } (its checksum line taken off; nexus: Nexus wrote it)
   copy(file) { return out(splitCopy(file)); },
+  // the copy's file for the words `body`: the words, then the checksum line -> { ok, file }
+  copyText(body) { return out({ ok: true, file: copyText(String(body == null ? '' : body)) }); },
 };

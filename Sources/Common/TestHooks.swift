@@ -7,6 +7,8 @@ enum TestHooks {
     /// `-NexusTestPdfBoard`: sample data, then a notebook "PDF zoom" with a board made from a 3-page PDF of fine print, opened
     /// (UITests/PdfZoomTests: zoomed-in pages must stay drawn).
     static func run(_ store: NexusStore) {
+        nestedNotebooks(store)
+        manyNotebooks(store)
         if ProcessInfo.processInfo.arguments.contains("-NexusTestBigBoard") { bigBoard(store); return }
         guard ProcessInfo.processInfo.arguments.contains("-NexusTestPdfBoard") else { return }
         if !store.snapshot.isDataFolder { store.makeSample() }
@@ -15,6 +17,84 @@ enum TestHooks {
         if NotebookActions.names(in: url).contains(where: { $0.hasSuffix(".board") }) { return }
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         try? NotebookActions().newBoard(pdfData: finePrint(), named: "Zoom test", in: dir, store)
+    }
+
+    /// `-NexusTestNestedNotebooks`: sample data, then notebooks nested three deep with boards at each level and notebook.json
+    /// orders that are not by name, as the laptop's OneNote import writes them, every notebook closed in the sidebar and no Recent
+    /// boards (UITests/SidebarTreeTests). `-NexusTestDark` puts the window in dark mode.
+    static func nestedNotebooks(_ store: NexusStore) {
+        let args = ProcessInfo.processInfo.arguments
+        if args.contains("-NexusTestDark") {
+            for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
+                scene.windows.forEach { $0.overrideUserInterfaceStyle = .dark }
+            }
+        }
+        guard args.contains("-NexusTestNestedNotebooks") else { return }
+        if !store.snapshot.isDataFolder { store.makeSample() }
+        // the speed test's 1,440 boards (SidebarSpeedTests, same simulator) would push this tree out of reach
+        var removed = false
+        for name in NotebookActions.names(in: store.folder.appendingPathComponent(BoardFormat.notebooks)) where name.hasPrefix("G12 Notebook ") {
+            try? FileManager.default.removeItem(at: store.folder.appendingPathComponent(BoardFormat.notebooks).appendingPathComponent(name))
+            removed = true
+        }
+        if removed { store.boardsChanged(listChanged: true) }
+        UserDefaults.standard.removeObject(forKey: "openNotebooks")
+        UserDefaults.standard.removeObject(forKey: RecentBoards.key)
+        let root = store.folder
+        guard !FileManager.default.fileExists(atPath: root.appendingPathComponent("notebooks/School").path) else { return }
+        let boards = [
+            "notebooks/School/Chemistry/R3 Energetics/Week 2/Lattice enthalpy.board",
+            "notebooks/School/Chemistry/R3 Energetics/Week 2/Born-Haber cycles.board",
+            "notebooks/School/Chemistry/R3 Energetics/Week 1/Calorimetry.board",
+            "notebooks/School/Chemistry/R3 Energetics/Week 1/Enthalpy of combustion.board",
+            "notebooks/School/Chemistry/R3 Energetics/Hess's law.board",
+            "notebooks/School/Chemistry/R3 Energetics/Bond enthalpy.board",
+            "notebooks/School/Chemistry/R1 Structure/Ions.board",
+            "notebooks/School/Chemistry/Syllabus.board",
+            "notebooks/School/Biology/Cells.board",
+            "notebooks/Spanish/Verbs.board",
+            "notebooks/Spanish/Vocab.board",
+        ]
+        let metas = [
+            "notebooks/School": ##"{"format": "nexus-notebook/1", "color": "#007F43", "order": ["Chemistry", "Biology"]}"##,
+            "notebooks/School/Chemistry": #"{"order": ["R3 Energetics", "R1 Structure", "Syllabus.board"]}"#,
+            "notebooks/School/Chemistry/R3 Energetics": #"{"order": ["Week 2", "Week 1", "Hess's law.board", "Bond enthalpy.board"]}"#,
+            "notebooks/School/Chemistry/R3 Energetics/Week 2": #"{"order": ["Lattice enthalpy.board", "Born-Haber cycles.board"]}"#,
+            "notebooks/Spanish": ##"{"format": "nexus-notebook/1", "color": "#A14174"}"##,
+        ]
+        for b in boards {
+            try? FolderAccess.write(root.appendingPathComponent(b).appendingPathComponent("board.json"), BoardFormat.boardJSON())
+        }
+        for (dir, json) in metas {
+            try? FolderAccess.write(root.appendingPathComponent(dir).appendingPathComponent(NotebookMeta.file), json + "\n")
+        }
+        store.boardsChanged(listChanged: true)
+    }
+
+    /// `-NexusTestManyNotebooks`: sample data, then a folder the size of the OneNote import (12 notebooks of 10 sections, 12 boards
+    /// in each: 1,440 boards, each with a PDF beside it in its section as the import leaves them), every notebook closed
+    /// (UITests/SidebarSpeedTests: the sidebar must stay quick).
+    static func manyNotebooks(_ store: NexusStore) {
+        guard ProcessInfo.processInfo.arguments.contains("-NexusTestManyNotebooks") else { return }
+        if !store.snapshot.isDataFolder { store.makeSample() }
+        UserDefaults.standard.removeObject(forKey: "openNotebooks")
+        UserDefaults.standard.removeObject(forKey: RecentBoards.key)
+        let root = store.folder
+        guard !FileManager.default.fileExists(atPath: root.appendingPathComponent("notebooks/G12 Notebook 01").path) else { return }
+        let board = Data(BoardFormat.boardJSON().utf8), fm = FileManager.default
+        for n in 1...12 {
+            let nb = String(format: "notebooks/G12 Notebook %02d", n)
+            for s in 1...10 {
+                let sec = nb + String(format: "/Section %02d", s)
+                for b in 1...12 {
+                    let dir = root.appendingPathComponent(sec + String(format: "/Page %02d.board", b))
+                    try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+                    try? board.write(to: dir.appendingPathComponent("board.json"))
+                }
+                try? Data("%PDF-1.4\n".utf8).write(to: root.appendingPathComponent(sec + "/Handout.pdf"))
+            }
+        }
+        store.boardsChanged(listChanged: true)
     }
 
     /// `-NexusTestBigBoard`: sample data, then a board as full as a long lesson's (4000 handwritten strokes of 60 points over a page

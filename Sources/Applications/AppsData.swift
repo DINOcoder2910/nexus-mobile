@@ -22,9 +22,8 @@ final class AppsData {
     private(set) var researching: [String: String] = [:]
     var researchNote: [String: String] = [:]
 
-    /// The Ask Claude button: the Claude chat's own screen opens it with the Applications conversation (wired where the chat lives).
-    /// Set by the Claude chat when both are built: opens the "apps" conversation with what the page shows.
-    static var askHandler: ((_ looking: String, _ context: String) -> Void)?
+    /// The Ask Claude buttons: open the Claude chat on the "apps" conversation with what the page shows (set at app start).
+    static var askHandler: (@MainActor (_ looking: String, _ context: String) -> Void)?
 
     // MARK: the model
 
