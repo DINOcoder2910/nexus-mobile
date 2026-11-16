@@ -126,6 +126,25 @@ final class TutorPanelTests: XCTestCase {
         XCTAssertEqual(box.value as? String, "Wait, why is it divided by two", "the box lost its words when the answer ended")
     }
 
+    /// Talking with a pause in it keeps the whole question (Nov 16). The demo's listening plays the recogniser's results for "What is a
+    /// mole", a pause, then its text starting over with "And how do I use it?", as Apple's does.
+    func testTalkingSurvivesAPause() {
+        launch()
+        openBoard("Tutor talking")
+        openTutor()
+        let mic = app.buttons["Talk to the tutor"].firstMatch
+        XCTAssertTrue(mic.waitForExistence(timeout: 10), "no microphone in the panel")
+        mic.tap() // (a tap: it listens until tapped again)
+        let whole = app.staticTexts["What is a mole And how do I use it?"].firstMatch
+        XCTAssertTrue(whole.waitForExistence(timeout: 15), "what was said before the pause is gone")
+        sleep(1)
+        shot("tutor-8-listening")
+        app.buttons["Send what you said"].firstMatch.tap()
+        waitForAnswer("asked out loud")
+        XCTAssertTrue(app.staticTexts["What is a mole And how do I use it?"].firstMatch.exists, "the asked question isn't the whole of it")
+        shot("tutor-9-asked")
+    }
+
     func testTutorChatDark() {
         launch(["-board.dark", "always"])
         openBoard("Tutor dark")
