@@ -492,6 +492,12 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     func saveNow() {
         saveWork?.cancel()
         guard dirty, !readOnly else { return }
+        let began = CACurrentMediaTime()
+        defer {
+            // a slow save holds up the Pencil: the freeze recorder's breadcrumbs say how slow
+            let ms = Int((CACurrentMediaTime() - began) * 1000)
+            if ms >= 120 { HangWatch.note("board: save took \(ms) ms (\(content.strokes.count) strokes)") }
+        }
         let taken = Set(content.items.map(\.id))
         content.strokes = ledger.strokes(canvas.drawing, offset: offset, taken: taken)
         recordingSaved()

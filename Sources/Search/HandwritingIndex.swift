@@ -50,6 +50,14 @@ final class HandwritingIndex {
         var signature: String
         var lines: [Line]
         var indexed: Date
+        /// The handwritten lines of each chunk with a fingerprint of the ink in it, so a board read again after an edit reads only the
+        /// chunks whose ink changed (nil in an index kept before this was).
+        var chunks: [String: ChunkLines]?
+    }
+
+    struct ChunkLines: Codable {
+        var sig: String
+        var lines: [Line]
     }
 
     /// Reading boards now.
@@ -79,10 +87,29 @@ final class HandwritingIndex {
     /// Reads every board again, even unchanged ones (the Re-read button). What is found stays searchable meanwhile.
     func reread(root: URL) { start(root: root, force: true) }
 
+    /// A board was saved: it is read again once it has been left alone for `settle` seconds (a save comes 600 ms after each stroke, and
+    /// reading a whole board with Vision after each one kept the iPad busy the whole time you wrote, until the Pencil lagged).
+    func boardSaved(_ path: String, root: URL) {
+        pendingBoards[path]?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            self?.pendingBoards[path] = nil
+            self?.refresh(board: path, root: root)
+        }
+        pendingBoards[path] = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + HandwritingIndex.settle, execute: work)
+    }
+
+    /// Seconds a board must be left alone before its handwriting is read again.
+    static let settle: Double = 20
+    @ObservationIgnored private var pendingBoards: [String: DispatchWorkItem] = [:]
+
     /// One board, e.g. right after it was saved. `path` is relative to the data folder ("notebooks/Chem/R3/Lesson 1.board").
     func refresh(board path: String, root: URL) {
+        // already waiting in the queue: that run reads the board as it is then
+        guard worker.markWaiting(path) else { return }
         worker.queue.async { [weak self] in
             guard let self else { return }
+            self.worker.dequeued(path)
             self.worker.use(root: root, publish: self.publishAll)
             let np = HandwritingIndex.nameAndPlace(path)
             let ref = BoardRef(path: path, name: np.name, place: np.place)
@@ -251,6 +278,18 @@ extension HandwritingIndex {
     final class Worker {
         let queue = DispatchQueue(label: "app.nexus.handwriting-index", qos: .utility)
         let generation = Generation()
+        private let waitingLock = NSLock()
+        private var waiting: Set<String> = []
+
+        /// Marks `path` as waiting to be read; false when it already is.
+        func markWaiting(_ path: String) -> Bool {
+            waitingLock.lock(); defer { waitingLock.unlock() }
+            return waiting.insert(path).inserted
+        }
+
+        func dequeued(_ path: String) {
+            waitingLock.lock(); waiting.remove(path); waitingLock.unlock()
+        }
         var entries: [String: BoardEntry] = [:]
         private var fileURL: URL?
 
@@ -330,8 +369,12 @@ extension HandwritingIndex {
                 return entries.removeValue(forKey: ref.path) != nil
             }
             var lines = Worker.typedLines(content)
-            lines.append(contentsOf: Worker.handwrittenLines(content.strokes))
-            entries[ref.path] = BoardEntry(path: ref.path, name: ref.name, place: ref.place, signature: sig, lines: lines, indexed: Date())
+            // chunks whose ink didn't change keep what was read in them (not on a forced re-read)
+            let before = force ? nil : entries[ref.path]?.chunks
+            let hw = Worker.handwrittenLines(content.strokes, reuse: before ?? [:])
+            lines.append(contentsOf: hw.lines)
+            entries[ref.path] = BoardEntry(path: ref.path, name: ref.name, place: ref.place, signature: sig, lines: lines, indexed: Date(),
+                                           chunks: hw.chunks)
             return true
         }
 
@@ -397,10 +440,14 @@ extension HandwritingIndex {
 
         /// The ink drawn black on white, one chunk (a 1024 square with ink, plus a margin so a line on the edge is read whole) at a
         /// time; each line is kept by the chunk its middle falls in. Highlighter strokes are left out (they cover the writing).
-        static func handwrittenLines(_ strokes: [BoardStroke]) -> [Line] {
+        static func handwrittenLines(_ strokes: [BoardStroke], reuse: [String: ChunkLines] = [:]) -> (lines: [Line], chunks: [String: ChunkLines]) {
             var byChunk: [String: [PKStroke]] = [:]
             var origins: [String: CGPoint] = [:]
+            var sigs: [String: Hash] = [:]
             for s in strokes where s.ink != "com.apple.ink.marker" {
+                // what the chunk's picture is made of: each stroke by id, size, ends and kept parts
+                let a = s.points.first ?? [], z = s.points.last ?? []
+                let ink = "\(s.id)|\(s.points.count)|\(a.prefix(2))|\(z.prefix(2))|\(s.ranges ?? [])"
                 var black = s
                 black.color = "#000000FF"
                 for k in InkConvert.pkStrokes(black, offset: .zero) {
@@ -427,20 +474,31 @@ extension HandwritingIndex {
                         let key = "\(tx)_\(ty)"
                         byChunk[key, default: []].append(k)
                         origins[key] = CGPoint(x: CGFloat(tx) * chunk, y: CGFloat(ty) * chunk)
+                        sigs[key, default: Hash()].add(ink)
                     }
                 }
             }
-            let request = makeRequest()
+            var request: VNRecognizeTextRequest?
             var out: [Line] = []
+            var chunks: [String: ChunkLines] = [:]
             for key in byChunk.keys.sorted() {
                 guard let pks = byChunk[key], let origin = origins[key] else { continue }
+                let sig = sigs[key]?.hex ?? ""
+                if let kept = reuse[key], kept.sig == sig {
+                    chunks[key] = kept
+                    out.append(contentsOf: kept.lines)
+                    continue
+                }
                 let core = CGRect(x: origin.x, y: origin.y, width: chunk, height: chunk)
                 // a chunk whose ink only reaches in from a neighbour's margin has nothing of its own to read
-                guard pks.contains(where: { $0.renderBounds.intersects(core) }) else { continue }
-                let found: [Line] = autoreleasepool { read(pks, core: core, group: key, request: request) }
+                guard pks.contains(where: { $0.renderBounds.intersects(core) }) else { chunks[key] = ChunkLines(sig: sig, lines: []); continue }
+                let req = request ?? makeRequest()
+                request = req
+                let found: [Line] = autoreleasepool { read(pks, core: core, group: key, request: req) }
+                chunks[key] = ChunkLines(sig: sig, lines: found)
                 out.append(contentsOf: found)
             }
-            return out
+            return (out, chunks)
         }
 
         static func makeRequest() -> VNRecognizeTextRequest {

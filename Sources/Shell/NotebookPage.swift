@@ -21,7 +21,7 @@ struct NotebookPage: View {
 
     var body: some View {
         let _ = store.notebooksVersion
-        let tree = Notebook.list(store.folder)
+        let tree = store.notebooks()
         let nb = Notebook.find(tree, path)
         let rootColor = tree.first { path == $0.path || path.hasPrefix($0.path + "/") }?.color
         Group {
@@ -44,7 +44,9 @@ struct NotebookPage: View {
             guard let item else { return }
             photo = nil
             Task { @MainActor in
-                if let data = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: data) {
+                // shrunk and encoded away from the main thread (a full-size photo froze the page)
+                if let data = try? await item.loadTransferable(type: Data.self),
+                   let img = await Task.detached(priority: .userInitiated, operation: { BoardImage.prepare(data: data) }).value {
                     actions.newBoard(fromPhoto: img, in: path, store)
                 }
             }

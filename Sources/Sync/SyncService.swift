@@ -232,7 +232,9 @@ final class SyncService {
                 }
             }
             if Task.isCancelled { return }
-            if woken { try? await Task.sleep(for: .milliseconds(700)) }
+            // a board saves 600 ms after each stroke and each save wakes sync: gather a couple of seconds of them into one cycle (each
+            // cycle looks over the whole data folder, which kept the iPad busy the whole time you wrote)
+            if woken { try? await Task.sleep(for: .seconds(2)) }
         }
     }
 

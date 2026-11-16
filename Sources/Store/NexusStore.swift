@@ -113,11 +113,26 @@ final class NexusStore {
     /// Reads the folder again (after an edit, on coming back to the app, or when the files changed underneath).
     func reload() {
         HangWatch.note("store: read the folder again")
+        readCount += 1
         today = Days.today()
         snapshot = DataFolder.load(folder)
         fingerprint = DataFolder.fingerprint(folder)
         loadShortcuts()
         onReload?()
+    }
+
+    @ObservationIgnored private var readCount = 0
+    @ObservationIgnored private var treeCache: (key: String, tree: [Notebook])?
+
+    /// The notebooks under `notebooks/`, read again only after the folder was read again or a notebook or board was made, renamed or
+    /// removed. The sidebar and a notebook's page asked for them on every redraw, and with many notebooks (a OneNote import) reading
+    /// them is a walk of hundreds of folders on the main thread (the Nov 14 freeze after coming back to the app).
+    func notebooks() -> [Notebook] {
+        let key = "\(folder.path)|\(notebooksVersion)|\(readCount)"
+        if let c = treeCache, c.key == key { return c.tree }
+        let tree = Notebook.list(folder)
+        treeCache = (key, tree)
+        return tree
     }
 
     /// Cheap check for another writer; reloads only when something changed. True when the files changed.

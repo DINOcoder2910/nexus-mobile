@@ -13,7 +13,7 @@ struct BoardPanes: View {
     var body: some View {
         BoardHost(target: main, root: store.folder, store: store, onClose: { store.openBoard = nil }, onSaved: { path in
             store.boardsChanged()
-            HandwritingIndex.shared.refresh(board: path, root: store.folder)
+            HandwritingIndex.shared.boardSaved(path, root: store.folder)
         }, onSidebar: {
             withAnimation { columns = columns == .detailOnly ? .all : .detailOnly }
         }, makeScreen: { screen, close in
