@@ -22,6 +22,8 @@ final class IdeasModel {
     @ObservationIgnored private weak var store: NexusStore?
 
     static let testSeed = ProcessInfo.processInfo.arguments.contains("-NexusTestIdeas")
+    /// The UI check's ideas are written afresh once per launch, so one test's added idea doesn't change the next test's counts.
+    static var seededThisLaunch = false
 
     private func url(_ name: String) -> URL? { store?.folder.appendingPathComponent(name) }
     private var today: String { Days.today() }
@@ -31,7 +33,7 @@ final class IdeasModel {
     /// Reads the file (or, with none yet, the To-do list's items) and folds in any conflict copy.
     func load() {
         guard let file = url(Ideas.file) else { return }
-        if Self.testSeed && !FileManager.default.fileExists(atPath: file.path) { try? FolderAccess.write(file, Self.seed(today)) }
+        if Self.testSeed && !Self.seededThisLaunch { Self.seededThisLaunch = true; try? FolderAccess.write(file, Self.seed(today)) }
         let text = try? FolderAccess.read(file)
         stamp = Self.modified(file)
         if text == nil, let t = url(Ideas.todoFile) {

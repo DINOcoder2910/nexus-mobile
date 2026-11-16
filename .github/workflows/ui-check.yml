@@ -160,6 +160,12 @@ jobs:
             ui.log
             ui.xcresult
 
+      # last, so a reader that sees only the log's end (its last few thousand lines) still sees which tests failed and why
+      - name: Test summary
+        if: always()
+        run: |
+          grep -E "UISTEP|Test Case .*(passed|failed)|error: -\[|XCTAssert|Executed [0-9]+ test" ui.log 2>/dev/null | grep -v "SHOT" | cut -c1-400 | tail -n 250 || true
+
       - name: Result
         if: always()
         run: exit $(cat status.txt 2>/dev/null || echo 1)

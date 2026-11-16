@@ -44,15 +44,20 @@ final class IdeasTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["New · 3"].firstMatch.waitForExistence(timeout: 10), "the idea wasn't added")
         shot("ideas-ipad-added-light")
         // Settings › Usage
-        app.staticTexts["Settings"].firstMatch.tap()
+        let settings = app.staticTexts["Settings"].firstMatch
+        XCTAssertTrue(settings.waitForExistence(timeout: 10), "no Settings row in the sidebar")
+        if !settings.isHittable { app.staticTexts["Ideas"].firstMatch.swipeUp() }
+        settings.tap()
         let credits = app.staticTexts["Anthropic API credits"].firstMatch
+        _ = credits.waitForExistence(timeout: 10)
         for _ in 0..<12 where !(credits.exists && credits.isHittable) { app.swipeUp() }
+        app.swipeUp()
+        // the picture first, so a failure below still shows what Settings held
+        shot("ideas-ipad-settings-usage-light")
         XCTAssertTrue(credits.exists, "no Usage section in Settings")
         XCTAssertTrue(app.staticTexts["usage.api.parts"].waitForExistence(timeout: 5), "the laptop's spending wasn't added")
         XCTAssertTrue(app.staticTexts["Claude plan (Max)"].exists, "the laptop's plan reading didn't show")
         XCTAssertTrue(app.staticTexts["Current session (5 hours)"].exists)
-        for _ in 0..<3 where !app.staticTexts["usage.plan.at"].isHittable { app.swipeUp() }
-        shot("ideas-ipad-settings-usage-light")
     }
 
     func testIdeasIPadDark() throws {
