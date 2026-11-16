@@ -3,7 +3,11 @@ import XCTest
 /// Insert space follows the drag (Sources/Boards/SpaceLive.swift): on a board as full as a long lesson's (4000 handwritten strokes
 /// over a PDF page), the app drags Insert space itself, one step per screen refresh (`-NexusTestSpaceDrag`,
 /// BoardController+SpaceBench.swift), holding still at each stage. This takes a picture at each stage (mid-drag: the ink and the
-/// PDF page already moved, the room open) and prints the timings: the start of a drag, each step, the worst frame, letting go.
+/// PDF page already moved, the room open); the timings (the start of a drag, each step, the worst frame, letting go) go to
+/// `diagnostics/space-bench.txt`, which the UI check prints.
+///
+/// It never reads the app's elements: on a board this full that query times out. The bench and the test talk by Darwin
+/// notifications instead (`app.nexus.spacebench.<phase>` from the app, `.go` from the test), and the pictures are of the screen.
 final class SpaceLiveTests: XCTestCase {
     let app = XCUIApplication()
 
@@ -22,55 +26,72 @@ final class SpaceLiveTests: XCTestCase {
         print("UISTEP \(Date().timeIntervalSince1970) \(name)")
     }
 
-    /// Waits for the bench's label to reach `phase`; returns its text.
-    @discardableResult
-    func wait(for phase: String, _ bench: XCUIElement, seconds: Int = 120) -> String {
-        var tries = 0
-        while !bench.label.contains("phase \(phase)") && tries < seconds {
-            if tries % 21 == 0 { print("UISTEP SPACE waiting for \(phase): \(bench.label.replacingOccurrences(of: "\n", with: " | "))") }
-            sleep(3)
-            tries += 3
+    /// Starts hearing the bench's stages (delivered on the main run loop, which `heard` turns).
+    func listen(_ stages: [String]) {
+        for s in stages {
+            CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), Unmanaged.passUnretained(self).toOpaque(),
+                                            { _, _, name, _, _ in
+                                                guard let name else { return }
+                                                SpaceHeard.names.insert(name.rawValue as String)
+                                            }, "app.nexus.spacebench.\(s)" as CFString, nil, .deliverImmediately)
         }
-        let text = bench.label
-        print("UISTEP SPACE at \(phase): \(text.replacingOccurrences(of: "\n", with: " | "))")
-        XCTAssertTrue(text.contains("phase \(phase)"), "the bench didn't reach \(phase): \(text)")
-        return text
     }
 
-    func testInsertSpaceFollowsTheDrag() {
-        // the app writes the big board and opens it (a minute or more in the simulator's debug build, the main thread busy reading
-        // it): the screen can't be read meanwhile, so the first look waits, as the save check does
-        sleep(100)
-        // run on its own, the app's first launch asks to send notifications: that alert hides the app from the test
+    /// Whether the bench reached `stage` within `seconds`.
+    func heard(_ stage: String, within seconds: TimeInterval) -> Bool {
+        let end = Date().addingTimeInterval(seconds)
+        while !SpaceHeard.names.contains("app.nexus.spacebench.\(stage)") {
+            if Date() > end { return false }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        }
+        return true
+    }
+
+    /// Waits for the bench to reach a stage; says so in the log either way.
+    @discardableResult
+    func reach(_ stage: String, seconds: TimeInterval = 120) -> Bool {
+        let ok = heard(stage, within: seconds)
+        print("UISTEP SPACE \(ok ? "at" : "never reached") \(stage)")
+        XCTAssertTrue(ok, "the bench didn't reach \(stage)")
+        return ok
+    }
+
+    /// The app's first launch asks to send notifications: that alert would sit over the pictures.
+    func answerAlert() {
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         for name in ["Allow", "Don\u{2019}t Allow", "Don't Allow"] {
             let b = springboard.buttons[name].firstMatch
-            if b.waitForExistence(timeout: 3) { b.tap(); break }
+            if b.waitForExistence(timeout: 2) { b.tap(); print("UISTEP SPACE answered the alert"); return }
         }
-        let bench = app.staticTexts["space-bench"].firstMatch
-        let opened = bench.waitForExistence(timeout: 300)
+    }
+
+    func testInsertSpaceFollowsTheDrag() {
+        listen(["ready", "before", "adding", "added", "taking", "taken", "dark", "done"])
+        // the app writes the big board and opens it (a minute or more in the simulator's debug build); answer the alert meanwhile
+        var opened = false
+        for _ in 0..<20 where !opened {
+            answerAlert()
+            opened = heard("ready", within: 20)
+        }
         if !opened { shot("space-0 no bench") }
         XCTAssertTrue(opened, "the big board didn't open")
-        if app.staticTexts["Planner"].firstMatch.exists, app.staticTexts["Planner"].firstMatch.isHittable {
-            let side = app.buttons["Sidebar"].firstMatch
-            if side.exists { side.tap() }
+        guard opened else { return }
+        answerAlert()
+        CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),
+                                             CFNotificationName("app.nexus.spacebench.go" as CFString), nil, nil, true)
+        let pictures = [("before", "space-1 before"), ("adding", "space-2 dragging down, not let go"), ("added", "space-3 let go"),
+                        ("taking", "space-4 dragging up, not let go"), ("taken", "space-5 let go"),
+                        ("dark", "space-6 dark board, dragging")]
+        for (stage, name) in pictures {
+            guard reach(stage, seconds: stage == "before" ? 240 : 120) else { shot("\(name) (late)"); return }
+            sleep(stage == "before" ? 3 : 1)
+            shot(name)
         }
-        wait(for: "ready", bench, seconds: 240)
-        bench.tap()
-        wait(for: "before", bench, seconds: 240)
-        sleep(2)
-        shot("space-1 before")
-        wait(for: "adding", bench)
-        shot("space-2 dragging down, not let go")
-        wait(for: "added", bench)
-        shot("space-3 let go")
-        wait(for: "taking", bench)
-        shot("space-4 dragging up, not let go")
-        wait(for: "taken", bench)
-        shot("space-5 let go")
-        wait(for: "dark", bench)
-        shot("space-6 dark board, dragging")
-        let text = wait(for: "done", bench)
-        for line in text.split(separator: "\n") { print("UISTEP SPACE \(line)") }
+        reach("done")
     }
+}
+
+/// The bench's stages heard so far (the observer is a C callback, so it can't hold the test).
+enum SpaceHeard {
+    static var names: Set<String> = []
 }

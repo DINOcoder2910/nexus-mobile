@@ -3,7 +3,9 @@ import NexusCore
 
 /// The UI check's Insert space drag on a full board (`-NexusTestBigBoard -NexusTestSpaceDrag`, Sources/Common/TestHooks.swift):
 /// the drag is made the way a finger makes it (SpaceLive.swift, a step every screen refresh), held still at each stage so
-/// UITests/SpaceLiveTests can take a picture, and timed. A label says the stage and the times.
+/// UITests/SpaceLiveTests can take a picture, and timed. A label says the stage and the times. The test and the bench talk by
+/// Darwin notifications (`app.nexus.spacebench.<phase>`, and `.go` from the test), because reading the screen's elements on a
+/// board this full times out; the times also go to `diagnostics/space-bench.txt`, which the UI check prints.
 extension BoardController {
     func spaceBenchIfAsked() {
         guard TestHooks.isSpaceDragRun, !readOnly, view.viewWithTag(9_192) == nil else { return }
@@ -19,10 +21,8 @@ extension BoardController {
         label.frame = CGRect(x: 20, y: view.bounds.height - 110, width: min(720, view.bounds.width - 40), height: 90)
         label.autoresizingMask = [.flexibleTopMargin]
         let bench = SpaceBench(board: self, label: label)
-        // the UI test taps the label once it can read the screen (the board takes a while to open in the debug build), so no
-        // stage passes before it is looking
-        label.isUserInteractionEnabled = true
-        label.addGestureRecognizer(UITapGestureRecognizer(target: bench, action: #selector(SpaceBench.tapped)))
+        // the UI test says go once it is listening (the board takes a while to open in the debug build), so no stage passes
+        // before it is looking
         objc_setAssociatedObject(label, &SpaceBench.key, bench, .OBJC_ASSOCIATION_RETAIN)
     }
 }
@@ -44,7 +44,13 @@ final class SpaceBench: NSObject {
         self.board = board
         self.label = label
         super.init()
-        label.text = "space bench: phase ready (tap to start)"
+        CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), Unmanaged.passUnretained(self).toOpaque(),
+                                        { _, observer, _, _, _ in
+                                            guard let observer else { return }
+                                            let bench = Unmanaged<SpaceBench>.fromOpaque(observer).takeUnretainedValue()
+                                            Task { @MainActor in bench.tapped() }
+                                        }, "app.nexus.spacebench.go" as CFString, nil, .deliverImmediately)
+        say("ready")
     }
 
     @objc func tapped() {
@@ -56,6 +62,13 @@ final class SpaceBench: NSObject {
     func say(_ phase: String) {
         label.text = "space bench: phase \(phase)\n" + times.joined(separator: "\n")
         print("SPACEBENCH \(phase) \(times.joined(separator: " | "))")
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let dir = docs.appendingPathComponent("nexus-data/diagnostics", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try? Data(("space bench: phase \(phase)\n" + times.joined(separator: "\n") + "\n").utf8)
+            .write(to: dir.appendingPathComponent("space-bench.txt"), options: .atomic)
+        CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),
+                                             CFNotificationName("app.nexus.spacebench.\(phase)" as CFString), nil, nil, true)
     }
 
     func start() {
