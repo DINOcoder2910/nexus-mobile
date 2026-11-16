@@ -191,6 +191,8 @@ jobs:
   # The iPhone, beside the iPad job: every UI test class named "…PhoneTests" (each skips itself on the iPad) on an iPhone simulator.
   # Its screenshots whose name has "phone" are printed in the log like the iPad's.
   phone:
+    # a run of one class ([ui-only: X] or the Run workflow box) skips the iPhone: Mac jobs are scarce
+    if: ${{ !contains(github.event.head_commit.message, '[ui-only:') && !inputs.only }}
     runs-on: macos-latest
     timeout-minutes: 40
     steps:
