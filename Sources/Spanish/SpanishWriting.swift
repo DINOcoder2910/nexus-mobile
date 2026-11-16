@@ -218,7 +218,7 @@ struct SpanishWriteView: View {
                 Text("Not counted: " + c.skipped.map { "\($0.why) “\($0.line)”" }.joined(separator: ", ")).font(.caption).foregroundStyle(.secondary)
             }
             HStack(spacing: 10) {
-                Button { SpanishKeyboard.hideOnPhone(); SpanishGradeRun.mark(store, workstreamId, p) } label: {
+                Button { SpanishKeyboard.hide(); SpanishGradeRun.mark(store, workstreamId, p) } label: {
                     if g?.busy == true { HStack { ProgressView(); Text("Marking…") } } else { Text("Mark it (IB Paper 1)") }
                 }
                 .buttonStyle(.borderedProminent)

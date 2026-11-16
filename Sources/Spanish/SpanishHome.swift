@@ -23,6 +23,7 @@ struct SpanishHomeContent: View {
     @Environment(\.spanish) private var actions
     @State private var route: SpanishRoute?
     @State private var historyOpen = false
+    @State private var chatOver = false
     @State private var allChats = false
     @State private var addingPrompt = false
     @State private var question = ""
@@ -47,8 +48,13 @@ struct SpanishHomeContent: View {
             switch r {
             case .chat: SpanishChatView(workstreamId: workstreamId)
             case .writing: SpanishHost(workstreamId: workstreamId) { SpanishWritingList(workstreamId: workstreamId) }
-            case .history: SpanishHistoryList(workstreamId: workstreamId, onMove: moveToChat)
-            case .skills: SpanishHost(workstreamId: workstreamId) { SpanishSkillsPage(workstreamId: workstreamId, onPractise: { openChat(first: $0) }) }
+            // History and Skills push the chat over themselves (a second route can't replace the one already shown).
+            case .history:
+                SpanishHistoryList(workstreamId: workstreamId, onMove: { e in if !e.isEmpty { prepareChat(first: SpanishCheck.moveToChatText(e)); chatOver = true } })
+                    .navigationDestination(isPresented: $chatOver) { SpanishChatView(workstreamId: workstreamId, onClose: { chatOver = false; route = nil }) }
+            case .skills:
+                SpanishHost(workstreamId: workstreamId) { SpanishSkillsPage(workstreamId: workstreamId, onPractise: { prepareChat(first: $0); chatOver = true }) }
+                    .navigationDestination(isPresented: $chatOver) { SpanishChatView(workstreamId: workstreamId, onClose: { chatOver = false; route = nil }) }
             }
         }
         .sheet(isPresented: $addingPrompt) { SpanishPromptSheet(workstreamId: workstreamId) }
@@ -125,7 +131,7 @@ struct SpanishHomeContent: View {
                 Text(d.entries.isEmpty ? "" : st > 0 ? "\(st) clean \(st == 1 ? "sentence" : "sentences") in a row" : "\(d.entries.count) \(d.entries.count == 1 ? "sentence" : "sentences") checked")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                Button { withAnimation { historyOpen.toggle() } } label: { Label("History", systemImage: "clock") }
+                Button { typing = false; withAnimation { historyOpen.toggle() } } label: { Label("History", systemImage: "clock") }
                     .buttonStyle(.bordered).controlSize(.small)
                     .accessibilityIdentifier("spanish-history-toggle")
             }
@@ -170,7 +176,7 @@ struct SpanishHomeContent: View {
         let run = SpanishCheckRun(text: t, question: question.trimmingCharacters(in: .whitespacesAndNewlines))
         lib.current[workstreamId] = run
         draft = ""
-        SpanishKeyboard.hideOnPhone()
+        SpanishKeyboard.hide()
         Task { await run.run(store, wsId: workstreamId) }
     }
 
@@ -328,15 +334,21 @@ struct SpanishHomeContent: View {
     // MARK: opening a chat
 
     private func openChat(path: String? = nil, first: String = "") {
+        if prepareChat(path: path, first: first) { route = .chat }
+    }
+
+    /// Opens (or starts) the chat and sends the first message; the caller shows the chat page.
+    @discardableResult
+    private func prepareChat(path: String? = nil, first: String = "") -> Bool {
         if let path {
-            guard let f = lib.readChat(store, path) else { store.toast = .init(message: "That chat file is gone."); return }
+            guard let f = lib.readChat(store, path) else { store.toast = .init(message: "That chat file is gone."); return false }
             if lib.chats[workstreamId]?.path != path || lib.chats[workstreamId]?.closed == true { lib.chats[workstreamId] = SpanishChat(wsId: workstreamId, file: f) }
         } else {
             if let old = lib.chats[workstreamId], !old.closed, old.hasTutor { store.toast = .init(message: "The chat you had open is saved; End chat there to update your memory.") }
             lib.chats[workstreamId] = SpanishChat(wsId: workstreamId, model: SpanishModel.current)
         }
-        route = .chat
         if !first.isEmpty { lib.chats[workstreamId]?.send(store, first) }
+        return true
     }
 
     private func moveToChat(_ entries: [SpanishCheck.Entry]) {

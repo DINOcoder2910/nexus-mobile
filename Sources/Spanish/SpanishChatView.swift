@@ -5,6 +5,8 @@ import NexusCore
 /// the memory review. On the iPad the conversation sits in a readable column; on the iPhone it fills the screen.
 struct SpanishChatView: View {
     let workstreamId: String
+    /// When the chat was pushed over History or Skills: back to the Spanish page itself, not to that list.
+    var onClose: (() -> Void)? = nil
     @Environment(NexusStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var size
@@ -18,7 +20,7 @@ struct SpanishChatView: View {
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .primaryAction) {
-                            Button("End chat") { if c.end(store) { dismiss() } }
+                            Button("End chat") { if c.end(store) { close() } }
                                 .disabled(c.busy || c.review != nil)
                                 .accessibilityIdentifier("spanish-end-chat")
                         }
@@ -26,12 +28,14 @@ struct SpanishChatView: View {
                             ToolbarItem(placement: .primaryAction) { SpanishModelMenu { c.model = $0 } }
                         }
                     }
-                    .onChange(of: c.closed) { _, closed in if closed { dismiss() } }
+                    .onChange(of: c.closed) { _, closed in if closed { close() } }
             } else {
                 EmptyNote(title: "No chat open", icon: "bubble.left.and.bubble.right")
             }
         }
     }
+
+    private func close() { if let onClose { onClose() } else { dismiss() } }
 }
 
 struct SpanishChatBody: View {
@@ -182,9 +186,9 @@ struct SpanishAnswerField: View {
                 .lineLimit(1...4)
                 .textFieldStyle(.roundedBorder)
                 .autocorrectionDisabled()
-                .onSubmit { SpanishKeyboard.hideOnPhone(); onCheck(text) }
+                .onSubmit { SpanishKeyboard.hide(); onCheck(text) }
                 .accessibilityIdentifier("spanish-answer")
-            Button("Check") { SpanishKeyboard.hideOnPhone(); onCheck(text) }
+            Button("Check") { SpanishKeyboard.hide(); onCheck(text) }
                 .buttonStyle(.borderedProminent)
                 .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }

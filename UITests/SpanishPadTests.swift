@@ -29,6 +29,14 @@ final class SpanishPadTests: XCTestCase {
         f.tap()
         f.typeText(s)
     }
+    /// Hides the on-screen keyboard with its own hide key (the bottom-right key).
+    func hideKeyboard() {
+        guard app.keyboards.count > 0 else { return }
+        let keys = app.keyboards.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'hide keyboard' OR label CONTAINS[c] 'dismiss'"))
+        if keys.count > 0 { keys.firstMatch.tap() }
+        sleep(1)
+    }
+
     /// Closes a popover by tapping outside it.
     func closePopover() {
         let dismiss = app.otherElements["PopoverDismissRegion"].firstMatch
@@ -117,7 +125,7 @@ final class SpanishPadTests: XCTestCase {
         XCTAssertTrue(prompt.waitForExistence(timeout: 5), "no prompt")
         prompt.tap()
         type("spanish-piece", "¡Hola Marta!\n\nLa semana pasada fui a la playa con mi familia. Fuimos en coche y el viaje fue muy largo, pero divertido. Nos quedamos en un hotel pequeño cerca del mar.\n\nCada día nadamos y comimos paella en un restaurante. Ayer compre una camiseta para mi hermano. Lo que más me gustó fue el atardecer en la playa porque fue muy bonito.\n\n¿Y tú? ¿Qué hiciste en las vacaciones?\n\nUn abrazo,\nAli")
-        sleep(1)
+        hideKeyboard()
         shot("pad-spanish-write")
         el("spanish-mark").tap()
         XCTAssertTrue(el("spanish-grade-total").waitForExistence(timeout: 20), "the piece wasn't marked")

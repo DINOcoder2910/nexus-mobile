@@ -296,6 +296,8 @@ struct SpanishToken: View {
                 }
             }
             .buttonStyle(.bordered).controlSize(.small)
+            .lineLimit(1)
+            .fixedSize()
         }
     }
 
@@ -314,11 +316,10 @@ extension String {
     var nonEmpty: String? { isEmpty ? nil : self }
 }
 
-/// The iPhone's keyboard covers half the screen, so the Spanish pages hide it once Check or Mark is pressed (the answer shows below)
-/// and give it a Done button. The iPad keeps the keyboard, so the next sentence can be typed at once.
+/// The on-screen keyboard covers half the screen, so the Spanish pages hide it once Check or Mark is pressed (the answer shows
+/// below), and the iPhone's keyboard gets a Done button (the iPad's has its own hide key).
 enum SpanishKeyboard {
-    @MainActor static func hideOnPhone() {
-        guard Device.isPhone else { return }
+    @MainActor static func hide() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 }
