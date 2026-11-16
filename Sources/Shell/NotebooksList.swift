@@ -331,15 +331,15 @@ final class NotebookActions {
     }
 
     /// New board from a photo: the picture in the board's files, on the board at the top left.
-    func newBoard(fromPhoto img: UIImage, in dir: String, _ store: NexusStore) {
-        guard let data = img.jpegData(compressionQuality: 0.85) else { return }
+    func newBoard(fromPhoto img: BoardImage.Prepared, in dir: String, _ store: NexusStore) {
         do {
             let rel = try makeBoard("Photo", in: dir, store)
             let board = store.folder.appendingPathComponent(rel, isDirectory: true)
-            try FolderAccess.writeData(board.appendingPathComponent("files/photo.jpg"), data)
+            let file = "files/photo" + img.ext
+            try FolderAccess.writeData(board.appendingPathComponent(file), img.data)
             let scale = min(1, 1000 / max(1, Double(img.size.width)))
             let it = BoardItem(id: "img1", type: "image", x: 60, y: 60, fields: [
-                ("src", .string("files/photo.jpg")), ("w", .number((Double(img.size.width) * scale).rounded())), ("h", .number((Double(img.size.height) * scale).rounded())),
+                ("src", .string(file)), ("w", .number((Double(img.size.width) * scale).rounded())), ("h", .number((Double(img.size.height) * scale).rounded())),
             ])
             var c = BoardContent()
             c.items = [it]
@@ -480,7 +480,7 @@ struct MoveSheet: View {
 
     var body: some View {
         let isBoard = path.lowercased().hasSuffix(".board")
-        let all = Notebook.list(store.folder).flatMap(\.allNotebooks)
+        let all = store.notebooks().flatMap(\.allNotebooks)
         NavigationStack {
             List {
                 if !isBoard {

@@ -51,6 +51,9 @@ final class SyncService {
     @ObservationIgnored private var waiting: Task<Void, Never>?
     @ObservationIgnored private var pendingRestart: Task<Void, Never>?
     @ObservationIgnored private var woken = false
+    /// What the app wrote since the last cycle, when every writer named it (a board's folder); `everywhere` when one didn't.
+    @ObservationIgnored private var touched: Set<String> = []
+    @ObservationIgnored private var everywhere = true
     @ObservationIgnored private var active = true
     @ObservationIgnored private var cycling = false
     @ObservationIgnored private var failures = 0
@@ -72,8 +75,14 @@ final class SyncService {
         token = Keychain.get(Keys.token) ?? ""
         lastSynced = d.object(forKey: Keys.last) as? Date
         // any window's store (or the shortcuts) wrote to the folder: send it soon
-        NotificationCenter.default.addObserver(forName: NexusStore.wrote, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.wake() }
+        NotificationCenter.default.addObserver(forName: NexusStore.wrote, object: nil, queue: .main) { [weak self] n in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                // paths are relative to the writer's folder: used only when it is the folder this syncs
+                let named = n.userInfo?["touched"] as? [String]
+                let same = (n.object as? NexusStore).map { $0.folder.standardizedFileURL == self.store?.folder.standardizedFileURL } ?? false
+                self.wake(touched: same ? named : nil)
+            }
         }
         // another folder was picked in a window: start again on it (once the shared store has moved to it too)
         NotificationCenter.default.addObserver(forName: NexusStore.folderChanged, object: nil, queue: .main) { [weak self] _ in
@@ -94,7 +103,7 @@ final class SyncService {
     func attach(_ store: NexusStore) {
         guard self.store !== store else { return }
         self.store = store
-        store.onWrite = { _ = Task { @MainActor in self.wake() } }
+        store.onWrite = { paths in _ = Task { @MainActor in self.wake(touched: paths) } }
         restart()
     }
 
@@ -135,6 +144,7 @@ final class SyncService {
 
     /// Starts (or starts again) with the current settings and data folder.
     func restart() {
+        everywhere = true // whatever happened while stopped is looked for
         loop?.cancel()
         loop = nil
         waiting?.cancel()
@@ -158,8 +168,10 @@ final class SyncService {
         loop = Task { await self.run() }
     }
 
-    /// Something changed here (the app wrote a file, or the folder changed underneath): sync soon.
-    func wake() {
+    /// Something changed here (the app wrote a file, or the folder changed underneath): sync soon. `touched`: the paths written,
+    /// relative to the folder, when the writer named them all; nil, and the next cycle looks over the whole folder.
+    func wake(touched paths: [String]? = nil) {
+        if let paths { touched.formUnion(paths) } else { everywhere = true }
         guard enabled else { return }
         woken = true
         waiting?.cancel()
@@ -184,7 +196,11 @@ final class SyncService {
         LivePresence.shared.stop()
         guard enabled, let client else { return }
         let box = BackgroundTask()
-        let work = Task { () -> Void in _ = try? await client.cycle() }
+        let hints = takeHints()
+        let work = Task { () -> Void in
+            await Self.hand(hints, to: client)
+            _ = try? await client.cycle()
+        }
         box.id = UIApplication.shared.beginBackgroundTask(withName: "Nexus sync") {
             MainActor.assumeIsolated {
                 work.cancel()
@@ -202,6 +218,7 @@ final class SyncService {
     func backgroundCycle(_ shared: NexusStore) async {
         if store == nil { attach(shared) } // launched straight into the background: no window attached it yet
         guard enabled, let client else { return }
+        await Self.hand(takeHints(), to: client)
         if case .synced(let r)? = try? await client.cycle() {
             lastSynced = Date()
             UserDefaults.standard.set(lastSynced, forKey: Keys.last)
@@ -232,8 +249,21 @@ final class SyncService {
                 }
             }
             if Task.isCancelled { return }
-            if woken { try? await Task.sleep(for: .milliseconds(700)) }
+            // a board saves soon after each stroke and each save wakes sync: gather a couple of seconds of them into one cycle (a cycle
+            // looks at the board's folder only, but each one still asks the hub)
+            if woken { try? await Task.sleep(for: .seconds(2)) }
         }
+    }
+
+    /// What the app wrote since the last cycle, handed to the client once (nil: anything may have changed).
+    private func takeHints() -> [String]? {
+        defer { touched = []; everywhere = false }
+        return everywhere ? nil : Array(touched)
+    }
+
+    private static func hand(_ hints: [String]?, to client: SyncClient) async {
+        await client.useQuickScans()
+        if let hints { await client.changed(hints) } else { await client.changedEverywhere() }
     }
 
     /// Runs `op` until it ends, `wake()` cancels it, or the loop is cancelled.
@@ -254,6 +284,7 @@ final class SyncService {
         defer { HangWatch.note("sync: cycle ends") }
         cycling = true
         defer { cycling = false }
+        await Self.hand(takeHints(), to: client)
         do {
             let outcome = try await client.cycle(progress: { p in _ = Task { @MainActor in self.showProgress(p) } })
             failures = 0
