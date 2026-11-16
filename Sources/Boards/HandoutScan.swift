@@ -110,8 +110,19 @@ final class ScanCamera: NSObject, VNDocumentCameraViewControllerDelegate {
     static var isSupported: Bool { VNDocumentCameraViewController.isSupported }
 
     /// Shows the scanner over `from`; `done` gets the pages once it is dismissed.
-    static func present(from: UIViewController, done: @escaping ([UIImage]) -> Void) {
+    static func present(from: UIViewController, tries: Int = 0, done: @escaping ([UIImage]) -> Void) {
         guard isSupported else { return }
+        HangWatch.note("scan: camera asked")
+        // UIKit quietly refuses to show the camera over a controller that is still showing (or still closing) something: the last
+        // scan's camera on its way out, a menu's popover. That was the second scan that never started. Wait for it, or close it first.
+        if let shown = from.presentedViewController, tries < 8 {
+            if shown.isBeingDismissed {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { present(from: from, tries: tries + 1, done: done) }
+            } else {
+                from.dismiss(animated: false) { present(from: from, tries: tries + 1, done: done) }
+            }
+            return
+        }
         let me = ScanCamera(done: done)
         open = me // the camera holds its delegate weakly
         let vc = VNDocumentCameraViewController()
@@ -121,6 +132,7 @@ final class ScanCamera: NSObject, VNDocumentCameraViewControllerDelegate {
     }
 
     private func finish(_ controller: VNDocumentCameraViewController, _ pages: [UIImage]) {
+        HangWatch.note("scan: camera closed, \(pages.count) pages")
         let done = self.done
         controller.dismiss(animated: true) { done(pages) }
         ScanCamera.open = nil
