@@ -388,6 +388,7 @@ struct TutorPanel: View {
                         .lineLimit(1...5)
                         .focused($typing)
                         .onSubmit(send)
+                        .accessibilityIdentifier("tutor-ask")
                         .padding(.vertical, 6)
                     if tutor.busy && blank {
                         Button { tutor.stop() } label: { Image(systemName: "stop.circle.fill").font(.system(size: 30)).foregroundStyle(.red) }

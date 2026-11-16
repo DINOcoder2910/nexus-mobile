@@ -95,6 +95,37 @@ final class TutorPanelTests: XCTestCase {
         XCTAssertTrue(app.buttons["Minimise the tutor"].firstMatch.waitForExistence(timeout: 10), "the pill doesn't open the panel again")
     }
 
+    /// The ask box keeps what you typed across a pause (Nov 16: typing, stopping a few seconds and typing on lost the first part),
+    /// both while the tutor is quiet and while it talks (the panel redraws with every sentence then).
+    func testTypingSurvivesAPause() {
+        launch()
+        openBoard("Tutor typing")
+        openTutor()
+        let box = app.descendants(matching: .any)["tutor-ask"].firstMatch
+        XCTAssertTrue(box.waitForExistence(timeout: 10), "no ask box")
+
+        box.tap()
+        box.typeText("What is a mole")
+        sleep(6)
+        box.typeText(" and how do I use it")
+        sleep(1)
+        XCTAssertEqual(box.value as? String, "What is a mole and how do I use it", "the first part was lost after a pause (quiet)")
+        shot("tutor-6-typed")
+
+        // clear it, then the same while it talks
+        app.buttons["Ask"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["Pause"].firstMatch.waitForExistence(timeout: 20), "no talking bar while it answers")
+        box.tap()
+        box.typeText("Wait, why")
+        sleep(6)
+        box.typeText(" is it divided by two")
+        sleep(1)
+        XCTAssertEqual(box.value as? String, "Wait, why is it divided by two", "the first part was lost after a pause (talking)")
+        shot("tutor-7-typed-while-talking")
+        waitForAnswer("typed question")
+        XCTAssertEqual(box.value as? String, "Wait, why is it divided by two", "the box lost its words when the answer ended")
+    }
+
     func testTutorChatDark() {
         launch(["-board.dark", "always"])
         openBoard("Tutor dark")
