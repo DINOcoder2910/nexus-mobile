@@ -37,3 +37,29 @@ struct ClaudeSettings: View {
         }
     }
 }
+
+/// Settings › Claude chat: the conversation's model, the day brief, how full /plan makes a day. Placed after Usage in SettingsView's Form.
+struct ClaudeChatSettings: View {
+    @AppStorage("claude.model") private var chatModel = "sonnet"
+    @AppStorage("claude.briefModel") private var briefModel = "haiku"
+    @AppStorage("claude.dayHours") private var dayHours = 6.0
+
+    var body: some View {
+        Section {
+            Picker("Conversation model", selection: $chatModel) {
+                Text("Sonnet").tag("sonnet"); Text("Haiku").tag("haiku"); Text("Opus").tag("opus")
+            }
+            Toggle("Day brief written by Claude", isOn: Binding(get: { DayBriefWriter.shared.on }, set: { DayBriefWriter.shared.on = $0 }))
+            if DayBriefWriter.shared.on {
+                Picker("Day brief model", selection: $briefModel) {
+                    Text("Haiku").tag("haiku"); Text("Sonnet").tag("sonnet")
+                }
+            }
+            Stepper("Plan up to \(dayHours.formatted()) h a day", value: $dayHours, in: 1...14, step: 0.5)
+        } header: {
+            Text("Claude chat")
+        } footer: {
+            Text("The conversation (the Claude row, the ✦ button) starts on this model; its header changes it for the next message. Claude reads your data folder and shows each change as a card to accept or reject. The day brief is written once a day from your plans (no files read), with a cheap model; off, the plain summary shows. /plan keeps a day to about this many hours.")
+        }
+    }
+}
