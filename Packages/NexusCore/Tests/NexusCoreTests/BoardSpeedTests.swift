@@ -81,4 +81,35 @@ final class BoardSpeedTests: XCTestCase {
         print("BOARDSPEED 4000 strokes x 60 points: every tile as text \(Int(plain * 1000)) ms; with the memo, one stroke added \(Int(memo * 1000)) ms")
         XCTAssertLessThan(memo, plain / 3)
     }
+
+    func testOneNewStrokeOnAFullPageIsQuickAndExact() throws {
+        // a page of writing: 1500 strokes in one tile
+        var c = BoardContent()
+        for i in 0..<1500 {
+            let x0 = 40 + Double((i % 40) * 22), y0 = 40 + Double(i / 40) * 24
+            var pts: [[Double]] = []
+            for k in 0..<60 { let t = Double(k) / 59; pts.append([x0 + t * 14, y0 + sin(t * 9) * 6, 0.6, 1.2, 1.1, t * 0.4, 2.4, 2.4, 1]) }
+            c.strokes.append(BoardStroke(id: String(format: "p%05d", i), ink: "com.apple.ink.pen", color: "#1A1A1AFF", points: pts))
+        }
+        XCTAssertEqual(Set(c.strokes.map(\.tileKey)).count, 1)
+        // as if read from the files: written, primed as an opened board is
+        for (k, t) in BoardSpeedTests.plainTiles(c) { c.tilesOnDisk[k] = t }
+        c.tileMemo = TileMemo()
+        c.tileMemo.prime(c)
+        XCTAssertTrue(BoardFiles.changes(c).tiles.isEmpty)
+        c.strokes.append(BoardStroke(id: "new01", ink: "com.apple.ink.pen", color: "#000000FF", points: [[50, 50, 1, 0, 1.5, 0, 2, 2, 1]]))
+        var t0 = Date()
+        let plain = BoardSpeedTests.plainTiles(c)
+        let plainTime = Date().timeIntervalSince(t0)
+        t0 = Date()
+        let ch = BoardFiles.changes(c).tiles
+        let memoTime = Date().timeIntervalSince(t0)
+        XCTAssertEqual(ch, plain)
+        print("BOARDSPEED a page of 1500 strokes, one added: the whole tile as text \(Int(plainTime * 1000)) ms; with stroke lines kept \(Int(memoTime * 1000)) ms")
+        XCTAssertLessThan(memoTime, plainTime / 3)
+        // a stroke in the middle erased in part and one removed: still exactly the plain text
+        c.strokes[700].ranges = [[0, 20.5]]
+        c.strokes.remove(at: 300)
+        XCTAssertEqual(BoardFiles.changes(c).tiles, BoardSpeedTests.plainTiles(c))
+    }
 }

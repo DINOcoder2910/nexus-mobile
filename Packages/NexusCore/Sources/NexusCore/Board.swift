@@ -236,16 +236,49 @@ public final class TileMemo {
     public init() {}
 
     struct Sig: Equatable { var a: UInt64; var b: UInt64; var n: Int }
+    struct Print: Equatable { var a: UInt64; var b: UInt64 }
+
+    /// Each stroke's line of the tile, with a fingerprint of the stroke it was made from: a tile with one new stroke among a
+    /// thousand (a page of writing) is the old lines plus one, not a thousand strokes turned into text again.
+    private var lines: [String: (print: Print, line: String)] = [:]
 
     /// The tile's text, made again only when what it holds changed.
     public func text(_ key: String, strokes: [BoardStroke], items: [BoardItem]) -> String {
         lock.lock()
         defer { lock.unlock() }
-        let want = sig(strokes, items)
+        return textLocked(key, strokes: strokes, items: items)
+    }
+
+    private func textLocked(_ key: String, strokes: [BoardStroke], items: [BoardItem]) -> String {
+        var prints: [Print] = []
+        prints.reserveCapacity(strokes.count)
+        let want = sig(strokes, items, &prints)
         if let m = memo[key], m.sig == want { return m.text }
-        let text = BoardFiles.tileJSON(strokes: strokes, items: items)
+        if lines.count > 150_000 { lines = [:] }
+        var strokeLines: [String] = []
+        strokeLines.reserveCapacity(strokes.count)
+        for (s, p) in zip(strokes, prints) {
+            if let l = lines[s.id], l.print == p { strokeLines.append(l.line); continue }
+            let line = s.json.text
+            lines[s.id] = (p, line)
+            strokeLines.append(line)
+        }
+        let text = BoardFiles.tileJSON(strokeLines: strokeLines, items: items)
         memo[key] = (want, text)
         return text
+    }
+
+    /// Makes every tile's text ahead of the first save (on a board just opened, that save would otherwise turn every stroke into
+    /// text, seconds on a long lesson). Run it away from the main thread; a save meanwhile waits for one tile at most.
+    public func prime(_ c: BoardContent) {
+        var byKey: [String: (s: [BoardStroke], i: [BoardItem])] = [:]
+        for s in c.strokes { byKey[s.tileKey, default: ([], [])].s.append(s) }
+        for it in c.items { byKey[it.tileKey, default: ([], [])].i.append(it) }
+        for (key, t) in byKey {
+            lock.lock()
+            _ = textLocked(key, strokes: t.s, items: t.i)
+            lock.unlock()
+        }
     }
 
     /// Each stroke's points hashed once: keyed by the points' storage, which an unchanged stroke shares from one save to the next
@@ -253,8 +286,10 @@ public final class TileMemo {
     private var pointPrints: [UInt: (points: [[Double]], a: UInt64, b: UInt64)] = [:]
 
     /// Two 64-bit hashes (FNV-1a and a multiply-rotate one) of everything that goes into the tile's text.
-    private func sig(_ strokes: [BoardStroke], _ items: [BoardItem]) -> Sig {
-        var a: UInt64 = 0xcbf2_9ce4_8422_2325, b: UInt64 = 0x9e37_79b9_7f4a_7c15
+    /// `prints`: each stroke's own fingerprint, in order.
+    private func sig(_ strokes: [BoardStroke], _ items: [BoardItem], _ prints: inout [Print]) -> Sig {
+        var ta: UInt64 = 0xcbf2_9ce4_8422_2325, tb: UInt64 = 0x9e37_79b9_7f4a_7c15
+        var a: UInt64 = 0, b: UInt64 = 0
         var n = 0
         @inline(__always) func mix(_ v: UInt64, _ a: inout UInt64, _ b: inout UInt64) {
             a = (a ^ v) &* 0x0000_0100_0000_01b3
@@ -265,6 +300,7 @@ public final class TileMemo {
         func addS(_ s: String) { for u in s.utf8 { addU(UInt64(u)) }; addU(0xff) }
         if pointPrints.count > 60_000 { pointPrints = [:] }
         for s in strokes {
+            a = 0xcbf2_9ce4_8422_2325; b = 0x9e37_79b9_7f4a_7c15
             addS(s.id); addS(s.ink); addS(s.color)
             addU(UInt64(s.points.count))
             let at = s.points.withUnsafeBufferPointer { UInt(bitPattern: $0.baseAddress) }
@@ -282,7 +318,10 @@ public final class TileMemo {
                 addU(3)
                 for (k, v) in o { addS(k); if !["id", "ink", "color", "points", "ranges"].contains(k) { addS(v.text) } }
             } else { addU(4) }
+            prints.append(Print(a: a, b: b))
+            mix(a, &ta, &tb); mix(b, &ta, &tb)
         }
+        a = ta; b = tb
         addU(0xfe)
         for it in items { addS(it.cleanJSON.text) }
         return Sig(a: a, b: b, n: n)
@@ -297,7 +336,11 @@ public enum BoardFiles {
 
     /// A tile's text, exactly as the laptop's `tileJson`: strokes in drawing order, items by id, one per line.
     public static func tileJSON(strokes: [BoardStroke], items: [BoardItem]) -> String {
-        let s = strokes.map { $0.json.text }
+        tileJSON(strokeLines: strokes.map { $0.json.text }, items: items)
+    }
+
+    /// The same, from each stroke's line already made.
+    static func tileJSON(strokeLines s: [String], items: [BoardItem]) -> String {
         let its = items.sorted { $0.id < $1.id }.map { $0.cleanJSON.text }
         let fields = JSONValue.array(BoardFormat.pointFields.map { .string($0) }).text
         return "{\"format\":\"\(BoardFormat.tileFormat)\",\"pointFields\":\(fields),\n\"strokes\":["
@@ -433,7 +476,8 @@ public enum BoardFiles {
             let text = c.tileMemo.text(key, strokes: t.s, items: t.i)
             if c.tilesOnDisk[key] != text {
                 // a tile on disk that doesn't parse is never written over unless something now lives in it
-                if let old = c.tilesOnDisk[key], (try? parseTile(old)) == nil, t.s.isEmpty, t.i.isEmpty { continue }
+                // (asked only of a tile left empty: parsing a page of writing on every save cost as much as writing it)
+                if t.s.isEmpty, t.i.isEmpty, let old = c.tilesOnDisk[key], (try? parseTile(old)) == nil { continue }
                 tiles[key] = text
             }
         }

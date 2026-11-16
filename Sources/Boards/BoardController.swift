@@ -252,6 +252,11 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         rebuildItems()
         dirty = false
         if !replay { log.loaded(content, board: boardURL) }
+        // every tile's text made now, away from the Pencil, so the first save after opening a full board is as quick as the rest
+        if !replay, loadProblem == nil, content.readOnly == nil {
+            let c = content
+            DispatchQueue.global(qos: .utility).async { c.tileMemo.prime(c) }
+        }
     }
 
     /// Everything on the board (board units): the ink and the items.
