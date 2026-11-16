@@ -823,14 +823,15 @@ struct MicButton: View {
         .animation(.easeOut(duration: 0.12), value: down != nil)
         .contentShape(Circle())
         .gesture(DragGesture(minimumDistance: 0)
-            .onChanged { _ in
+            .onChanged { v in
                 guard down == nil else { return }
-                down = Date()
+                down = v.time
                 stopOnRelease = tutor.phase == .listening || tutor.listenLocked
                 if !stopOnRelease { tutor.startListening() }
             }
-            .onEnded { _ in
-                let held = down.map { Date().timeIntervalSince($0) } ?? 0
+            .onEnded { v in
+                // (the touches' own times: a busy moment between them must not turn a tap into a hold that sends nothing)
+                let held = down.map { v.time.timeIntervalSince($0) } ?? 0
                 down = nil
                 if stopOnRelease { tutor.stopListening() } else if held < 0.35 { tutor.listenLocked = true } else { tutor.stopListening() }
             })
