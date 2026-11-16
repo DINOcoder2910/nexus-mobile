@@ -102,7 +102,8 @@ struct TaskTimeSection: View {
             HStack(spacing: 12) {
                 if let mine {
                     Button { tracker.stop(store: store) } label: {
-                        Label { TimerClock(entry: mine) } icon: { Image(systemName: "stop.fill") }
+                        HStack(spacing: 6) { Image(systemName: "stop.fill").imageScale(.small); TimerClock(entry: mine) }
+                            .lineLimit(1).fixedSize()
                     }
                     .buttonStyle(.borderedProminent)
                     .accessibilityIdentifier("task-timer")
@@ -380,7 +381,7 @@ struct TimeView: View {
             .font(.caption).foregroundStyle(.secondary)
             Spacer()
             TimerClock(entry: c).font(.title2.weight(.semibold))
-            Button { tracker.stop(store: store) } label: { Label("Stop", systemImage: "stop.fill") }
+            Button { tracker.stop(store: store) } label: { Label("Stop", systemImage: "stop.fill").lineLimit(1).fixedSize() }
                 .buttonStyle(.borderedProminent)
         }
         .padding(.vertical, 4)
