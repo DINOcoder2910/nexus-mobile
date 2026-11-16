@@ -238,7 +238,7 @@ struct SpanishMemoryReview: View {
                             Text(c.title).bold()
                             Spacer()
                             Button(kept ? "Undo" : "Keep it") {
-                                if kept { chat.review?.keep.remove(c.block) } else { chat.review?.keep.insert(c.block) }
+                                if kept { _ = chat.review?.keep.remove(c.block) } else { _ = chat.review?.keep.insert(c.block) }
                             }
                             .controlSize(.small)
                         }

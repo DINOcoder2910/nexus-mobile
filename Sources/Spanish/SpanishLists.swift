@@ -63,7 +63,7 @@ struct SpanishHistoryList: View {
         let on = picked.contains(e.at)
         let marks = SpanishCheck.merge(e.text, [], SpanishCheck.AI(corrected: e.fixed, mistakes: e.mistakes.map { .init(wrong: $0.wrong, right: $0.right, skill: $0.skill, why: $0.why) }, good: [], structures: [], words: []))
         return Button {
-            if on { picked.remove(e.at) } else { picked.insert(e.at) }
+            if on { _ = picked.remove(e.at) } else { _ = picked.insert(e.at) }
         } label: {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: on ? "checkmark.circle.fill" : "circle")

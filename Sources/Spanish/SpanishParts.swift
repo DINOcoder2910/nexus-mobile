@@ -76,7 +76,7 @@ enum SpanishDict {
 /// The real SpanishDict site, with Back, Open in Safari and Close. (The UI check opens no site: it shows the word it would look up.)
 struct SpanishDictPanel: View {
     @Binding var url: URL?
-    @State private var web = SpanishWeb()
+    @StateObject private var web = SpanishWeb()
     @Environment(\.openURL) private var openURL
 
     var body: some View {
@@ -108,11 +108,10 @@ struct SpanishDictPanel: View {
     }
 }
 
-@Observable
-final class SpanishWeb: NSObject, WKNavigationDelegate {
-    @ObservationIgnored weak var view: WKWebView?
-    var canGoBack = false
-    var current: URL?
+final class SpanishWeb: NSObject, ObservableObject, WKNavigationDelegate {
+    weak var view: WKWebView?
+    @Published var canGoBack = false
+    @Published var current: URL?
     func back() { view?.goBack() }
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { canGoBack = webView.canGoBack; current = webView.url }
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) { canGoBack = webView.canGoBack; current = webView.url }

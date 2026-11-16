@@ -8,7 +8,7 @@ import NexusCore
 /// (SpanishCheck.merge). Every check is added to the month's log and the numbers per skill are counted again (SpanishLibrary.addToLog).
 enum SpanishLayers {
     /// The device's Spanish dictionary, if it has one.
-    static let language: String? = UITextChecker.availableLanguages.first { $0 == "es_ES" } ?? UITextChecker.availableLanguages.first { $0.hasPrefix("es") }
+    @MainActor static var language: String? { UITextChecker.availableLanguages.first { $0 == "es_ES" } ?? UITextChecker.availableLanguages.first { $0.hasPrefix("es") } }
 
     /// The words the dictionary does not know (two letters or more), each with the accented word it knows, or its guesses.
     @MainActor
@@ -94,7 +94,8 @@ final class SpanishCheckRun: Identifiable {
     @discardableResult
     func run(_ store: NexusStore, wsId: String) async -> SpanishCheck.Entry {
         let lib = SpanishLibrary.shared
-        async let lt = SpanishLayers.languageTool(text)
+        let sentence = text
+        async let lt = SpanishLayers.languageTool(sentence)
         let sp = SpanishLayers.spell(text)
         let ltr = await lt
         dictionary = sp.ok ? .ok : .off; dictError = sp.error
