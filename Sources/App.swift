@@ -147,6 +147,8 @@ enum Screen: Hashable {
     case today, planner, calendar, tasks, someday, inbox, workstream(String), boards, boardSearch, settings, study
     /// A notebook's page (its path in the data folder, "notebooks/Chem").
     case notebook(String)
+    /// Applications (the tracker and Research), and a school's page by its workstream id.
+    case applications, school(String)
 }
 
 /// The shell: the sidebar on the left (where you go), the screen on the right, and the task panel, add sheet and undo bar over both.
@@ -298,6 +300,7 @@ struct RootView: View {
         case "app.sidebar": columns = columns == .detailOnly ? .all : .detailOnly
         case "app.newTask":
             if case .workstream(let w) = screen { store.capture = .init(workstream: w, parent: nil, plan: nil) }
+            else if case .school(let w) = screen { store.capture = .init(workstream: w, parent: nil, plan: nil) }
             else { store.capture = .init(workstream: nil, parent: nil, plan: screen == .today ? store.today : nil) }
         case "app.search":
             ShortcutCenter.shared.searchPending = true
@@ -334,6 +337,8 @@ struct RootView: View {
             case .notebook(let path): NotebookPage(path: path, go: go)
             case .settings: SettingsView()
             case .study: StudyHome()
+            case .applications: ApplicationsView(go: go)
+            case .school(let id): SchoolPage(id: id, go: go)
             }
         }
     }
@@ -403,6 +408,7 @@ struct RootView: View {
     /// The floating +: into the workstream on screen, planned today on Today, else the Inbox.
     private func addFrom(_ which: PhoneTab, _ top: Screen?) {
         if case .workstream(let w)? = top { store.capture = .init(workstream: w, parent: nil, plan: nil); return }
+        if case .school(let w)? = top { store.capture = .init(workstream: w, parent: nil, plan: nil); return }
         store.capture = .init(workstream: nil, parent: nil, plan: which == .today && top == nil ? store.today : nil)
     }
 
