@@ -43,6 +43,44 @@ struct OpenAddSheetIntent: AppIntent {
     }
 }
 
+/// An idea into Ideas without opening the app (Siri: "Add an idea to Nexus", the Action button): dictate it, it is saved as written
+/// and sent to the hub; Claude sorts it with the next batch (on the laptop, a few minutes later).
+struct AddIdeaIntent: AppIntent {
+    static let title: LocalizedStringResource = "Add an idea to Nexus"
+    static let description = IntentDescription("Saves an idea in Nexus's Ideas, as you said it. Claude sorts it into a topic later.")
+    static let openAppWhenRun = false
+
+    @Parameter(title: "Idea", requestValueDialog: "What's the idea?")
+    var text: String
+
+    static var parameterSummary: some ParameterSummary { Summary("Add \(\.$text) to Nexus's Ideas") }
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        AppServices.start()
+        let store = AppServices.store
+        store.reloadIfChanged()
+        guard IdeasFile.add(text, store: store) else {
+            return .result(dialog: IntentDialog(stringLiteral: store.problem ?? "Couldn't save that idea. Is the Nexus folder set up?"))
+        }
+        await AppServices.sync.backgroundCycle(store)
+        return .result(dialog: IntentDialog(stringLiteral: "Saved in Ideas. Claude sorts it in a few minutes."))
+    }
+}
+
+/// Opens Ideas with the keyboard up (for the Action button when typing or the keyboard's dictation suits better).
+struct OpenIdeasIntent: AppIntent {
+    static let title: LocalizedStringResource = "Open Nexus Ideas"
+    static let description = IntentDescription("Opens Nexus on Ideas, ready to type or dictate an idea.")
+    static let openAppWhenRun = true
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        WindowRouter.shared.ideas = true
+        return .result()
+    }
+}
+
 struct NexusShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(intent: AddToNexusIntent(),
@@ -52,6 +90,28 @@ struct NexusShortcuts: AppShortcutsProvider {
         AppShortcut(intent: OpenAddSheetIntent(),
                     phrases: ["Open the \(.applicationName) add sheet", "Type a task in \(.applicationName)"],
                     shortTitle: "New task", systemImageName: "square.and.pencil")
+        AppShortcut(intent: AddIdeaIntent(),
+                    phrases: ["Add an idea to \(.applicationName)", "New idea in \(.applicationName)", "Save an idea in \(.applicationName)"],
+                    shortTitle: "Add an idea", systemImageName: "lightbulb")
+        AppShortcut(intent: OpenIdeasIntent(),
+                    phrases: ["Open \(.applicationName) ideas", "Type an idea in \(.applicationName)"],
+                    shortTitle: "Ideas", systemImageName: "lightbulb.max")
+    }
+}
+
+/// One idea added to nexus-ideas.yaml from outside the Ideas screen (the shortcut): read, add as written, write whole (Ideas.swift).
+@MainActor
+enum IdeasFile {
+    static func add(_ text: String, store: NexusStore) -> Bool {
+        guard store.snapshot.isDataFolder, store.snapshot.readOnlyReason == nil else { return false }
+        let file = store.folder.appendingPathComponent(Ideas.file)
+        let parsed: Ideas.Parsed
+        if let cur = try? FolderAccess.read(file) { parsed = Ideas.parse(cur) }
+        else { parsed = Ideas.parse(nil, todo: try? FolderAccess.read(store.folder.appendingPathComponent(Ideas.todoFile))) }
+        if let e = parsed.error { store.problem = Ideas.file + " " + e + ", so the idea wasn't saved."; return false }
+        let next = Ideas.add(parsed.items, text, today: Days.today(), now: Ideas.stamp(), from: Device.name)
+        guard next != parsed.items else { return false }
+        do { try FolderAccess.write(file, Ideas.serialize(next)); store.didWrite(); return true } catch { store.problem = "Couldn't save \(Ideas.file): \(error.localizedDescription)"; return false }
     }
 }
 
