@@ -110,7 +110,7 @@ struct TutorPanel: View {
     var onReplay: () -> Void
     @State private var typed = ""
     @State private var voiceSettings = false
-    @FocusState private var typing: Bool
+    @State private var typing = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -384,10 +384,7 @@ struct TutorPanel: View {
                 .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 21, style: .continuous))
             } else {
                 HStack(alignment: .bottom, spacing: 6) {
-                    TextField(tutor.busy ? "Type to cut in…" : "Ask the tutor…", text: $typed, axis: .vertical)
-                        .lineLimit(1...5)
-                        .focused($typing)
-                        .onSubmit(send)
+                    AskBox(text: $typed, focused: $typing, placeholder: tutor.busy ? "Type to cut in…" : "Ask the tutor…", onSend: send)
                         .padding(.vertical, 6)
                     if tutor.busy && blank {
                         Button { tutor.stop() } label: { Image(systemName: "stop.circle.fill").font(.system(size: 30)).foregroundStyle(.red) }
@@ -419,6 +416,137 @@ struct TutorPanel: View {
         typing = false
         tutor.ask(t) // (while it talks: it stops and is told how far you had heard)
     }
+}
+
+// MARK: - the ask box
+
+/// The box you type a question in (Nov 16: replaces SwiftUI's growing TextField, which lost what you had typed or dictated with the
+/// keyboard's microphone when the panel redrew part way, after a pause; the panel redraws with every sentence the tutor says). The
+/// words live in the text view: the binding follows them, and is written back into the view only when it was changed from outside
+/// (emptied when the question is sent). One to five lines, growing as you type; Return sends, Shift-Return makes a new line.
+struct AskBox: UIViewRepresentable {
+    @Binding var text: String
+    @Binding var focused: Bool
+    var placeholder: String
+    var onSend: () -> Void
+
+    static let maxLines = 5
+
+    func makeUIView(context: Context) -> UITextView {
+        let v = AskTextView()
+        v.delegate = context.coordinator
+        v.font = .preferredFont(forTextStyle: .body)
+        v.adjustsFontForContentSizeCategory = true
+        v.backgroundColor = .clear
+        v.textContainerInset = .zero
+        v.textContainer.lineFragmentPadding = 0
+        v.isScrollEnabled = false
+        v.returnKeyType = .send
+        v.enablesReturnKeyAutomatically = true
+        v.accessibilityIdentifier = "tutor-ask"
+        v.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        v.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        v.text = text
+        v.placeholderLabel.text = placeholder
+        v.showPlaceholder()
+        return v
+    }
+
+    func updateUIView(_ v: UITextView, context: Context) {
+        context.coordinator.parent = self
+        guard let v = v as? AskTextView else { return }
+        // never over what is being typed or dictated: the view takes the binding's words only when they were changed from outside
+        // (emptied when sent), not when the binding is just behind the view
+        let c = context.coordinator
+        if text != c.known { c.known = text; if v.text != text { v.text = text; v.invalidateIntrinsicContentSize() } }
+        v.placeholderLabel.text = placeholder
+        v.showPlaceholder()
+        if !focused, v.isFirstResponder { v.resignFirstResponder() }
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView v: UITextView, context: Context) -> CGSize? {
+        let width = proposal.width ?? 240
+        let line = v.font?.lineHeight ?? 20
+        let fits = v.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height
+        let height = min(max(fits, line), line * CGFloat(Self.maxLines))
+        v.isScrollEnabled = fits > line * CGFloat(Self.maxLines) + 1
+        return CGSize(width: width, height: ceil(height))
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    final class Coordinator: NSObject, UITextViewDelegate {
+        var parent: AskBox
+        /// The words last passed between the view and the binding: a binding that differs was changed from outside.
+        var known: String
+        init(_ p: AskBox) { parent = p; known = p.text }
+
+        func push(_ v: UITextView) {
+            known = v.text
+            if parent.text != v.text { parent.text = v.text }
+        }
+
+        func textViewDidChange(_ v: UITextView) {
+            push(v)
+            (v as? AskTextView)?.showPlaceholder()
+            v.invalidateIntrinsicContentSize()
+        }
+
+        func textViewDidBeginEditing(_ v: UITextView) { if !parent.focused { parent.focused = true } }
+        func textViewDidEndEditing(_ v: UITextView) {
+            push(v)
+            if parent.focused { parent.focused = false }
+        }
+
+        /// Return sends (a hardware keyboard's Shift-Return makes a new line, see AskTextView).
+        func textView(_ v: UITextView, shouldChangeTextIn range: NSRange, replacementText t: String) -> Bool {
+            guard t == "\n" else { return true }
+            if let a = v as? AskTextView, a.newLineNext { a.newLineNext = false; return true }
+            send(v)
+            return false
+        }
+
+        func send(_ v: UITextView) {
+            push(v)
+            parent.onSend()
+        }
+    }
+}
+
+/// AskBox's text view: its placeholder, and Shift-Return for a new line on a hardware keyboard.
+final class AskTextView: UITextView {
+    let placeholderLabel = UILabel()
+    /// The next "\n" is Shift-Return's new line, not a send.
+    var newLineNext = false
+
+    override init(frame: CGRect, textContainer: NSTextContainer?) {
+        super.init(frame: frame, textContainer: textContainer)
+        placeholderLabel.font = .preferredFont(forTextStyle: .body)
+        placeholderLabel.adjustsFontForContentSizeCategory = true
+        placeholderLabel.textColor = .placeholderText
+        placeholderLabel.isAccessibilityElement = false
+        placeholderLabel.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(placeholderLabel)
+        NSLayoutConstraint.activate([
+            placeholderLabel.leadingAnchor.constraint(equalTo: leadingAnchor),
+            placeholderLabel.topAnchor.constraint(equalTo: topAnchor),
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError("not from a storyboard") }
+
+    func showPlaceholder() {
+        placeholderLabel.isHidden = !text.isEmpty
+        accessibilityLabel = placeholderLabel.text
+    }
+
+    override var keyCommands: [UIKeyCommand]? {
+        let k = UIKeyCommand(input: "\r", modifierFlags: .shift, action: #selector(newLine))
+        k.wantsPriorityOverSystemBehavior = true
+        return [k]
+    }
+
+    @objc private func newLine() { newLineNext = true; insertText("\n"); newLineNext = false }
 }
 
 // MARK: - pieces
@@ -695,14 +823,15 @@ struct MicButton: View {
         .animation(.easeOut(duration: 0.12), value: down != nil)
         .contentShape(Circle())
         .gesture(DragGesture(minimumDistance: 0)
-            .onChanged { _ in
+            .onChanged { v in
                 guard down == nil else { return }
-                down = Date()
+                down = v.time
                 stopOnRelease = tutor.phase == .listening || tutor.listenLocked
                 if !stopOnRelease { tutor.startListening() }
             }
-            .onEnded { _ in
-                let held = down.map { Date().timeIntervalSince($0) } ?? 0
+            .onEnded { v in
+                // (the touches' own times: a busy moment between them must not turn a tap into a hold that sends nothing)
+                let held = down.map { v.time.timeIntervalSince($0) } ?? 0
                 down = nil
                 if stopOnRelease { tutor.stopListening() } else if held < 0.35 { tutor.listenLocked = true } else { tutor.stopListening() }
             })
