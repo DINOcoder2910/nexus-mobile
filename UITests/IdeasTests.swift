@@ -44,6 +44,11 @@ final class IdeasTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["New · 3"].firstMatch.waitForExistence(timeout: 10), "the idea wasn't added")
         shot("ideas-ipad-added-light")
         // Settings › Usage
+        // the keyboard stays up after Add (for the next idea) and covers the sidebar's lower half: put it away
+        if app.keyboards.count > 0 {
+            let hide = app.keyboards.buttons["Hide keyboard"]
+            if hide.exists { hide.tap() } else { app.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: 0.12)).tap() }
+        }
         // Settings is the sidebar's last row, below Notebooks: scroll the sidebar (the left tenth of the screen) down to it
         let settings = app.staticTexts["Settings"].firstMatch
         for _ in 0..<10 where !(settings.exists && settings.isHittable) {
