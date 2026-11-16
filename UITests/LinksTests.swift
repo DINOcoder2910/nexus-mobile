@@ -27,6 +27,8 @@ final class LinksTests: XCTestCase {
         let links = app.buttons["Links"].firstMatch
         XCTAssertTrue(links.waitForExistence(timeout: 30), "the links board didn't open")
         sleep(2)
+        // the sidebar can still be over the board when the app opens straight into it: put it away
+        if app.buttons["Today"].firstMatch.isHittable { app.buttons["Sidebar"].firstMatch.tap(); sleep(1) }
         shot("links-board-\(mode)")
         links.tap()
         let all = app.buttons["All links…"].firstMatch
