@@ -11,7 +11,9 @@ struct SaveToNexusIntent: AppIntent {
     static let description = IntentDescription("Saves what you share: a PDF or a photo becomes a board in a notebook, a link or some words a task in the Inbox.")
     static let openAppWhenRun = false
 
-    @Parameter(title: "Items", supportedContentTypes: [.pdf, .image, .url, .text, .plainText, .data])
+    /// Any file: what it is, is worked out from its type and bytes (NexusCore Shared.kind). (Listing the content types here
+    /// needs iOS 18, above the app's lowest iOS.)
+    @Parameter(title: "Items")
     var items: [IntentFile]
 
     @Parameter(title: "Notebook", description: "Where PDFs and photos go. Leave it empty for “Shared”.")
