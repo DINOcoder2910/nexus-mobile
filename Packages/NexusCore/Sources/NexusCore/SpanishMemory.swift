@@ -159,7 +159,7 @@ public enum SpanishMemory {
         body += ns.substring(from: at)
         // an unclosed check block while it streams
         if let r = body.range(of: "```check") {
-            if check == nil { let rest = body[r.upperBound...].trimmed; check = rest.isEmpty ? nil : rest }
+            if check == nil { let rest = String(body[r.upperBound...]).trimmed; check = rest.isEmpty ? nil : rest }
             body = String(body[..<r.lowerBound])
         }
         return Reply(text: body.trimmed, check: check, cards: cards)

@@ -136,7 +136,10 @@ public enum SpanishCheck {
     // MARK: Claude: the prompt, the answer's shape, reading it
 
     public struct AI: Equatable, Sendable {
-        public struct Mistake: Equatable, Sendable { public var wrong, right, skill, why: String }
+        public struct Mistake: Equatable, Sendable {
+            public var wrong, right, skill, why: String
+            public init(wrong: String, right: String, skill: String, why: String) { self.wrong = wrong; self.right = right; self.skill = skill; self.why = why }
+        }
         public struct Good: Equatable, Sendable { public var text, skill, why: String }
         public struct Structure: Equatable, Sendable { public var name, text: String }
         public struct Word: Equatable, Sendable {
@@ -148,6 +151,9 @@ public enum SpanishCheck {
         public var good: [Good]
         public var structures: [Structure]
         public var words: [Word]
+        public init(corrected: String, mistakes: [Mistake] = [], good: [Good] = [], structures: [Structure] = [], words: [Word] = []) {
+            self.corrected = corrected; self.mistakes = mistakes; self.good = good; self.structures = structures; self.words = words
+        }
     }
 
     public static let system = "You check Spanish written by an IB Spanish ab initio student (a beginner). You are exact: every mistake is found, nothing correct is marked wrong, and accents count. Explanations are short, in English."

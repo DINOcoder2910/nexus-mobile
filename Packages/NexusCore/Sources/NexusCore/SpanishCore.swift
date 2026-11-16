@@ -134,6 +134,28 @@ public enum Spanish {
         return lines.joined(separator: "\n") + "\n"
     }
 
+    /// skills.yaml with one skill's status changed on its own line (the rest of the file, comments included, as it was); a file without
+    /// that skill's line gets it added under `skills:`, and a missing or unreadable file is written whole.
+    public static func setSkillStatus(_ text: String?, id: String, status: String) -> String {
+        guard isSkill(id), statusWords[status] != nil else { return text ?? serializeSkills(courseStatus) }
+        guard let text, (try? YValue.parse(text))?["skills"]?.list != nil else {
+            var st = parseSkills(text); st[id] = status
+            return serializeSkills(st)
+        }
+        var lines = text.components(separatedBy: "\n")
+        let idRe = "(^|[{,\\s])id:\\s*['\"]?" + NSRegularExpression.escapedPattern(for: id) + "['\"]?\\s*[,}]"
+        if let i = lines.firstIndex(where: { JS.test(idRe, $0) && JS.test("status:", $0) }) {
+            lines[i] = JS.replace("status:\\s*['\"]?[A-Za-z-]+['\"]?", lines[i], "status: " + status)
+            return lines.joined(separator: "\n")
+        }
+        guard let at = lines.firstIndex(where: { JS.test("^skills:\\s*$", $0) }) else {
+            var st = parseSkills(text); st[id] = status
+            return serializeSkills(st)
+        }
+        lines.insert("  - { id: \(id), status: \(status) }  # \(skillName(id))", at: at + 1)
+        return lines.joined(separator: "\n")
+    }
+
     // MARK: the units (study/units.yaml), grade 11 then grade 12
 
     public struct Unit: Equatable, Sendable { public let code, title, status, notes: String }

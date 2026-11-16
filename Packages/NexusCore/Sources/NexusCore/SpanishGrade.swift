@@ -229,7 +229,12 @@ public enum SpanishGrade {
     }
 
     /// A piece's front matter, for the list of pieces under a prompt.
-    public struct PieceInfo: Equatable, Sendable { public var path, prompt, written: String; public var words: Int; public var total: Int? }
+    public struct PieceInfo: Equatable, Sendable {
+        public var path, prompt, written: String
+        public var words: Int
+        public var total: Int?
+        public init(path: String, prompt: String, written: String, words: Int, total: Int?) { self.path = path; self.prompt = prompt; self.written = written; self.words = words; self.total = total }
+    }
     public static func pieceInfo(_ text: String, path: String) -> PieceInfo? {
         guard let m = JS.match(#"^---\n([\s\S]*?)\n---"#, text), let fm = try? YValue.parse(m[1]), fm.map != nil else { return nil }
         let total = fm["marks"]?["total"]?.number

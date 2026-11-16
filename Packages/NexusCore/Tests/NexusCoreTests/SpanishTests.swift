@@ -266,6 +266,28 @@ final class SpanishTests: XCTestCase {
 
     // MARK: the laptop's table (dev/unit-spanish.mjs)
 
+    func testSettingASkillsStatus() {
+        // one line changes, the comments and the rest stay
+        let file = Spanish.serializeSkills(Spanish.courseStatus).replacingOccurrences(of: "skills:\n", with: "skills:\n  # mine\n")
+        let after = Spanish.setSkillStatus(file, id: "verb.imperativo", status: "taught")
+        XCTAssertEqual(Spanish.parseSkills(after)["verb.imperativo"], "taught")
+        XCTAssertEqual(Spanish.parseSkills(after)["verb.imperativo-neg"], "reteach")
+        XCTAssertTrue(after.contains("  # mine\n"))
+        XCTAssertEqual(file.components(separatedBy: "\n").count, after.components(separatedBy: "\n").count)
+        XCTAssertEqual(zip(file.components(separatedBy: "\n"), after.components(separatedBy: "\n")).filter { $0 != $1 }.count, 1)
+        // a skill the file leaves out is added under skills:
+        let short = "skills:\n  - { id: gustar, status: taught }\n"
+        let added = Spanish.setSkillStatus(short, id: "verb.subjuntivo", status: "taught")
+        XCTAssertEqual(Spanish.parseSkills(added)["verb.subjuntivo"], "taught")
+        XCTAssertTrue(added.hasSuffix("  - { id: gustar, status: taught }\n"))
+        // no file, or one that does not parse: written whole
+        XCTAssertEqual(Spanish.parseSkills(Spanish.setSkillStatus(nil, id: "gustar", status: "reteach"))["gustar"], "reteach")
+        XCTAssertEqual(Spanish.parseSkills(Spanish.setSkillStatus("skills: [", id: "gustar", status: "not-yet"))["gustar"], "not-yet")
+        // an unknown skill or status changes nothing
+        XCTAssertEqual(Spanish.setSkillStatus(short, id: "nope", status: "taught"), short)
+        XCTAssertEqual(Spanish.setSkillStatus(short, id: "gustar", status: "maybe"), short)
+    }
+
     func testCourse() {
         XCTAssertEqual([Spanish.courseStatus["verb.imperativo"], Spanish.courseStatus["verb.imperativo-neg"]], ["reteach", "reteach"])
         XCTAssertEqual([Spanish.courseStatus["verb.imperfecto"], Spanish.courseStatus["verb.subjuntivo"]], ["not-yet", "not-yet"])
