@@ -61,6 +61,8 @@ struct SettingsView: View {
 
             UsageSettings()
 
+            ClaudeChatSettings()
+
             TutorSettings()
 
             if !s.problems.isEmpty {

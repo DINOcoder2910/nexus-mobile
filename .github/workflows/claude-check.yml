@@ -1,0 +1,104 @@
+name: Claude check (iPad and iPhone simulators)
+
+# Claude on the iPad and the iPhone (UITests/ClaudeChatUITests.swift for the iPad, ClaudeChatPhoneTests.swift for the iPhone; each skips
+# itself on the other device), run with the demo Claude on both simulators side by side. Their screenshots ("claude-…" and
+# "phone-claude-…") are printed in the log as base64 JPEGs for a reader that can't download artifacts. Run by hand, or on a push to a
+# branch that touches Claude's screens, these tests or this file.
+on:
+  workflow_dispatch:
+  push:
+    branches: ["claude/**"]
+    paths: ["Sources/Claude/**", "UITests/ClaudeChat*.swift", ".github/workflows/claude-check.yml"]
+
+concurrency:
+  group: claude-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sim:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - device: iPad
+            tests: ClaudeChatUITests
+          - device: iPhone
+            tests: ClaudeChatPhoneTests
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate the Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Pick a simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available -j | DEVICE="${{ matrix.device }}" python3 -c '
+          import json,os,sys
+          want=os.environ["DEVICE"]
+          d=json.load(sys.stdin)["devices"]
+          c=[x for k,v in d.items() if "iOS" in k for x in v if x["name"].startswith(want)]
+          c.sort(key=lambda x: (("Pro" not in x["name"]) or ("Max" in x["name"]), x["name"]))
+          print(c[0]["udid"], c[0]["name"], file=sys.stderr)
+          print(c[0]["udid"])')
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl privacy "$UDID" grant calendar app.nexus.mobile || true
+
+      - name: Build for testing
+        run: |
+          set -o pipefail
+          xcodebuild build-for-testing -project NexusMobile.xcodeproj -scheme NexusMobileUITests \
+            -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" -derivedDataPath DerivedData \
+            CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- 2>&1 | grep -E "error:|BUILD|\*\*" | head -n 100
+
+      - name: Run the tests
+        timeout-minutes: 25
+        run: |
+          echo 1 > status.txt
+          set +e
+          xcodebuild test-without-building -project NexusMobile.xcodeproj -scheme NexusMobileUITests \
+            -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" -derivedDataPath DerivedData \
+            -only-testing:NexusMobileUITests/${{ matrix.tests }} \
+            -resultBundlePath claude.xcresult 2>&1 | tee claude.log | grep -E "UISTEP|Test Case|error|failed|passed|skipped"
+          STATUS=${PIPESTATUS[0]}
+          echo "xcodebuild test exited $STATUS"
+          echo "$STATUS" > status.txt
+
+      - name: Screenshots in the log (base64 JPEG)
+        if: always()
+        run: |
+          mkdir -p shots
+          xcrun xcresulttool export attachments --path claude.xcresult --output-path shots 2>&1 | tail -n 3 || true
+          python3 -c '
+          import json
+          for t in json.load(open("shots/manifest.json")):
+              for a in t.get("attachments",[]):
+                  n=a.get("suggestedHumanReadableName","")
+                  if n.startswith("claude-") or n.startswith("phone-claude-"): print(a["exportedFileName"] + "\t" + n.split("_")[0])' > wanted.txt 2>/dev/null || true
+          while IFS=$'\t' read -r F N; do
+            [ -f "shots/$F" ] || continue
+            sips -Z 1400 -s format jpeg -s formatOptions 60 "shots/$F" --out "$N.jpg" >/dev/null || continue
+            echo "SHOT-BEGIN $N.jpg $(stat -f%z "$N.jpg")"
+            base64 -i "$N.jpg" | fold -w 3000
+            echo "SHOT-END"
+          done < wanted.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: claude-check-${{ matrix.device }}
+          path: |
+            shots
+            claude.log
+
+      # last, so a reader that sees only the log's end still sees which tests failed and why
+      - name: Test summary
+        if: always()
+        run: |
+          grep -E "UISTEP|Test Case .*(passed|failed|skipped)|error: -\[|XCTAssert|Executed [0-9]+ test" claude.log 2>/dev/null | cut -c1-400 | tail -n 100 || true
+          exit $(cat status.txt 2>/dev/null || echo 1)

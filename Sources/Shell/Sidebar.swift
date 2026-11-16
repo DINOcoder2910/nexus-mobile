@@ -78,6 +78,10 @@ struct Sidebar: View {
                     row(.study, "Study", "rectangle.on.rectangle.angled", count: StudyLibrary.shared.dueTotal)
                 }
                 row(.ideas, "Ideas", "lightbulb", count: nil)
+                if s.isDataFolder {
+                    row(.claude, "Claude", "sparkles", count: ClaudeChatSession.shared.conversation("main").pendingCount)
+                        .accessibilityIdentifier("sidebar-claude")
+                }
             }
 
             if s.isDataFolder {
