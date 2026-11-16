@@ -36,6 +36,8 @@ enum TestHooks {
             }
             guard let rel = try? NotebookActions().makeBoard("Long lesson", in: dir, store, items: items) else { return }
             let board = store.folder.appendingPathComponent(rel, isDirectory: true)
+            // written away from the main thread (seconds in the debug build), so the UI test can read the screen meanwhile
+            DispatchQueue.global(qos: .userInitiated).async {
             if var c = try? BoardFiles.load(board) {
                 for i in 0..<4000 {
                     // short wavy strokes in lines down the page, like writing
@@ -49,7 +51,8 @@ enum TestHooks {
                 }
                 _ = try? BoardFiles.save(c, to: board, write: { u, t in try FolderAccess.write(u, t) })
             }
-            store.openBoard = .init(path: rel, focus: nil)
+            Task { @MainActor in store.openBoard = .init(path: rel, focus: nil) }
+            }
         } else if let b = NotebookActions.names(in: url).first(where: { $0.hasSuffix(".board") }) {
             store.openBoard = .init(path: dir + "/" + b, focus: nil)
         }
