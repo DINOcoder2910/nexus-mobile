@@ -47,9 +47,13 @@ final class ToolPage: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         }
     }
 
+    /// One data store (kept in memory only) for every tool page, not a new one for each card and each opening of the panel: WebKit
+    /// once failed to find room to set up a page here and ended the app (Nov 12, opening a tool from the Tools panel).
+    private static let store = WKWebsiteDataStore.nonPersistent()
+
     init(interactive: Bool) {
         let cfg = WKWebViewConfiguration()
-        cfg.websiteDataStore = .nonPersistent()
+        cfg.websiteDataStore = ToolPage.store
         cfg.preferences.javaScriptCanOpenWindowsAutomatically = false
         cfg.allowsInlineMediaPlayback = true
         cfg.dataDetectorTypes = []

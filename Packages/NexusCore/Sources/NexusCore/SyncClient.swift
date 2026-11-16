@@ -87,9 +87,11 @@ public actor SyncClient {
         self.folder = folder
         self.stateURL = stateURL
         self.transport = transport
-        var s = SyncState.load(stateURL) ?? SyncState(hubUrl: hubUrl)
+        let read = SyncState.load(stateURL)
+        var s = read ?? SyncState(hubUrl: hubUrl)
         s.hubUrl = hubUrl
         state = s
+        savedState = read
     }
 
     // MARK: one at a time
@@ -109,9 +111,16 @@ public actor SyncClient {
         if dirty >= 25 { try? saveState() }
     }
 
+    /// The state as last written: a cycle that changed nothing doesn't write it again. With a big data folder (a OneNote import) the
+    /// state holds a hash for every file, megabytes of JSON, and it was written at the end of every cycle (each few seconds while you
+    /// write on a board).
+    private var savedState: SyncState?
+
     private func saveState() throws {
-        try state.save(to: stateURL)
         dirty = 0
+        if let savedState, savedState == state { return }
+        try state.save(to: stateURL)
+        savedState = state
     }
 
     // MARK: the cycle
