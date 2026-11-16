@@ -44,9 +44,13 @@ final class IdeasTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["New · 3"].firstMatch.waitForExistence(timeout: 10), "the idea wasn't added")
         shot("ideas-ipad-added-light")
         // Settings › Usage
+        // Settings is the sidebar's last row, below Notebooks: scroll the sidebar (the left tenth of the screen) down to it
         let settings = app.staticTexts["Settings"].firstMatch
-        XCTAssertTrue(settings.waitForExistence(timeout: 10), "no Settings row in the sidebar")
-        if !settings.isHittable { app.staticTexts["Ideas"].firstMatch.swipeUp() }
+        for _ in 0..<10 where !(settings.exists && settings.isHittable) {
+            let from = app.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.8))
+            from.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.25)))
+        }
+        XCTAssertTrue(settings.isHittable, "no Settings row in the sidebar")
         settings.tap()
         let credits = app.staticTexts["Anthropic API credits"].firstMatch
         _ = credits.waitForExistence(timeout: 10)
