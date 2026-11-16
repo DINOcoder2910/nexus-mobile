@@ -7,7 +7,8 @@ import XCTest
 /// `diagnostics/space-bench.txt`, which the UI check prints.
 ///
 /// It never reads the app's elements: on a board this full that query times out. The bench and the test talk by Darwin
-/// notifications instead (`app.nexus.spacebench.<phase>` from the app, `.go` from the test), and the pictures are of the screen.
+/// notifications instead (`app.nexus.spacebench.<phase>` from the app, every second; `.go` from the test, and the bench starts
+/// on its own a minute after it is ready if that never arrives), and the pictures are of the screen.
 final class SpaceLiveTests: XCTestCase {
     let app = XCUIApplication()
 
@@ -26,25 +27,15 @@ final class SpaceLiveTests: XCTestCase {
         print("UISTEP \(Date().timeIntervalSince1970) \(name)")
     }
 
-    /// Starts hearing the bench's stages (delivered on the main run loop, which `heard` turns).
-    func listen(_ stages: [String]) {
-        for s in stages {
-            CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), Unmanaged.passUnretained(self).toOpaque(),
-                                            { _, _, name, _, _ in
-                                                guard let name else { return }
-                                                SpaceHeard.names.insert(name.rawValue as String)
-                                            }, "app.nexus.spacebench.\(s)" as CFString, nil, .deliverImmediately)
-        }
-    }
-
-    /// Whether the bench reached `stage` within `seconds`.
+    /// Whether the bench said `stage` within `seconds` (it says its stage again every second, so a fresh short wait each time
+    /// can't miss it).
     func heard(_ stage: String, within seconds: TimeInterval) -> Bool {
         let end = Date().addingTimeInterval(seconds)
-        while !SpaceHeard.names.contains("app.nexus.spacebench.\(stage)") {
-            if Date() > end { return false }
-            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
-        }
-        return true
+        repeat {
+            let e = XCTDarwinNotificationExpectation(notificationName: "app.nexus.spacebench.\(stage)")
+            if XCTWaiter().wait(for: [e], timeout: max(1, min(5, end.timeIntervalSinceNow))) == .completed { return true }
+        } while Date() < end
+        return false
     }
 
     /// Waits for the bench to reach a stage; says so in the log either way.
@@ -66,7 +57,6 @@ final class SpaceLiveTests: XCTestCase {
     }
 
     func testInsertSpaceFollowsTheDrag() {
-        listen(["ready", "before", "adding", "added", "taking", "taken", "dark", "done"])
         // the app writes the big board and opens it (a minute or more in the simulator's debug build); answer the alert meanwhile
         var opened = false
         for _ in 0..<20 where !opened {
@@ -89,9 +79,4 @@ final class SpaceLiveTests: XCTestCase {
         }
         reach("done")
     }
-}
-
-/// The bench's stages heard so far (the observer is a C callback, so it can't hold the test).
-enum SpaceHeard {
-    static var names: Set<String> = []
 }

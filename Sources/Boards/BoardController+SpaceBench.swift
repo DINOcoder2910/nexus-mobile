@@ -51,6 +51,14 @@ final class SpaceBench: NSObject {
                                             Task { @MainActor in bench.tapped() }
                                         }, "app.nexus.spacebench.go" as CFString, nil, .deliverImmediately)
         say("ready")
+        // the stage is said again every second, so a test that starts listening late still hears it; and the bench starts on
+        // its own if the test's go never arrives
+        let beat = Timer(timeInterval: 1, repeats: true) { [weak self] t in
+            guard let self else { t.invalidate(); return }
+            MainActor.assumeIsolated { self.announce() }
+        }
+        RunLoop.main.add(beat, forMode: .common)
+        after(60) { self.tapped() }
     }
 
     @objc func tapped() {
@@ -67,6 +75,13 @@ final class SpaceBench: NSObject {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         try? Data(("space bench: phase \(phase)\n" + times.joined(separator: "\n") + "\n").utf8)
             .write(to: dir.appendingPathComponent("space-bench.txt"), options: .atomic)
+        self.phase = phase
+        announce()
+    }
+
+    private var phase = "ready"
+
+    private func announce() {
         CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),
                                              CFNotificationName("app.nexus.spacebench.\(phase)" as CFString), nil, nil, true)
     }
