@@ -188,6 +188,10 @@ public enum ClaudeChat {
             self.root = root; self.read = read
         }
 
+        /// Files Claude is told it can't read here (pictures, PDFs, documents, audio, archives).
+        static let binary: Set<String> = ["pdf", "png", "jpg", "jpeg", "heic", "gif", "webp", "tiff", "docx", "doc", "xlsx", "xls", "pptx", "ppt", "zip",
+                                          "one", "onepkg", "m4a", "mp3", "wav", "mp4", "mov", "ipa", "bin", "wasm"]
+
         func url(_ rel: String) -> URL { rel.isEmpty ? root : root.appendingPathComponent(rel) }
 
         func isDir(_ u: URL) -> Bool {
@@ -210,6 +214,7 @@ public enum ClaudeChat {
             let u = url(p)
             if p.isEmpty || isDir(u) { return "That is a folder; list it instead.\n" + listText(p) }
             guard fm.fileExists(atPath: u.path) else { return "There is no file at \(p)." }
+            if Self.binary.contains(u.pathExtension.lowercased()) { return "\(p) is not a text file Nexus can show you (a \(u.pathExtension.uppercased()))." }
             guard let t = try? read(u) else { return "\(p) is not a text file Nexus can show you." }
             if t.count > maxRead { return String(t.prefix(maxRead)) + "\n… (cut here: the file is \(t.count) characters; search it for the part you need)" }
             return t
