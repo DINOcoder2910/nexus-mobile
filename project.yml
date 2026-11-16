@@ -31,6 +31,8 @@ targets:
       # the laptop's rich-text editor (tools/richtext/build.mjs): rich.html and its fonts
       - path: Resources/RichText
         type: folder
+      # the laptop's universities database (renderer/data/universities.json) for Applications > Research
+      - path: Resources/Data/universities.json
     dependencies:
       - package: NexusCore
     info:
