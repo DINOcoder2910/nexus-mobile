@@ -41,6 +41,12 @@ final class SpaceLiveTests: XCTestCase {
         // the app writes the big board and opens it (a minute or more in the simulator's debug build, the main thread busy reading
         // it): the screen can't be read meanwhile, so the first look waits, as the save check does
         sleep(100)
+        // run on its own, the app's first launch asks to send notifications: that alert hides the app from the test
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        for name in ["Allow", "Don\u{2019}t Allow", "Don't Allow"] {
+            let b = springboard.buttons[name].firstMatch
+            if b.waitForExistence(timeout: 3) { b.tap(); break }
+        }
         let bench = app.staticTexts["space-bench"].firstMatch
         let opened = bench.waitForExistence(timeout: 300)
         if !opened { shot("space-0 no bench") }
