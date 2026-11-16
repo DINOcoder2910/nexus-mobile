@@ -62,6 +62,7 @@ struct Sidebar: View {
                 if s.isDataFolder && StudyLibrary.shared.hasDecks {
                     row(.study, "Study", "rectangle.on.rectangle.angled", count: StudyLibrary.shared.dueTotal)
                 }
+                row(.ideas, "Ideas", "lightbulb", count: nil)
             }
 
             if s.isDataFolder {

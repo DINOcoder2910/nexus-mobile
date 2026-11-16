@@ -129,6 +129,9 @@ final class WindowRouter {
     var openTask: String?
     /// The add sheet is asked for.
     var addSheet = false
+    /// Ideas is asked for (the "Add an idea" shortcut that opens the app), with the cursor in its add box.
+    var ideas = false
+    var focusIdeas = false
 }
 
 /// One window: its own store (its task panel, add sheet, Undo and open board), on the shared data folder.
@@ -144,7 +147,7 @@ struct WindowRoot: View {
 
 /// Where the sidebar can take you.
 enum Screen: Hashable {
-    case today, planner, calendar, tasks, someday, inbox, workstream(String), boards, boardSearch, settings, study, time
+    case today, planner, calendar, tasks, someday, inbox, workstream(String), boards, boardSearch, settings, study, ideas, time
     /// A notebook's page (its path in the data folder, "notebooks/Chem").
     case notebook(String)
 }
@@ -219,6 +222,7 @@ struct RootView: View {
         .onChange(of: calendar.version) { _, _ in reminders.reschedule() }
         .onChange(of: router.openTask) { _, _ in answerRouter() }
         .onChange(of: router.addSheet) { _, _ in answerRouter() }
+        .onChange(of: router.ideas) { _, _ in answerRouter() }
         .task {
             AppServices.start()
             if router.front == nil { router.front = windowId }
@@ -272,6 +276,11 @@ struct RootView: View {
         if router.addSheet {
             router.addSheet = false
             store.capture = .init(workstream: nil, parent: nil, plan: nil)
+        }
+        if router.ideas {
+            router.ideas = false
+            router.focusIdeas = true
+            screen = .ideas
         }
     }
 
@@ -334,6 +343,7 @@ struct RootView: View {
             case .notebook(let path): NotebookPage(path: path, go: go)
             case .settings: SettingsView()
             case .study: StudyHome()
+            case .ideas: IdeasView()
             case .time: TimeView()
             }
         }
