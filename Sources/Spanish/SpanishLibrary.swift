@@ -152,7 +152,7 @@ final class SpanishLibrary {
         let names = (try? FileManager.default.contentsOfDirectory(atPath: root.appendingPathComponent(dir).path)) ?? []
         for name in names where SyncPaths.isConflictCopy(name) {
             guard let m = name.range(of: #"^\d{4}-\d{2}"#, options: .regularExpression) else { continue }
-            let main = dir + "/" + name[m] + ".yaml"
+            let main = dir + "/" + String(name[m]) + ".yaml"
             let copy = SpanishCheck.parseLog(read(root, dir + "/" + name)), mine = SpanishCheck.parseLog(read(root, main))
             guard copy.ok, mine.ok else { continue }
             var seen = Set(mine.entries.map { $0.at + "\u{1}" + $0.text })

@@ -76,7 +76,9 @@ final class SpanishCheckRun: Identifiable {
     var dictionary: State = .busy
     var languagetool: State = .busy
     var claude: State = .wait
-    var dictError = "", ltError = "", aiError = ""
+    var dictError = ""
+    var ltError = ""
+    var aiError = ""
     var result: SpanishCheck.Result?
     var entry: SpanishCheck.Entry?
 
