@@ -26,14 +26,22 @@ final class SpaceLiveTests: XCTestCase {
     @discardableResult
     func wait(for phase: String, _ bench: XCUIElement, seconds: Int = 120) -> String {
         var tries = 0
-        while !bench.label.contains("phase \(phase)") && tries < seconds { sleep(1); tries += 1 }
-        XCTAssertTrue(bench.label.contains("phase \(phase)"), "the bench didn't reach \(phase): \(bench.label)")
-        return bench.label
+        while !bench.label.contains("phase \(phase)") && tries < seconds {
+            if tries % 20 == 0 { print("UISTEP SPACE waiting for \(phase): \(bench.label.replacingOccurrences(of: "\n", with: " | "))") }
+            sleep(1)
+            tries += 1
+        }
+        let text = bench.label
+        print("UISTEP SPACE at \(phase): \(text.replacingOccurrences(of: "\n", with: " | "))")
+        XCTAssertTrue(text.contains("phase \(phase)"), "the bench didn't reach \(phase): \(text)")
+        return text
     }
 
     func testInsertSpaceFollowsTheDrag() {
         let bench = app.staticTexts["space-bench"].firstMatch
-        XCTAssertTrue(bench.waitForExistence(timeout: 300), "the big board didn't open")
+        let opened = bench.waitForExistence(timeout: 300)
+        if !opened { shot("space-0 no bench") }
+        XCTAssertTrue(opened, "the big board didn't open")
         if app.staticTexts["Planner"].firstMatch.exists, app.staticTexts["Planner"].firstMatch.isHittable {
             let side = app.buttons["Sidebar"].firstMatch
             if side.exists { side.tap() }

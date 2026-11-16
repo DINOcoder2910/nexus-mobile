@@ -4,6 +4,11 @@ name: UI check (simulator)
 # freeze shows where the app is stuck. Run by hand (Actions › UI check › Run workflow), or on a push to a branch that touches UITests/.
 on:
   workflow_dispatch:
+    inputs:
+      only:
+        description: "Run only this test class (e.g. SpaceLiveTests); empty runs them all"
+        required: false
+        default: ""
   push:
     branches: ["claude/**"]
     paths: ["UITests/**", ".github/workflows/ui-check.yml"]
@@ -45,7 +50,15 @@ jobs:
             CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- 2>&1 | grep -E "error:|BUILD|\*\*" | head -n 100
 
       - name: Run the UI tests, sampling the app
+        env:
+          # a push whose commit message says [ui-only: SomeTests] runs only that class (or the Run workflow box's "only")
+          ONLY_INPUT: ${{ inputs.only }}
+          HEAD_MSG: ${{ github.event.head_commit.message }}
         run: |
+          ONLY="$ONLY_INPUT"
+          [ -n "$ONLY" ] || ONLY=$(printf '%s' "$HEAD_MSG" | sed -n 's/.*\[ui-only: *\([A-Za-z0-9_]*\)\].*/\1/p' | head -n 1)
+          ONLY_ARG=""
+          if [ -n "$ONLY" ]; then ONLY_ARG="-only-testing:NexusMobileUITests/$ONLY"; echo "only $ONLY"; fi
           mkdir -p samples
           # every 5 s: if the app is running, a 1 s sample of all its threads
           ( while true; do
@@ -57,7 +70,7 @@ jobs:
           set +e
           xcodebuild test-without-building -project NexusMobile.xcodeproj -scheme NexusMobileUITests \
             -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" -derivedDataPath DerivedData \
-            -resultBundlePath ui.xcresult 2>&1 | tee ui.log | grep -E "UISTEP|Test Case|error|failed|passed|Hang|hang" | head -n 300
+            -resultBundlePath ui.xcresult $ONLY_ARG 2>&1 | tee ui.log | grep -E "UISTEP|Test Case|error|failed|passed|Hang|hang" | head -n 300
           STATUS=${PIPESTATUS[0]}
           kill $SAMPLER || true
           echo "xcodebuild test exited $STATUS"
@@ -149,6 +162,11 @@ jobs:
             base64 -i z.jpg | fold -w 3000
             echo "SHOT-END"
           done < zoomshots.txt
+
+      - name: The tests in brief (last, so a log's tail has them)
+        if: always()
+        run: |
+          grep -E "UISTEP|Test Case|error:|XCTAssert|failed" ui.log | cut -c1-400 | tail -n 150 || true
 
       - uses: actions/upload-artifact@v4
         if: always()
