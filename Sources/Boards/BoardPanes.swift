@@ -12,7 +12,8 @@ struct BoardPanes: View {
 
     var body: some View {
         BoardHost(target: main, root: store.folder, store: store, onClose: { store.openBoard = nil }, onSaved: { path in
-            store.boardsChanged()
+            // a save writes inside the board's folder only: sync looks there, not at the whole data folder
+            store.boardsChanged(touched: [path])
             HandwritingIndex.shared.boardSaved(path, root: store.folder)
         }, onSidebar: {
             withAnimation { columns = columns == .detailOnly ? .all : .detailOnly }

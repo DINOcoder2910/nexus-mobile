@@ -145,6 +145,7 @@ public actor SyncClient {
             state.restoring = nil
             refused = [:]
             pendingDeletions = []
+            needFull = true
             let local = scan()
             if local.files.isEmpty && local.unreadable.isEmpty {
                 // Nothing here to lose: download everything.
@@ -219,6 +220,7 @@ public actor SyncClient {
         state.bases = [:]
         state.cursor = 0
         state.restoring = nil
+        needFull = true
         try saveState()
     }
 
@@ -242,6 +244,8 @@ public actor SyncClient {
         refused = [:]
         pendingDeletions = []
         allowDeletions = false
+        lastScan = nil
+        needFull = true
         try saveState()
         return moved
     }
@@ -442,48 +446,141 @@ public actor SyncClient {
 
     private static let keys: [URLResourceKey] = [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey, .contentModificationDateKey]
 
-    /// Walks the folder (skipping ignored paths and symbolic links), hashing only files whose size or time changed.
+    // MARK: quick scans
+
+    /// How often a cycle walks the whole folder even when the app named every change. A OneNote import left 16,000 files in the
+    /// folder, and every cycle (one each few seconds while you write, one each 25 s idle) walked and looked at all of them, twice.
+    public static let fullScanEvery: TimeInterval = 600
+    /// The folder as the last scan saw it, kept true by this client's own writes and the paths the app names (`changed`).
+    private var lastScan: Scan?
+    private var lastFullScan = Date.distantPast
+    private var needFull = true
+    private var hints: Set<String> = []
+    /// Walks of the whole folder so far (tests).
+    public private(set) var fullScans = 0
+    private var quick = false
+
+    /// From now on the app names what it changes (`changed`, `changedEverywhere`), so a cycle need not walk the whole folder.
+    /// Without this every scan walks it all.
+    public func useQuickScans() { quick = true }
+
+    /// The app changed these files or folders (relative to the folder) and nothing else: the next cycle looks at them only.
+    public func changed(_ paths: [String]) {
+        for p in paths {
+            let rel = SyncPaths.nfc(p).split(separator: "/").joined(separator: "/")
+            if rel.isEmpty { needFull = true } else { hints.insert(rel) }
+        }
+    }
+
+    /// Something may have changed anywhere in the folder (another app, a write the app didn't name): the next cycle walks it all.
+    public func changedEverywhere() { needFull = true }
+
+    /// The folder as it is: a walk of all of it when asked, the first time, or every `fullScanEvery`; otherwise the last scan with
+    /// the changed paths looked at again.
     private func scan() -> Scan {
+        if !quick || needFull || lastScan == nil || Date().timeIntervalSince(lastFullScan) >= Self.fullScanEvery { return fullScan() }
+        return quickScan() ?? fullScan()
+    }
+
+    /// Walks the folder (skipping ignored paths and symbolic links), hashing only files whose size or time changed.
+    private func fullScan() -> Scan {
         var out = Scan()
         var cache: [String: CachedHash] = [:]
-        func walk(_ dir: URL, _ prefix: String) {
-            guard let items = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: Self.keys, options: []) else { return }
-            for url in items {
-                let name = SyncPaths.nfc(url.lastPathComponent)
-                let rel = prefix.isEmpty ? name : prefix + "/" + name
-                guard let v = try? url.resourceValues(forKeys: Set(Self.keys)), v.isSymbolicLink != true else { continue }
-                if v.isDirectory == true {
-                    if SyncPaths.isIgnoredFolder(name) { continue }
-                    guard SyncPaths.isSafe(rel) else {
-                        out.problems.append(SyncProblem(path: rel, message: "This folder's name can't be used on every device, so it isn't synced. Rename it."))
-                        continue
-                    }
-                    walk(url, rel)
-                    continue
-                }
-                guard v.isRegularFile == true, !SyncPaths.isIgnored(rel) else { continue }
-                guard SyncPaths.isSafe(rel) else {
-                    out.problems.append(SyncProblem(path: rel, message: "This name can't be used on every device, so it isn't synced. Rename it."))
-                    continue
-                }
-                let size = Int64(v.fileSize ?? 0)
-                let mtime = (v.contentModificationDate?.timeIntervalSince1970 ?? 0) * 1000
-                if let c = state.hashCache[rel], c.size == size, c.mtimeMs == mtime {
-                    cache[rel] = c
-                } else if let h = try? SyncHash.file(url) {
-                    cache[rel] = CachedHash(size: size, mtimeMs: mtime, hash: h)
-                } else {
-                    out.unreadable.insert(rel)
-                    continue
-                }
-                out.files[rel] = LocalFile(hash: cache[rel]!.hash, size: size, mtimeMs: mtime)
-                if SyncPaths.isConflictCopy(rel) { out.conflictCopies.append(rel) }
-            }
-        }
-        walk(folder, "")
+        walk(folder, "", &out, &cache)
         state.hashCache = cache
         out.conflictCopies.sort()
+        fullScans += 1
+        lastScan = out
+        lastFullScan = Date()
+        needFull = false
+        hints = []
         return out
+    }
+
+    /// The last scan, with each hinted path dropped and read again. Nil when a hint can't be trusted (its name differs from the
+    /// folder's in capitals): then the whole folder is walked.
+    private func quickScan() -> Scan? {
+        guard var out = lastScan else { return nil }
+        let all = hints.sorted()
+        hints = []
+        // a hint inside another one is read with it
+        var roots: [String] = []
+        for h in all where !roots.contains(where: { h == $0 || h.hasPrefix($0 + "/") }) { roots.append(h) }
+        var cache = state.hashCache
+        for rel in roots {
+            let under: (String) -> Bool = { $0 == rel || $0.hasPrefix(rel + "/") }
+            for k in out.files.keys where under(k) { out.files[k] = nil }
+            for k in cache.keys where under(k) { cache[k] = nil }
+            out.unreadable = out.unreadable.filter { !under($0) }
+            out.conflictCopies.removeAll(where: under)
+            out.problems.removeAll(where: { under($0.path) })
+            guard let exact = spelledAsOnDisk(rel) else { return nil }
+            guard exact else { continue } // gone
+            // a path the full walk never goes into (an ignored or unsafe folder above it) stays out
+            let parts = rel.split(separator: "/").map(String.init)
+            if parts.dropLast().contains(where: SyncPaths.isIgnoredFolder) { continue }
+            if (1..<parts.count).contains(where: { !SyncPaths.isSafe(parts[0..<$0].joined(separator: "/")) }) { continue }
+            let url = folder.appendingPathComponent(rel)
+            visit(url, rel, &out, &cache)
+        }
+        state.hashCache = cache
+        out.conflictCopies.sort()
+        lastScan = out
+        return out
+    }
+
+    /// True when every part of `rel` is in the folder with exactly that name, false when it isn't there at all, nil when it is
+    /// there in other capitals (the iPad's disk doesn't tell them apart; the names sent must be the folder's own).
+    private func spelledAsOnDisk(_ rel: String) -> Bool? {
+        var dir = folder
+        for part in rel.split(separator: "/").map(String.init) {
+            guard let names = try? fm.contentsOfDirectory(atPath: dir.path).map(SyncPaths.nfc) else { return false }
+            if !names.contains(part) {
+                return names.contains(where: { $0.lowercased() == part.lowercased() }) ? nil : false
+            }
+            dir = dir.appendingPathComponent(part)
+        }
+        return true
+    }
+
+    private func walk(_ dir: URL, _ prefix: String, _ out: inout Scan, _ cache: inout [String: CachedHash]) {
+        guard let items = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: Self.keys, options: []) else { return }
+        for url in items {
+            let name = SyncPaths.nfc(url.lastPathComponent)
+            visit(url, prefix.isEmpty ? name : prefix + "/" + name, &out, &cache)
+        }
+    }
+
+    /// One file or folder of a scan.
+    private func visit(_ url: URL, _ rel: String, _ out: inout Scan, _ cache: inout [String: CachedHash]) {
+        let name = String(rel.split(separator: "/").last ?? "")
+        guard let v = try? url.resourceValues(forKeys: Set(Self.keys)), v.isSymbolicLink != true else { return }
+        if v.isDirectory == true {
+            if SyncPaths.isIgnoredFolder(name) { return }
+            guard SyncPaths.isSafe(rel) else {
+                out.problems.append(SyncProblem(path: rel, message: "This folder's name can't be used on every device, so it isn't synced. Rename it."))
+                return
+            }
+            walk(url, rel, &out, &cache)
+            return
+        }
+        guard v.isRegularFile == true, !SyncPaths.isIgnored(rel) else { return }
+        guard SyncPaths.isSafe(rel) else {
+            out.problems.append(SyncProblem(path: rel, message: "This name can't be used on every device, so it isn't synced. Rename it."))
+            return
+        }
+        let size = Int64(v.fileSize ?? 0)
+        let mtime = (v.contentModificationDate?.timeIntervalSince1970 ?? 0) * 1000
+        if let c = state.hashCache[rel], c.size == size, c.mtimeMs == mtime {
+            cache[rel] = c
+        } else if let h = try? SyncHash.file(url) {
+            cache[rel] = CachedHash(size: size, mtimeMs: mtime, hash: h)
+        } else {
+            out.unreadable.insert(rel)
+            return
+        }
+        out.files[rel] = LocalFile(hash: cache[rel]!.hash, size: size, mtimeMs: mtime)
+        if SyncPaths.isConflictCopy(rel) { out.conflictCopies.append(rel) }
     }
 
     /// The hash of the file at `rel` now (nil when there is none), from the cache when its size and time are unchanged.
@@ -539,6 +636,7 @@ public actor SyncClient {
             throw SyncError.local("Couldn't write it: \(String(cString: strerror(errno)))")
         }
         remember(rel, got)
+        hints.insert(rel) // the next quick scan sees it (else it would look deleted here)
         return .wrote(got)
     }
 
@@ -547,6 +645,7 @@ public actor SyncClient {
         guard try localHash(rel) == expected else { return false }
         try fm.removeItem(at: folder.appendingPathComponent(rel))
         state.hashCache[rel] = nil
+        hints.insert(rel)
         removeEmptyFolders(above: rel)
         return true
     }

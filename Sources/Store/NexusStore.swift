@@ -27,8 +27,9 @@ final class NexusStore {
     var openTaskId: String?
     /// The capture sheet, with what it starts from.
     var capture: CaptureStart?
-    /// Called after the app wrote to the data folder (sync sends it soon after).
-    @ObservationIgnored var onWrite: (() -> Void)?
+    /// Called after the app wrote to the data folder (sync sends it soon after), with the paths written (relative to the folder)
+    /// when the writer named them, nil when anything may have changed.
+    @ObservationIgnored var onWrite: (([String]?) -> Void)?
     /// Called after every read of the folder (the shared store: reminders and Spotlight follow it).
     @ObservationIgnored var onReload: (() -> Void)?
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
@@ -94,9 +95,14 @@ final class NexusStore {
 
     /// This store changed the folder: tell sync (through `onWrite` or the notice) and the other windows. Code that writes to
     /// the folder itself (study grades, boards) calls this after.
-    func didWrite(listChanged: Bool = false) {
-        onWrite?()
-        NotificationCenter.default.post(name: Self.wrote, object: self, userInfo: listChanged ? ["list": true] : nil)
+    /// `touched`: the files or folders written, relative to the folder, when the writer knows them all (sync then looks at those
+    /// only, not at every file in the folder).
+    func didWrite(listChanged: Bool = false, touched: [String]? = nil) {
+        onWrite?(touched)
+        var info: [String: Any] = [:]
+        if listChanged { info["list"] = true }
+        if let touched { info["touched"] = touched }
+        NotificationCenter.default.post(name: Self.wrote, object: self, userInfo: info.isEmpty ? nil : info)
     }
 
     /// Both devices' shortcuts files, read with the folder (Settings › Shortcuts, the keys the app runs).
@@ -160,9 +166,9 @@ final class NexusStore {
     }
 
     /// A board (or a notebook) was written: let sync send it.
-    func boardsChanged(listChanged: Bool = false) {
+    func boardsChanged(listChanged: Bool = false, touched: [String]? = nil) {
         if listChanged { notebooksVersion += 1 }
-        didWrite(listChanged: listChanged)
+        didWrite(listChanged: listChanged, touched: touched)
     }
 
     func makeSample() {

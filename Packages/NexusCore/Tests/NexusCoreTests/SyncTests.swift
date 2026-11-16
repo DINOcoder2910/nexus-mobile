@@ -512,4 +512,68 @@ final class SyncTests: XCTestCase {
         XCTAssertEqual(hub.downloads, [])
         XCTAssertEqual(r.pulled, [])
     }
+
+    // MARK: quick scans (a folder of 16,000 files was walked twice a cycle, Nov 2026)
+
+    func testAQuickScanLooksOnlyWhereTheAppSaysAndNeverInventsADeletion() async throws {
+        let c = try await agreed()
+        await c.useQuickScans()
+        let walks = await c.fullScans
+
+        // nothing named: nothing walked, nothing sent
+        _ = synced(try await c.cycle())
+        XCTAssertEqual(hub.puts, [])
+        XCTAssertEqual(hub.deletes, [])
+
+        // a board saved (named) and a file the app didn't name: only the named one goes, without a walk
+        try put("notebooks/N/B.board/tiles/0_0.json", "{}\n")
+        try put("notes/unnamed.md", "later\n")
+        await c.changed(["notebooks/N/B.board"])
+        var r = synced(try await c.cycle())
+        XCTAssertEqual(r.pushed, ["notebooks/N/B.board/tiles/0_0.json"])
+
+        // what the laptop sent is downloaded, and the next quick cycles don't take it for a deletion here
+        hub.write("x/y/from-laptop.md", "hello\n")
+        r = synced(try await c.cycle())
+        XCTAssertEqual(r.pulled, ["x/y/from-laptop.md"])
+        hub.remove("old/deep/c.md")
+        _ = synced(try await c.cycle())
+        XCTAssertFalse(exists("old/deep/c.md"))
+        hub.resetCounts()
+        _ = synced(try await c.cycle())
+        _ = synced(try await c.cycle())
+        XCTAssertEqual(hub.deletes, [])
+        XCTAssertEqual(hub.puts, [])
+
+        // a deletion inside a named folder is seen
+        try rm("notebooks/N/B.board/tiles/0_0.json")
+        await c.changed(["notebooks/N"])
+        _ = synced(try await c.cycle())
+        XCTAssertEqual(hub.deletes, ["notebooks/N/B.board/tiles/0_0.json"])
+        let quickWalks = await c.fullScans
+        XCTAssertEqual(quickWalks, walks, "no cycle so far walked the whole folder")
+
+        // "anything may have changed": the whole folder is walked, and the unnamed file goes
+        await c.changedEverywhere()
+        r = synced(try await c.cycle())
+        XCTAssertEqual(r.pushed, ["notes/unnamed.md"])
+        let after = await c.fullScans
+        XCTAssertEqual(after, walks + 1)
+    }
+
+    func testANameInOtherCapitalsWalksTheWholeFolder() async throws {
+        let c = try await agreed()
+        await c.useQuickScans()
+        try put("notes/Mixed.md", "m\n")
+        await c.changed(["notes/mixed.md"])
+        let r = synced(try await c.cycle())
+        let s = await c.state
+        if fm.fileExists(atPath: dir.appendingPathComponent("notes/mixed.md").path) {
+            // a disk that doesn't tell capitals apart (the iPad's, a Mac's): the folder's own name is sent
+            XCTAssertEqual(r.pushed, ["notes/Mixed.md"])
+        } else {
+            XCTAssertEqual(r.pushed, [], "the named file isn't there; nothing else was named")
+        }
+        XCTAssertNil(s.bases["notes/mixed.md"])
+    }
 }
