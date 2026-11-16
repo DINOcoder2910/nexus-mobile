@@ -523,7 +523,9 @@ public enum BoardFiles {
             out.tilesOnDisk[key] = text
         }
         for (id, md) in ch.texts {
-            try write(board.appendingPathComponent(BoardFormat.textFile(id)), md)
+            // a block's own copy ends with its checksum line, beside its .jsonl (drafts keep plain words, as on the laptop)
+            let file = RichWords.isMain(id) && RichWords.enabled ? (RichWords.shared.copyText(md) ?? md) : md
+            try write(board.appendingPathComponent(BoardFormat.textFile(id)), file)
             out.textsOnDisk[id] = md
         }
         // each block's .jsonl beside its copy (drafts keep only their .md, as on the laptop)
