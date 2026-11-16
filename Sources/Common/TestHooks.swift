@@ -30,6 +30,13 @@ enum TestHooks {
         }
         guard args.contains("-NexusTestNestedNotebooks") else { return }
         if !store.snapshot.isDataFolder { store.makeSample() }
+        // the speed test's 1,440 boards (SidebarSpeedTests, same simulator) would push this tree out of reach
+        var removed = false
+        for name in NotebookActions.names(in: store.folder.appendingPathComponent(BoardFormat.notebooks)) where name.hasPrefix("G12 Notebook ") {
+            try? FileManager.default.removeItem(at: store.folder.appendingPathComponent(BoardFormat.notebooks).appendingPathComponent(name))
+            removed = true
+        }
+        if removed { store.boardsChanged(listChanged: true) }
         UserDefaults.standard.removeObject(forKey: "openNotebooks")
         UserDefaults.standard.removeObject(forKey: RecentBoards.key)
         let root = store.folder
