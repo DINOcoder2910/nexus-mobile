@@ -27,9 +27,9 @@ final class SpaceLiveTests: XCTestCase {
     func wait(for phase: String, _ bench: XCUIElement, seconds: Int = 120) -> String {
         var tries = 0
         while !bench.label.contains("phase \(phase)") && tries < seconds {
-            if tries % 20 == 0 { print("UISTEP SPACE waiting for \(phase): \(bench.label.replacingOccurrences(of: "\n", with: " | "))") }
-            sleep(1)
-            tries += 1
+            if tries % 21 == 0 { print("UISTEP SPACE waiting for \(phase): \(bench.label.replacingOccurrences(of: "\n", with: " | "))") }
+            sleep(3)
+            tries += 3
         }
         let text = bench.label
         print("UISTEP SPACE at \(phase): \(text.replacingOccurrences(of: "\n", with: " | "))")
@@ -38,6 +38,9 @@ final class SpaceLiveTests: XCTestCase {
     }
 
     func testInsertSpaceFollowsTheDrag() {
+        // the app writes the big board and opens it (a minute or more in the simulator's debug build, the main thread busy reading
+        // it): the screen can't be read meanwhile, so the first look waits, as the save check does
+        sleep(100)
         let bench = app.staticTexts["space-bench"].firstMatch
         let opened = bench.waitForExistence(timeout: 300)
         if !opened { shot("space-0 no bench") }

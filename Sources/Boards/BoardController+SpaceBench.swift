@@ -30,7 +30,7 @@ final class SpaceBench {
     let label: UILabel
     var times: [String] = []
     var line: CGFloat = 0
-    let hold: TimeInterval = 9
+    let hold: TimeInterval = 14
     private var link: CADisplayLink?
     private var step: ((CFTimeInterval) -> Bool)?
 
