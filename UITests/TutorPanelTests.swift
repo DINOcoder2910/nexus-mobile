@@ -135,10 +135,14 @@ final class TutorPanelTests: XCTestCase {
         let mic = app.buttons["Talk to the tutor"].firstMatch
         XCTAssertTrue(mic.waitForExistence(timeout: 10), "no microphone in the panel")
         mic.tap() // (a tap: it listens until tapped again)
-        let whole = app.staticTexts["What is a mole And how do I use it?"].firstMatch
-        XCTAssertTrue(whole.waitForExistence(timeout: 15), "what was said before the pause is gone")
+        let said = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'use it'")).firstMatch
+        let found = said.waitForExistence(timeout: 15)
         sleep(1)
         shot("tutor-8-listening")
+        let labels = app.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }
+        print("UISTEP texts: " + labels.joined(separator: " | "))
+        XCTAssertTrue(found, "the words after the pause never showed")
+        XCTAssertTrue(app.staticTexts["What is a mole And how do I use it?"].firstMatch.exists, "what was said before the pause is gone")
         app.buttons["Send what you said"].firstMatch.tap()
         waitForAnswer("asked out loud")
         XCTAssertTrue(app.staticTexts["What is a mole And how do I use it?"].firstMatch.exists, "the asked question isn't the whole of it")
