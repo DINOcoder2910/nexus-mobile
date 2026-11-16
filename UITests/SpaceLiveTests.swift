@@ -49,6 +49,8 @@ final class SpaceLiveTests: XCTestCase {
             let side = app.buttons["Sidebar"].firstMatch
             if side.exists { side.tap() }
         }
+        wait(for: "ready", bench, seconds: 240)
+        bench.tap()
         wait(for: "before", bench, seconds: 240)
         sleep(2)
         shot("space-1 before")

@@ -19,13 +19,19 @@ extension BoardController {
         label.frame = CGRect(x: 20, y: view.bounds.height - 110, width: min(720, view.bounds.width - 40), height: 90)
         label.autoresizingMask = [.flexibleTopMargin]
         let bench = SpaceBench(board: self, label: label)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { bench.start() }
+        // the UI test taps the label once it can read the screen (the board takes a while to open in the debug build), so no
+        // stage passes before it is looking
+        label.isUserInteractionEnabled = true
+        label.addGestureRecognizer(UITapGestureRecognizer(target: bench, action: #selector(SpaceBench.tapped)))
+        objc_setAssociatedObject(label, &SpaceBench.key, bench, .OBJC_ASSOCIATION_RETAIN)
     }
 }
 
 /// One run of the bench (kept alive by its own steps).
 @MainActor
-final class SpaceBench {
+final class SpaceBench: NSObject {
+    static var key = 0
+    private var started = false
     weak var board: BoardController?
     let label: UILabel
     var times: [String] = []
@@ -37,6 +43,14 @@ final class SpaceBench {
     init(board: BoardController, label: UILabel) {
         self.board = board
         self.label = label
+        super.init()
+        label.text = "space bench: phase ready (tap to start)"
+    }
+
+    @objc func tapped() {
+        guard !started else { return }
+        started = true
+        start()
     }
 
     func say(_ phase: String) {
