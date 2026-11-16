@@ -377,7 +377,7 @@ public enum StudyUpload {
         let said = StudySheets.safePath(replaceOnce(str(pick("unitFolder", "unit_folder"), 200), root + "/"))
         let saidLast = said.components(separatedBy: "/").last ?? said
         let saidFolder = groups.contains(said) ? said : groups.first { ($0.components(separatedBy: "/").last ?? $0) == saidLast }
-        let whereTo = model.map { folderFor(p.codes, $0, root: root) } ?? (nil, false)
+        let whereTo: (folder: String?, multi: Bool) = model.map { folderFor(p.codes, $0, root: root) } ?? (folder: nil, multi: false)
         let newFolder = !said.isEmpty && model != nil && !said.contains("/") ? newUnitParent(model!, root: root) + said : said
         p.multi = whereTo.multi
         p.unitFolder = whereTo.multi ? (whereTo.folder ?? "") : saidFolder ?? whereTo.folder ?? (newFolder.isEmpty ? nil : newFolder) ?? groups.first ?? ""

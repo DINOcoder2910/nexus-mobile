@@ -117,8 +117,8 @@ public enum StudyUnits {
     /// The items of a round: those of the chosen level (or the given ids), shuffled by `seed`.
     public static func practiceRound(_ deck: StudyDeck, level: String = "all", ids: [String]? = nil, seed: String = "") -> [String] {
         let lv = (levels.first { $0.id == level } ?? levels[0]).has
-        let list = deck.practice.filter { ids.map { ids in ids.contains($0.id) } ?? lv.contains($0.level) }
-        return StudyDeck.shuffle(list.map(\.id), StudyDeck.rng("practice|" + seed))
+        let list = deck.practice.filter { item in ids.map { $0.contains(item.id) } ?? lv.contains(item.level) }
+        return StudyDeck.shuffle(list.map { $0.id }, StudyDeck.rng("practice|" + seed))
     }
 
     public static func ruleOf(_ deck: StudyDeck, _ item: StudyDeck.PracticeItem) -> StudyDeck.Card? { deck.cards.first { $0.id == item.rule } }
