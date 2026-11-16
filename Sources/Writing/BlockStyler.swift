@@ -33,11 +33,44 @@ enum BlockStyler {
 
     /// A formula's picture and the size it takes at the line's font size.
     final class MathBox: NSObject, @unchecked Sendable {
+        /// The picture in the colour the words had where they were styled (the size is the same in every colour).
         let image: UIImage
         let size: CGSize
         /// A $$ block of its own lines: centred, standing on the line instead of on the words' middle.
         var block = false
-        init(image: UIImage, size: CGSize) { self.image = image; self.size = size }
+        let tex: String
+        let display: Bool
+        /// The size the picture is drawn at (MathRender's).
+        let ask: CGFloat
+        /// The words' colour, which can differ by look: black words are white on a dark board (BlockLook.adapt).
+        let color: UIColor
+        /// `image`'s colour, as MathRender keys it.
+        let imageColor: String
+        init(image: UIImage, size: CGSize, tex: String, display: Bool, ask: CGFloat, color: UIColor, imageColor: String) {
+            self.image = image; self.size = size; self.tex = tex; self.display = display; self.ask = ask; self.color = color; self.imageColor = imageColor
+        }
+
+        /// The picture in the words' colour where it is drawn now (UITraitCollection.current, so a dark board's): blocks are styled
+        /// outside drawing (the tutor measures its blocks from its own task), where the colour resolves to the light look, so a formula on
+        /// a dark board was photographed in black and drew invisibly on the dark paper. A colour not drawn yet is asked for (`mathReady`
+        /// is posted when it is in) and nothing is drawn meanwhile.
+        func picture() -> UIImage? {
+            guard Thread.isMainThread else { return image }
+            return MainActor.assumeIsolated { () -> UIImage? in
+                let c = color.resolvedColor(with: UITraitCollection.current)
+                if MathRender.css(c) == imageColor { return image }
+                let render = MathRender.shared
+                if let img = render.cached(tex: tex, display: display, size: ask, color: c) { return img }
+                if render.cannotRead(tex: tex, display: display) { return nil }
+                let tex = tex, display = display, ask = ask
+                Task { @MainActor in
+                    if await render.image(tex: tex, display: display, size: ask, color: c) != nil {
+                        NotificationCenter.default.post(name: BlockStyler.mathReady, object: nil)
+                    }
+                }
+                return nil
+            }
+        }
     }
 
     /// Pictures are drawn this many times the font size and shrunk, so they stay sharp when the board is zoomed in.
@@ -50,13 +83,15 @@ enum BlockStyler {
         return MainActor.assumeIsolated { () -> MathBox? in
             let ask = min(240, size * mathDetail)
             let render = MathRender.shared
-            if let img = render.cached(tex: tex, display: display, size: ask, color: color) {
+            let shown = color.resolvedColor(with: UITraitCollection.current)
+            if let img = render.cached(tex: tex, display: display, size: ask, color: shown) {
                 let k = size / MathRender.step(ask)
-                return MathBox(image: img, size: CGSize(width: ceil(img.size.width * k), height: ceil(img.size.height * k)))
+                return MathBox(image: img, size: CGSize(width: ceil(img.size.width * k), height: ceil(img.size.height * k)),
+                               tex: tex, display: display, ask: ask, color: color, imageColor: MathRender.css(shown))
             }
             if render.cannotRead(tex: tex, display: display) { return nil }
             Task { @MainActor in
-                if await render.image(tex: tex, display: display, size: ask, color: color) != nil {
+                if await render.image(tex: tex, display: display, size: ask, color: shown) != nil {
                     NotificationCenter.default.post(name: mathReady, object: nil)
                 }
             }
