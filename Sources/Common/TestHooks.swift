@@ -7,6 +7,7 @@ enum TestHooks {
     /// `-NexusTestPdfBoard`: sample data, then a notebook "PDF zoom" with a board made from a 3-page PDF of fine print, opened
     /// (UITests/PdfZoomTests: zoomed-in pages must stay drawn).
     static func run(_ store: NexusStore) {
+        if ProcessInfo.processInfo.arguments.contains("-NexusTestBigBoard") { bigBoard(store); return }
         guard ProcessInfo.processInfo.arguments.contains("-NexusTestPdfBoard") else { return }
         if !store.snapshot.isDataFolder { store.makeSample() }
         let dir = "notebooks/PDF zoom"
@@ -14,6 +15,44 @@ enum TestHooks {
         if NotebookActions.names(in: url).contains(where: { $0.hasSuffix(".board") }) { return }
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         try? NotebookActions().newBoard(pdfData: finePrint(), named: "Zoom test", in: dir, store)
+    }
+
+    /// `-NexusTestBigBoard`: sample data, then a board as full as a long lesson's (4000 handwritten strokes of 60 points over a page
+    /// of PDF), opened; the board times its saves (BoardController.saveBench) and UITests/BoardSpeedTests prints the times.
+    static var isBigBoardRun: Bool { ProcessInfo.processInfo.arguments.contains("-NexusTestBigBoard") }
+
+    static func bigBoard(_ store: NexusStore) {
+        if !store.snapshot.isDataFolder { store.makeSample() }
+        let dir = "notebooks/Speed"
+        let url = store.folder.appendingPathComponent(dir, isDirectory: true)
+        if !NotebookActions.names(in: url).contains(where: { $0.hasSuffix(".board") }) {
+            try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+            var items: [BoardItem] = []
+            let pdf = "Lesson handout.pdf"
+            if (try? finePrint().write(to: url.appendingPathComponent(pdf))) != nil {
+                items.append(BoardItem(id: "pdf1", type: "pdf", x: 60, y: 60, fields: [
+                    ("src", .string("../" + pdf)), ("w", .number(BoardFormat.pdfWidth)), ("gap", .number(BoardFormat.pdfGap)),
+                ]))
+            }
+            guard let rel = try? NotebookActions().makeBoard("Long lesson", in: dir, store, items: items) else { return }
+            let board = store.folder.appendingPathComponent(rel, isDirectory: true)
+            if var c = try? BoardFiles.load(board) {
+                for i in 0..<4000 {
+                    // short wavy strokes in lines down the page, like writing
+                    let x0 = 80 + Double((i % 40) * 18), y0 = 80 + Double(i / 40) * 26
+                    var pts: [[Double]] = []
+                    for k in 0..<60 {
+                        let t = Double(k) / 59
+                        pts.append([x0 + t * 14, y0 + sin(t * 9) * 6, 0.6, 1.2, 1.1, t * 0.4, 2.4, 2.4, 1])
+                    }
+                    c.strokes.append(BoardStroke(id: String(format: "s%05d", i), ink: "com.apple.ink.pen", color: "#1A1A1AFF", points: pts))
+                }
+                _ = try? BoardFiles.save(c, to: board, write: { u, t in try FolderAccess.write(u, t) })
+            }
+            store.openBoard = .init(path: rel, focus: nil)
+        } else if let b = NotebookActions.names(in: url).first(where: { $0.hasSuffix(".board") }) {
+            store.openBoard = .init(path: dir + "/" + b, focus: nil)
+        }
     }
 
     /// Three letter pages of small numbered lines and a fine grid, so a blurry or missing page shows at any zoom.

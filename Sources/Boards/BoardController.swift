@@ -206,6 +206,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         applyTheme()
         if !readOnly { canvas.becomeFirstResponder() }
         if let p = loadProblem ?? content.readOnly { tell(p) } else { showHintOnce() }
+        saveBenchIfAsked()
     }
 
     override func viewWillAppear(_ animated: Bool) {
