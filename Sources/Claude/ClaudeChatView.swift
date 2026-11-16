@@ -13,6 +13,8 @@ struct ClaudeChatView: View {
     var context: (@MainActor () -> String)? = nil
     /// Shown as the side column or a sheet: a close button.
     var onClose: (() -> Void)? = nil
+    /// The iPad's column beside a screen: its own header row in view, since an inspector's toolbar items join the screen's toolbar.
+    var inColumn = false
 
     @Environment(NexusStore.self) private var store
     @Environment(\.horizontalSizeClass) private var size
@@ -26,6 +28,7 @@ struct ClaudeChatView: View {
     var body: some View {
         let c = convo
         VStack(spacing: 0) {
+            if inColumn { columnHeader(c); Divider() }
             messages(c)
             Divider()
             inputBar(c)
@@ -33,7 +36,7 @@ struct ClaudeChatView: View {
         .background(Color(uiColor: .systemBackground))
         .navigationTitle(conversation == "apps" ? "Applications · Claude" : "Claude")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar { toolbar(c) }
+        .toolbar { if !inColumn { toolbar(c) } }
         .sheet(isPresented: $showEarlier) { EarlierConversations(conversation: conversation) }
         .onAppear { if let context { c.context = context } }
     }
@@ -51,22 +54,42 @@ struct ClaudeChatView: View {
         ToolbarItemGroup(placement: .primaryAction) {
             if wide { modelMenu(c) }
             ClaudeModeChip(small: !wide)
-            Menu {
-                if !wide {
-                    Picker("Model", selection: Binding(get: { c.model }, set: { c.model = $0 })) {
-                        ForEach(Self.models, id: \.id) { m in Text(m.name).tag(m.id) }
-                    }
-                }
-                Button { c.clear() } label: { Label("New conversation", systemImage: "square.and.pencil") }.disabled(c.busy || c.isEmpty)
-                Button { showEarlier = true } label: { Label("Earlier conversations", systemImage: "clock.arrow.circlepath") }
-                if c.pendingCount > 1 {
-                    Button { c.acceptAll() } label: { Label("Accept all \(c.pendingCount) changes", systemImage: "checkmark.circle") }
-                }
-            } label: {
-                Label("More", systemImage: "ellipsis.circle")
-            }
-            .accessibilityIdentifier("claude-menu")
+            moreMenu(c)
         }
+    }
+
+    private func moreMenu(_ c: ClaudeConversation) -> some View {
+        Menu {
+            if !wide {
+                Picker("Model", selection: Binding(get: { c.model }, set: { c.model = $0 })) {
+                    ForEach(Self.models, id: \.id) { m in Text(m.name).tag(m.id) }
+                }
+            }
+            Button { c.clear() } label: { Label("New conversation", systemImage: "square.and.pencil") }.disabled(c.busy || c.isEmpty)
+            Button { showEarlier = true } label: { Label("Earlier conversations", systemImage: "clock.arrow.circlepath") }
+            if c.pendingCount > 1 {
+                Button { c.acceptAll() } label: { Label("Accept all \(c.pendingCount) changes", systemImage: "checkmark.circle") }
+            }
+        } label: {
+            Label("More", systemImage: "ellipsis.circle").labelStyle(.iconOnly)
+        }
+        .accessibilityIdentifier("claude-menu")
+    }
+
+    private func columnHeader(_ c: ClaudeConversation) -> some View {
+        HStack(spacing: 12) {
+            Label(conversation == "apps" ? "Applications · Claude" : "Claude", systemImage: "sparkles")
+                .font(.headline).labelStyle(.titleAndIcon).foregroundStyle(Theme.claude).lineLimit(1)
+            Spacer(minLength: 4)
+            modelMenu(c)
+            ClaudeModeChip(small: true)
+            moreMenu(c)
+            if let onClose {
+                Button { onClose() } label: { Image(systemName: "xmark.circle.fill").font(.title3).foregroundStyle(.secondary) }
+                    .accessibilityLabel("Close").accessibilityIdentifier("claude-close")
+            }
+        }
+        .padding(.horizontal, 16).padding(.vertical, 10)
     }
 
     struct ModelChoice: Identifiable { let id: String; let name: String }

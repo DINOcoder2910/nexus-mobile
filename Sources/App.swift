@@ -274,8 +274,11 @@ struct RootView: View {
                 }
                 .id(screen)
                 .inspector(isPresented: Binding(get: { claude.presented != nil && screen != .claude }, set: { if !$0 { claude.presented = nil } })) {
-                    NavigationStack {
-                        ClaudeChatView(conversation: claude.presented ?? "main", onClose: { claude.presented = nil })
+                    // its own header row in view (an inspector's toolbar items would join the screen's toolbar, even while it is closed)
+                    Group {
+                        if let key = claude.presented {
+                            ClaudeChatView(conversation: key, onClose: { claude.presented = nil }, inColumn: true)
+                        }
                     }
                     .inspectorColumnWidth(min: 320, ideal: 400, max: 520)
                 }
@@ -431,8 +434,8 @@ struct RootView: View {
             }
         }
         .overlay(alignment: .bottomTrailing) {
-            // the Calendar has its own + (a new event) in its bottom bar
-            if which != .calendar && store.snapshot.isDataFolder && store.snapshot.readOnlyReason == nil {
+            // the Calendar has its own + (a new event) in its bottom bar; Claude has its box and send button there
+            if which != .calendar && path.wrappedValue.last != .claude && store.snapshot.isDataFolder && store.snapshot.readOnlyReason == nil {
                 Button { addFrom(which, path.wrappedValue.last) } label: {
                     Image(systemName: "plus")
                         .font(.title2.weight(.semibold))

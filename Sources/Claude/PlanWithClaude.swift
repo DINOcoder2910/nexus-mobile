@@ -126,6 +126,7 @@ struct PlanWithClaudeButton: View {
                 .font(.callout.weight(.medium))
                 .buttonStyle(.borderless)
             }
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("plan-result")
         }
     }

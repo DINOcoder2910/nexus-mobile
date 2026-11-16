@@ -39,7 +39,7 @@ final class ClaudeChatPhoneTests: XCTestCase {
     func testPlanWithClaudeFromTodaysMenu() {
         launch()
         openMenu()
-        sleep(1)
+        sleep(2)
         shot("phone-claude-today-menu")
         app.buttons["Plan with Claude"].firstMatch.tap()
         XCTAssertTrue(el("plan-result").waitForExistence(timeout: 30), "Plan with Claude didn't finish")

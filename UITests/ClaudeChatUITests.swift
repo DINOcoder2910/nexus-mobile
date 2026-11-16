@@ -59,6 +59,9 @@ final class ClaudeChatUITests: XCTestCase {
         input.tap()
         input.typeText("What's in my Inbox? Give the field trip form a deadline.")
         app.buttons["claude-send"].firstMatch.tap()
+        // the simulator's on-screen keyboard (a real iPad usually has its keyboard attached): put it away for the screenshots
+        let hide = app.keyboards.buttons["Hide keyboard"].firstMatch
+        if hide.waitForExistence(timeout: 2) { hide.tap() }
         let accept = app.buttons["change-accept"].firstMatch
         XCTAssertTrue(accept.waitForExistence(timeout: 30), "no change card")
         sleep(1)
