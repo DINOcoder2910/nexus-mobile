@@ -1,7 +1,9 @@
 name: UI check (simulator)
 
 # Drives the app in an iPad simulator (UITests/) on a GitHub-hosted Mac, sampling the app's main thread every few seconds, so a
-# freeze shows where the app is stuck. Run by hand (Actions › UI check › Run workflow), or on a push to a branch that touches UITests/.
+# freeze shows where the app is stuck, then runs the iPhone tests on an iPhone simulator in the SAME job from the same build (one Mac,
+# not two: the account may run only 5 Mac jobs at once). Run by hand (Actions › UI check › Run workflow), or on a push to a branch
+# that touches UITests/.
 on:
   workflow_dispatch:
   push:
@@ -15,13 +17,13 @@ concurrency:
 jobs:
   ui:
     runs-on: macos-latest
-    timeout-minutes: 45
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
 
       - name: Generate the Xcode project
         run: |
-          brew install xcodegen
+          command -v xcodegen >/dev/null || brew install xcodegen
           xcodegen generate
 
       - name: Pick an iPad simulator
@@ -160,32 +162,14 @@ jobs:
             ui.log
             ui.xcresult
 
-      # last, so a reader that sees only the log's end (its last few thousand lines) still sees which tests failed and why
-      - name: Test summary
-        if: always()
-        run: |
-          grep -E "UISTEP|Test Case .*(passed|failed)|error: -\[|XCTAssert|Executed [0-9]+ test" ui.log 2>/dev/null | grep -v "SHOT" | cut -c1-400 | tail -n 250 || true
-
-      - name: Result
-        if: always()
-        run: exit $(cat status.txt 2>/dev/null || echo 1)
-
-  # The iPhone, beside the iPad job: every UI test class named "…PhoneTests" (each skips itself on the iPad) on an iPhone simulator.
-  # Its screenshots whose name has "phone" are printed in the log like the iPad's.
-  phone:
-    runs-on: macos-latest
-    timeout-minutes: 40
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Generate the Xcode project
-        run: |
-          brew install xcodegen
-          xcodegen generate
-
+      # The iPhone, in the same job (one Mac, not two): every UI test class named "…PhoneTests" (each skips itself on the iPad), on an
+      # iPhone simulator, from the same build (build-for-testing builds for the simulator, not for one device).
+      # Its screenshots whose name has "phone" are printed in the log like the iPad's.
       - name: Pick an iPhone simulator
-        id: sim
+        id: phonesim
+        if: ${{ !cancelled() }}
         run: |
+          xcrun simctl shutdown "${{ steps.sim.outputs.udid }}" || true
           UDID=$(xcrun simctl list devices available -j | python3 -c '
           import json,sys
           d=json.load(sys.stdin)["devices"]
@@ -195,27 +179,22 @@ jobs:
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"
           xcrun simctl boot "$UDID" || true
 
-      - name: Build for testing
-        run: |
-          set -o pipefail
-          xcodebuild build-for-testing -project NexusMobile.xcodeproj -scheme NexusMobileUITests \
-            -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" -derivedDataPath DerivedData \
-            CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- 2>&1 | grep -E "error:|BUILD|\*\*" | head -n 100
-
       - name: Run the iPhone tests
+        if: ${{ !cancelled() }}
         timeout-minutes: 25
         run: |
-          echo 1 > status.txt
+          echo 1 > phone-status.txt
+          [ -d DerivedData/Build/Products ] || { echo "the build for testing failed, so no iPhone run"; exit 0; }
           ONLY=$(grep -ho "class [A-Za-z0-9_]*PhoneTests" UITests/*.swift | awk '{print "-only-testing:NexusMobileUITests/" $2}' | sort -u | tr '\n' ' ')
-          [ -n "$ONLY" ] || { echo "no iPhone tests"; echo 0 > status.txt; exit 0; }
+          [ -n "$ONLY" ] || { echo "no iPhone tests"; echo 0 > phone-status.txt; exit 0; }
           echo "running: $ONLY"
           set +e
           xcodebuild test-without-building -project NexusMobile.xcodeproj -scheme NexusMobileUITests \
-            -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" -derivedDataPath DerivedData $ONLY \
+            -destination "platform=iOS Simulator,id=${{ steps.phonesim.outputs.udid }}" -derivedDataPath DerivedData $ONLY \
             -resultBundlePath phone.xcresult 2>&1 | tee phone.log | grep -E "UISTEP|Test Case|error|failed|passed|skipped"
           STATUS=${PIPESTATUS[0]}
           echo "xcodebuild test exited $STATUS"
-          echo "$STATUS" > status.txt
+          echo "$STATUS" > phone-status.txt
 
       - name: The test log's end (when it stopped early)
         if: always()
@@ -248,6 +227,18 @@ jobs:
             phoneshots
             phone.log
 
-      - name: Result
+      # last, so a reader that sees only the log's end (its last few thousand lines) still sees which tests failed and why
+      - name: Test summary
         if: always()
-        run: exit $(cat status.txt 2>/dev/null || echo 1)
+        run: |
+          echo "==== iPad"
+          grep -E "UISTEP|Test Case .*(passed|failed)|error: -\[|XCTAssert|Executed [0-9]+ test" ui.log 2>/dev/null | grep -v "SHOT" | cut -c1-400 | tail -n 250 || true
+          echo "==== iPhone"
+          grep -E "Test Case .*(passed|failed)|error: -\[|XCTAssert|Executed [0-9]+ test" phone.log 2>/dev/null | grep -v "SHOT" | cut -c1-400 | tail -n 80 || true
+
+      - name: Result (iPad and iPhone)
+        if: always()
+        run: |
+          IPAD=$(cat status.txt 2>/dev/null || echo 1); PHONE=$(cat phone-status.txt 2>/dev/null || echo 1)
+          echo "iPad tests exited $IPAD, iPhone tests exited $PHONE"
+          [ "$IPAD" = "0" ] && [ "$PHONE" = "0" ]

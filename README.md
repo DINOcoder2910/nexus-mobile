@@ -57,7 +57,15 @@ The code: `Packages/NexusCore/Sources/NexusCore/Sync*.swift` (the paths, the sta
 
 ## Building
 
-There is no Mac in the loop: every push builds on a GitHub-hosted Mac (`.github/workflows/build.yml`), running the NexusCore tests and building the app side by side. The project file is generated from `project.yml` with XcodeGen, and the build is unsigned. `main` publishes **Releases › latest › NexusMobile.ipa**; any other branch publishes **Releases › preview**.
+There is no Mac in the loop: every push builds on a GitHub-hosted Mac (`.github/workflows/build.yml`), running the NexusCore tests (when the push changed `Packages/`) and then building the app, in one job. The project file is generated from `project.yml` with XcodeGen, and the build is unsigned. `main` publishes **Releases › latest › NexusMobile.ipa**; any other branch publishes **Releases › preview-<branch>**.
+
+**Mac jobs are scarce.** The account may run only 5 GitHub-hosted Mac jobs at once, shared by every branch, so most of a build's time is spent queued, not building (Nov 2026: 6 minutes of work, 30 to 70 minutes of waiting when several branches push). When you write or change a workflow:
+
+- One Mac job per check. Build for testing once, then run the iPad and the iPhone simulators one after the other in the same job (as `ui-check.yml` does), never as a matrix or two jobs.
+- Give a push trigger a `paths:` filter, so a check runs only when its screens or tests change.
+- A check written for one feature (like `claude-check.yml` or `spanish-check.yml`) folds into `ui-check.yml` or is deleted before the branch merges, so main doesn't carry it.
+- Push in batches rather than commit by commit: each push to a branch cancels that branch's older runs, but they've often already held a Mac.
+- Don't add `pull_request` triggers: the builds run on pushes, and the repo is public.
 
 ## Installing
 
