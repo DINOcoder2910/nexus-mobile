@@ -1,6 +1,7 @@
 import AVFoundation
 import NaturalLanguage
 import Speech
+import NexusCore
 import UIKit
 
 /// The iPad's voices: Apple's, free and offline. Settings › Tutor › Voice keeps a voice for English and one for Spanish (any accent
@@ -240,18 +241,38 @@ enum Audio {
     }
 }
 
-/// Hearing the question: Apple's speech recognition on the iPad (offline when the iPad has the language), while the button is held.
+/// Hearing the question: Apple's speech recognition on the iPad (offline when the iPad has the language), while the button is held
+/// or until it is tapped again. The recogniser starts its text over after a pause (and can stop on its own after a long one), so what
+/// you say is kept whole by `SpeechJoin`, and a recogniser that stops while you are still talking is replaced by a new one (Nov 16:
+/// pausing and talking on used to lose everything said before the pause).
 @MainActor
 final class Listener {
+    /// The request the microphone feeds, swapped when the recogniser is restarted part way (the tap runs on the audio thread).
+    private final class Feed: @unchecked Sendable {
+        private let lock = NSLock()
+        private var request: SFSpeechAudioBufferRecognitionRequest?
+        func set(_ r: SFSpeechAudioBufferRecognitionRequest?) { lock.lock(); request = r; lock.unlock() }
+        func append(_ b: AVAudioPCMBuffer) { lock.lock(); let r = request; lock.unlock(); r?.append(b) }
+    }
+
     private let engine = AVAudioEngine()
+    private let feed = Feed()
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
     private var recognizer: SFSpeechRecognizer?
-    private var best = ""
+    private var join = SpeechJoin()
+    /// Between start and stop / cancel.
+    private var listening = false
+    /// Each recognition task's number: a replaced or finished task's late results are dropped.
+    private var gen = 0
+    private var restarts = 0
+    private var taskStarted = Date()
     private var done: CheckedContinuation<String, Never>?
+    private var demo: Task<Void, Never>?
     var onPartial: ((String) -> Void)?
 
     static func ask() async -> String? {
+        if TutorDemo.active { return nil }
         let speech: SFSpeechRecognizerAuthorizationStatus = await withCheckedContinuation { c in SFSpeechRecognizer.requestAuthorization { c.resume(returning: $0) } }
         guard speech == .authorized else { return "Nexus isn't allowed to use speech recognition. Turn it on in iPad Settings › Nexus." }
         guard await Audio.askMicrophone() else { return "Nexus isn't allowed to use the microphone. Turn it on in iPad Settings › Nexus." }
@@ -260,42 +281,83 @@ final class Listener {
 
     /// Starts listening; nil, or why it can't.
     func start() -> String? {
-        best = ""
+        join = SpeechJoin()
+        restarts = 0
+        if TutorDemo.active { startDemo(); return nil }
         guard let r = SFSpeechRecognizer(locale: Voices.listenLocale) ?? SFSpeechRecognizer(), r.isAvailable else {
             return "Speech recognition isn't available right now."
         }
         recognizer = r
         Audio.configure()
+        let input = engine.inputNode
+        let format = input.outputFormat(forBus: 0)
+        guard format.sampleRate > 0 else { return "No microphone found." }
+        input.removeTap(onBus: 0)
+        let feed = self.feed
+        input.installTap(onBus: 0, bufferSize: 1024, format: format) { buf, _ in feed.append(buf) }
+        begin()
+        engine.prepare()
+        do { try engine.start() } catch {
+            input.removeTap(onBus: 0)
+            task?.cancel()
+            finish()
+            return "The microphone couldn't start: \(error.localizedDescription)"
+        }
+        listening = true
+        return nil
+    }
+
+    /// A recognition request and task: at the start, and again when the recogniser stops on its own while you are still talking.
+    private func begin() {
+        guard let r = recognizer else { return }
         let req = SFSpeechAudioBufferRecognitionRequest()
         req.shouldReportPartialResults = true
         if r.supportsOnDeviceRecognition { req.requiresOnDeviceRecognition = true }
         req.addsPunctuation = true
         request = req
-        let input = engine.inputNode
-        let format = input.outputFormat(forBus: 0)
-        guard format.sampleRate > 0 else { return "No microphone found." }
-        input.removeTap(onBus: 0)
-        input.installTap(onBus: 0, bufferSize: 1024, format: format) { buf, _ in req.append(buf) }
-        engine.prepare()
-        do { try engine.start() } catch { input.removeTap(onBus: 0); return "The microphone couldn't start: \(error.localizedDescription)" }
+        feed.set(req)
+        gen += 1
+        let g = gen
+        taskStarted = Date()
         task = r.recognitionTask(with: req) { [weak self] result, error in
-            let text = result?.bestTranscription.formattedString
+            let text = result?.bestTranscription.formattedString ?? ""
+            let start = result?.bestTranscription.segments.first?.timestamp
+            let ended = result?.speechRecognitionMetadata != nil // (the recogniser's mark for the end of a stretch of speech)
             let final = result?.isFinal == true || error != nil
-            Task { @MainActor in
-                guard let self else { return }
-                if let text, !text.isEmpty { self.best = text; self.onPartial?(text) }
-                if final { self.finish() }
-            }
+            Task { @MainActor in self?.heard(g, text, start: start, ended: ended || final, final: final) }
         }
-        return nil
+    }
+
+    private func heard(_ g: Int, _ text: String, start: Double?, ended: Bool, final: Bool) {
+        guard g == gen else { return }
+        let before = join.text
+        let all = join.update(text, start: start, ended: ended)
+        if all != before, !all.isEmpty { onPartial?(all) }
+        guard final else { return }
+        if listening && done == nil {
+            // it stopped on its own (a long pause, an error) while you are still talking: carry on with a new one, unless it keeps
+            // stopping at once (then the microphone stays on and what was heard is kept)
+            if restarts < 30, Date().timeIntervalSince(taskStarted) > 1 {
+                restarts += 1
+                begin()
+            } else {
+                task = nil
+                request = nil
+                feed.set(nil)
+            }
+        } else {
+            finish()
+        }
     }
 
     /// Stops and returns what was heard (waits briefly for the last words).
     func stop() async -> String {
-        guard request != nil else { return best }
+        listening = false
+        if demo != nil { demo?.cancel(); demo = nil; return join.text }
         engine.stop()
         engine.inputNode.removeTap(onBus: 0)
-        request?.endAudio()
+        guard let req = request else { finish(); return join.text }
+        req.endAudio()
         return await withCheckedContinuation { (c: CheckedContinuation<String, Never>) in
             done = c
             Task { @MainActor in
@@ -306,6 +368,8 @@ final class Listener {
     }
 
     func cancel() {
+        listening = false
+        if demo != nil { demo?.cancel(); demo = nil; return }
         engine.stop()
         engine.inputNode.removeTap(onBus: 0)
         task?.cancel()
@@ -313,8 +377,23 @@ final class Listener {
     }
 
     private func finish() {
+        gen += 1
         task = nil
         request = nil
-        if let d = done { done = nil; d.resume(returning: best) }
+        feed.set(nil)
+        if let d = done { done = nil; d.resume(returning: join.text) }
+    }
+
+    /// The UI check's listening (-NexusTutorDemo): the recogniser's results for a question with a pause in it, starting over after
+    /// the pause as the real one does, through the same joining.
+    private func startDemo() {
+        listening = true
+        demo = Task { @MainActor [weak self] in
+            for (wait, words) in TutorDemo.heard {
+                try? await Task.sleep(for: .milliseconds(wait))
+                guard let self, !Task.isCancelled else { return }
+                self.heard(self.gen, words, start: nil, ended: false, final: false)
+            }
+        }
     }
 }

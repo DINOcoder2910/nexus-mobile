@@ -27,6 +27,13 @@ enum TutorDemo {
         return ClaudeReply(text: text, model: "demo", mode: .api, msToFirstText: 1200)
     }
 
+    /// Instead of the microphone: the recogniser's results as you ask a question with a pause in it (milliseconds before each). After
+    /// the pause its text starts over, as Apple's does, and the panel must still show the whole question.
+    static let heard: [(Int, String)] = [
+        (500, "What"), (400, "What is"), (400, "What is a mole"),
+        (3000, "And"), (400, "And how do I"), (400, "And how do I use it?"),
+    ]
+
     static func reply(_ words: String, asking: TutorPrompt.Asking) -> String {
         if asking.practice { return practice }
         if asking.check != nil { return check }
