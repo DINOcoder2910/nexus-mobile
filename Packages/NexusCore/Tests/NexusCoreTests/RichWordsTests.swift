@@ -83,6 +83,15 @@ final class RichWordsTests: XCTestCase {
 
     func testTheCopysChecksumLine() {
         XCTAssertEqual(RichWords.body("Words\n\n<!-- nexus-copy 0123456789abcdef -->\n"), "Words")
+        // the laptop's hash to the bit (richblock.js copyText under Node), over UTF-16 as JavaScript counts it
+        XCTAssertEqual(RichWords.shared.copyText("Words"), "Words\n\n<!-- nexus-copy 806fcae096923b28 -->\n")
+        let odd = "H\u{2082}O \u{1F600}\n"
+        XCTAssertEqual(RichWords.shared.copyText(odd), odd + "\n\n<!-- nexus-copy f942d4a7592afdb5 -->\n")
+        XCTAssertTrue(RichWords.shared.isNexusCopy("Words\n\n<!-- nexus-copy 806fcae096923b28 -->\n"))
+        XCTAssertFalse(RichWords.shared.isNexusCopy("Words, edited\n\n<!-- nexus-copy 806fcae096923b28 -->\n"), "a hand edit: the hash no longer matches")
+        XCTAssertFalse(RichWords.shared.isNexusCopy("Words"))
+        // a checksum line that matches comes off exactly: the words keep their own last line end
+        XCTAssertEqual(RichWords.body(odd + "\n\n<!-- nexus-copy f942d4a7592afdb5 -->\n"), odd)
         XCTAssertEqual(RichWords.body("Words\r\nmore"), "Words\nmore")
         XCTAssertEqual(RichWords.body("Plain"), "Plain")
     }
@@ -111,7 +120,10 @@ final class RichWordsTests: XCTestCase {
         c = try BoardFiles.save(c, to: board, write: { url, text in try text.write(to: url, atomically: true, encoding: .utf8) })
         let jsonl = try XCTUnwrap(read("B.board/text/txt22.jsonl"))
         XCTAssertEqual(RichWords.shared.words(jsonl), "# Hello\n\nOne line, typed on the iPad.")
-        XCTAssertEqual(read("B.board/text/txt22.md"), "# Hello\n\nOne line, typed on the iPad.", "the copy stays plain, as the laptop writes it")
+        let copy = try XCTUnwrap(read("B.board/text/txt22.md"))
+        XCTAssertEqual(copy, RichWords.shared.copyText("# Hello\n\nOne line, typed on the iPad."), "the copy ends with its checksum line, as the laptop writes it")
+        XCTAssertTrue(copy.hasSuffix(" -->\n") && RichWords.shared.isNexusCopy(copy))
+        XCTAssertEqual(RichWords.body(copy), "# Hello\n\nOne line, typed on the iPad.")
         XCTAssertFalse(c.docsStale.contains("txt22"))
         XCTAssertTrue(BoardFiles.changes(c).docs.allSatisfy { BoardFiles.docToWrite(c, id: $0) == nil }, "nothing more to write")
 
@@ -144,7 +156,43 @@ final class RichWordsTests: XCTestCase {
         let out = try XCTUnwrap(read("B.board/text/txt22.jsonl"))
         XCTAssertEqual(RichWords.shared.words(out), words)
         XCTAssertEqual(RichWords.shared.header(out)?["google"]?["doc"]?.string, "1AbC")
-        XCTAssertEqual(read("B.board/text/txt22.md"), words)
+        XCTAssertEqual(read("B.board/text/txt22.md").map(RichWords.body), words)
+    }
+
+    /// The hub merged both devices' .jsonl by paragraph and kept the laptop's copy whole (both copies Nexus's: the newer wins). That copy
+    /// lacks what the iPad saved meanwhile: the .jsonl carries the words, and the copy is not taken (it would undo the iPad's paragraph).
+    func testANexusCopyBesideAMergedJsonlBringsNothing() throws {
+        let jsonl = try fixture("rich-block.jsonl"), md = try fixture("rich-block.md")
+        try write("B.board/board.json", Self.meta)
+        try write("B.board/tiles/0_0.json", Self.tile)
+        try write("B.board/text/txt22.md", md)
+        try write("B.board/text/txt22.jsonl", jsonl)
+        let board = dir.appendingPathComponent("B.board")
+        var c = try BoardFiles.load(board)
+        let save = { (c: BoardContent) in try BoardFiles.save(c, to: board, write: { url, text in try text.write(to: url, atomically: true, encoding: .utf8) }) }
+        // the iPad saved a change to the heading, then typed in the list
+        let p = md.replacingOccurrences(of: "# Why chemistry", with: "# Why chemistry, saved on the iPad")
+        c.texts["txt22"] = p
+        c = try save(c)
+        let saved = try XCTUnwrap(read("B.board/text/txt22.jsonl"))
+        c.texts["txt22"] = p.replacingOccurrences(of: "- one", with: "- one, typed on the iPad")
+        // meanwhile the laptop changed the quote: the hub's .jsonl has both, its copy only the laptop's words
+        let l = md.replacingOccurrences(of: "> A quote", with: "> A quote from the laptop")
+        let merged = try XCTUnwrap(RichWords.shared.write(md: p.replacingOccurrences(of: "> A quote", with: "> A quote from the laptop"), prevJsonl: saved, prevMd: p))
+        try write("B.board/text/txt22.jsonl", merged)
+        try write("B.board/text/txt22.md", try XCTUnwrap(RichWords.shared.copyText(l)))
+        let r = try LiveBoard.reconcile(c, read: { rel in self.read("B.board/" + rel) }, write: { rel, text in try self.write("B.board/" + rel, text) }, device: "Zephyrus Duo 16")
+        let words = try XCTUnwrap(r.content.texts["txt22"])
+        XCTAssertTrue(words.contains("saved on the iPad") && words.contains("typed on the iPad") && words.contains("A quote from the laptop"), words)
+        XCTAssertTrue(r.drafts.isEmpty)
+        c = try save(r.content)
+        XCTAssertEqual(read("B.board/text/txt22.md").map(RichWords.body), words, "the copy is written again with every side's words")
+        // a board opened with a Nexus copy behind its .jsonl reads the .jsonl's words
+        try write("B.board/text/txt22.jsonl", merged)
+        try write("B.board/text/txt22.md", try XCTUnwrap(RichWords.shared.copyText(l)))
+        let again = try BoardFiles.load(board)
+        XCTAssertEqual(again.texts["txt22"], RichWords.shared.words(merged))
+        XCTAssertTrue(again.docsStale.contains("txt22") || again.texts["txt22"] != again.textsOnDisk["txt22"], "the copy is written again")
     }
 
     func testAJsonlConflictCopy() {
