@@ -239,30 +239,43 @@ public final class TileMemo {
 
     /// The tile's text, made again only when what it holds changed.
     public func text(_ key: String, strokes: [BoardStroke], items: [BoardItem]) -> String {
-        let sig = TileMemo.sig(strokes, items)
         lock.lock()
-        if let m = memo[key], m.sig == sig { lock.unlock(); return m.text }
-        lock.unlock()
+        defer { lock.unlock() }
+        let want = sig(strokes, items)
+        if let m = memo[key], m.sig == want { return m.text }
         let text = BoardFiles.tileJSON(strokes: strokes, items: items)
-        lock.lock(); memo[key] = (sig, text); lock.unlock()
+        memo[key] = (want, text)
         return text
     }
 
+    /// Each stroke's points hashed once: keyed by the points' storage, which an unchanged stroke shares from one save to the next
+    /// (the entry holds the points, so that storage can't be reused for other points while it is here).
+    private var pointPrints: [UInt: (points: [[Double]], a: UInt64, b: UInt64)] = [:]
+
     /// Two 64-bit hashes (FNV-1a and a multiply-rotate one) of everything that goes into the tile's text.
-    static func sig(_ strokes: [BoardStroke], _ items: [BoardItem]) -> Sig {
+    private func sig(_ strokes: [BoardStroke], _ items: [BoardItem]) -> Sig {
         var a: UInt64 = 0xcbf2_9ce4_8422_2325, b: UInt64 = 0x9e37_79b9_7f4a_7c15
         var n = 0
-        @inline(__always) func addU(_ v: UInt64) {
+        @inline(__always) func mix(_ v: UInt64, _ a: inout UInt64, _ b: inout UInt64) {
             a = (a ^ v) &* 0x0000_0100_0000_01b3
             b = (b ^ v) &* 0xff51_afd7_ed55_8ccd
             b = (b << 31) | (b >> 33)
-            n &+= 1
         }
+        func addU(_ v: UInt64) { mix(v, &a, &b); n &+= 1 }
         func addS(_ s: String) { for u in s.utf8 { addU(UInt64(u)) }; addU(0xff) }
+        if pointPrints.count > 60_000 { pointPrints = [:] }
         for s in strokes {
             addS(s.id); addS(s.ink); addS(s.color)
             addU(UInt64(s.points.count))
-            for p in s.points { addU(UInt64(p.count)); for v in p { addU(v.bitPattern) } }
+            let at = s.points.withUnsafeBufferPointer { UInt(bitPattern: $0.baseAddress) }
+            if at != 0, let p = pointPrints[at], p.points.count == s.points.count {
+                addU(p.a); addU(p.b)
+            } else {
+                var pa: UInt64 = 0x84222325cbf29ce4, pb: UInt64 = 0x7f4a7c159e3779b9
+                for p in s.points { mix(UInt64(p.count), &pa, &pb); for v in p { mix(v.bitPattern, &pa, &pb) } }
+                if at != 0 { pointPrints[at] = (s.points, pa, pb) }
+                addU(pa); addU(pb)
+            }
             if let r = s.ranges { addU(1); for x in r { addU(UInt64(x.count)); for v in x { addU(v.bitPattern) } } } else { addU(2) }
             // a stroke as it was read is written back as it was (its key order, keys this app doesn't know)
             if case .object(let o)? = s.raw {
