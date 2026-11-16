@@ -2,7 +2,7 @@ import XCTest
 
 /// On the iPhone every feature the iPad has must be reachable (Nov 16 2026): the Calendar's Week view, drawn narrow, and a board's
 /// Split screen (the iPad's Side by side, stacked: the board on top, Today or the Calendar below). The screenshots ("phone-…") are
-/// printed in the phone-check log. Skips itself on the iPad.
+/// printed in the UI check log. Skips itself on the iPad.
 final class ParityPhoneTests: XCTestCase {
     let app = XCUIApplication()
 

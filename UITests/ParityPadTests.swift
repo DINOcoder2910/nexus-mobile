@@ -1,7 +1,7 @@
 import XCTest
 
 /// The iPad's side of "every feature on both devices" (Nov 16 2026): Home, Files, How Nexus works and Share into Nexus from the
-/// sidebar. The screenshots ("pad-…") are printed in the phone-check log. Skips itself on the iPhone.
+/// sidebar. The screenshots ("pad-…") run in the UI check. Skips itself on the iPhone.
 final class ParityPadTests: XCTestCase {
     let app = XCUIApplication()
 
