@@ -55,8 +55,11 @@ struct Sidebar: View {
                 row(.planner, "Planner", "rectangle.split.3x1", count: nil)
                 row(.calendar, "Calendar", "calendar", count: nil)
                 row(.tasks, "Tasks", "checklist", count: nil)
-                if s.isDataFolder && StudyLibrary.shared.hasDecks {
+                if s.isDataFolder && StudyLibrary.shared.hasStudy {
                     row(.study, "Study", "rectangle.on.rectangle.angled", count: StudyLibrary.shared.dueTotal)
+                }
+                if s.isDataFolder && StudyTools.shown(store) {
+                    row(.studyTools, "Study tools", "atom", count: nil)
                 }
             }
 
@@ -117,6 +120,7 @@ struct Sidebar: View {
             Label(title, systemImage: icon)
                 .badge(count ?? 0)
         }
+        .accessibilityIdentifier("sidebar-" + title)
     }
 
     /// Groups are open unless closed; the closed ones are remembered.

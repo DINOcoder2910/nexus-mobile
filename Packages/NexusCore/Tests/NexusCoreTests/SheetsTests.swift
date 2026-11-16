@@ -355,4 +355,32 @@ final class SheetsTests: XCTestCase {
         let json = try XCTUnwrap(f.range(of: "{\"type\"").map { String(f[$0.lowerBound...]) })
         XCTAssertNotNil(try? JSONValue.parse(json))
     }
+
+    /// The sample data's chemistry study folder reads as the laptop would: units, a deck with a practice list, sheets with their notes.
+    func testSampleStudyFolder() throws {
+        let files = SampleFolder.study(today: "2026-11-16")
+        let base = SampleFolder.chem + "/study/"
+        XCTAssertEqual(StudyUnits.parseConfig(String(decoding: files[base + "study.yaml"]!, as: UTF8.self)).sheets, "files/Sheets")
+        guard case .ok(let units) = StudyUnits.parseUnits(String(decoding: files[base + "units.yaml"]!, as: UTF8.self)) else { return XCTFail("units") }
+        XCTAssertEqual(units.count, 22)
+        XCTAssertEqual(StudyUnits.themesOf(units).map(\.code), ["S1", "S2", "S3", "R1", "R2", "R3"])
+        let parsed = StudyDeck.parse(String(decoding: files[base + "decks/acids.yaml"]!, as: UTF8.self), fileId: "acids")
+        let deck = try XCTUnwrap(parsed.deck, parsed.error ?? "")
+        XCTAssertEqual(parsed.problems, [])
+        XCTAssertEqual(deck.practice.count, 10)
+        XCTAssertEqual(StudyUnits.practiceOptions(deck), ["strong acid", "weak acid", "strong base", "weak base"])
+        XCTAssertEqual(StudyUnits.practiceRound(deck, level: "required", seed: "1").count, 6)
+        let paths = files.keys.filter { $0.hasPrefix(SampleFolder.sheetsDir + "/") }.sorted()
+        let index = SheetIndex.parse(String(decoding: files[base + "sheets.yaml"]!, as: UTF8.self))
+        let model = StudySheets.withIndex(StudySheets.build(paths, root: SampleFolder.sheetsDir), root: SampleFolder.sheetsDir, index: index)
+        XCTAssertEqual(model.sheets.count, 7)
+        let hess = try XCTUnwrap(model.sheets.first { $0.title == "Hess" })
+        XCTAssertEqual(hess.kind, "MCQ")
+        XCTAssertTrue(hess.codes.contains("R1.2"))
+        XCTAssertFalse(hess.notes.isEmpty)
+        XCTAssertEqual(StudySheets.sheetsFor(unit: "R1", in: model.sheets).count, 2)
+        // the PDFs are real ones
+        let pdf = String(decoding: files[paths.first { $0.hasSuffix(".pdf") }!]!, as: UTF8.self)
+        XCTAssertTrue(pdf.hasPrefix("%PDF-1.4") && pdf.hasSuffix("%%EOF\n"))
+    }
 }

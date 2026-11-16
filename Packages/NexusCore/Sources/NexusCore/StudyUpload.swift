@@ -285,8 +285,14 @@ public enum StudyUpload {
 
     // MARK: the answer
 
-    public struct Section: Equatable, Sendable { public var name: String; public var codes: [String] }
-    public struct Duplicate: Equatable, Sendable { public var path: String; public var why: String }
+    public struct Section: Equatable, Sendable {
+        public var name: String; public var codes: [String]
+        public init(name: String, codes: [String]) { self.name = name; self.codes = codes }
+    }
+    public struct Duplicate: Equatable, Sendable {
+        public var path: String; public var why: String
+        public init(path: String, why: String) { self.path = path; self.why = why }
+    }
 
     /// What the form shows: Claude's answer read and checked against the folder.
     public struct Proposal: Equatable, Sendable {

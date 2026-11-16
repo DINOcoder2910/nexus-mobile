@@ -177,8 +177,9 @@ struct WorkstreamView: View {
 
     @ViewBuilder
     private var studySection: some View {
-        if let id = workstreamId, let study = StudyLibrary.shared.study(id), !study.decks.isEmpty {
+        if let id = workstreamId, let study = StudyLibrary.shared.study(id) {
             Section {
+                StudyPageRow(study: study)
                 DeckRows(study: study)
             } header: {
                 SectionTitle(title: "Study", count: nil)
