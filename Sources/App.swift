@@ -144,7 +144,7 @@ struct WindowRoot: View {
 
 /// Where the sidebar can take you.
 enum Screen: Hashable {
-    case today, planner, calendar, tasks, someday, inbox, workstream(String), boards, boardSearch, settings, study
+    case today, planner, calendar, tasks, someday, inbox, workstream(String), boards, boardSearch, settings, study, time
     /// A notebook's page (its path in the data folder, "notebooks/Chem").
     case notebook(String)
 }
@@ -334,6 +334,7 @@ struct RootView: View {
             case .notebook(let path): NotebookPage(path: path, go: go)
             case .settings: SettingsView()
             case .study: StudyHome()
+            case .time: TimeView()
             }
         }
     }
@@ -395,6 +396,17 @@ struct RootView: View {
                 .padding(.trailing, 18)
                 .padding(.bottom, store.toast == nil ? 18 : 84)
                 .animation(.snappy, value: store.toast == nil)
+            }
+        }
+        // the running timer, over every tab (its task opens on a tap; Stop)
+        .overlay(alignment: .bottomLeading) {
+            if store.snapshot.isDataFolder && TimeTracker.shared.current != nil {
+                RunningTimerPill()
+                    .padding(.leading, 16)
+                    .padding(.trailing, 92)
+                    .padding(.bottom, (store.toast == nil ? 22 : 88) + (which == .calendar ? 56 : 0))
+                    .animation(.snappy, value: store.toast == nil)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .overlay(alignment: .bottom) { UndoBar().animation(.snappy, value: store.toast) }

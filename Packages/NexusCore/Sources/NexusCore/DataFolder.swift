@@ -152,6 +152,14 @@ public enum DataFolder {
                 for b in list(a) where b.pathExtension == "yaml" { stamp(b) }
                 continue
             }
+            if a.lastPathComponent == TimeLog.dir {
+                // time tracked on each device (time/<device>/<month>.yaml): a timer started or stopped elsewhere shows here
+                for b in list(a) where (try? b.resourceValues(forKeys: keys).isDirectory) == true {
+                    parts.append("//" + b.lastPathComponent)
+                    for c in list(b) where c.pathExtension == "yaml" { stamp(c) }
+                }
+                continue
+            }
             for b in list(a) {
                 if b.lastPathComponent == "group.yaml" { stamp(b); continue }
                 guard (try? b.resourceValues(forKeys: keys).isDirectory) == true, !b.lastPathComponent.hasSuffix(".board") else { continue }

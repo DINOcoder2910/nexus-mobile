@@ -142,6 +142,8 @@ struct TaskDetailView: View {
                 }
             }
 
+            TaskTimeSection(task: t, editable: editable)
+
             Section {
                 ForEach(store.snapshot.children(of: t)) { c in
                     TaskRow(task: c, showWorkstream: false, showCrumb: false, compact: true)

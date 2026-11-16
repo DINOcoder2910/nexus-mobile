@@ -59,7 +59,19 @@ struct TaskRow: View {
             out.append(Chip(text: Days.relative(due, today: today), icon: "flag", color: n < 0 ? Theme.late : n <= 1 ? Theme.soon : .secondary, strong: n <= 0))
         }
         if let pr = p.progress(task) { out.append(Chip(text: "\(pr.done)/\(pr.total)", icon: "checklist")) }
-        if let h = p.estimate(task) { out.append(Chip(text: hoursText(h), icon: "hourglass")) }
+        // time tracked (TimeTracker): a running timer, else the time spent against the estimate
+        let tracker = TimeTracker.shared
+        let spent = tracker.entries.isEmpty ? 0 : tracker.seconds(task.id, in: store.snapshot)
+        let est = p.estimate(task)
+        if tracker.isRunning(task.id) {
+            out.append(Chip(text: "Timer on", icon: "timer", color: Theme.accent, strong: true))
+        }
+        if spent >= 60 {
+            out.append(Chip(text: TimeLog.spent(spent) + (est.map { " of \(hoursText($0))" } ?? ""), icon: "stopwatch",
+                            color: est.map { spent > $0 * 3600 ? Theme.soon : .secondary } ?? .secondary))
+        } else if let h = est {
+            out.append(Chip(text: hoursText(h), icon: "hourglass"))
+        }
         if let w = task.waitingOn {
             let since = task.waitingSince.map { " · \(Days.between($0, today))d" } ?? ""
             out.append(Chip(text: "Waiting on \(w)\(since)", icon: "hourglass.bottomhalf.filled", color: Theme.soon))
@@ -111,6 +123,10 @@ struct TaskMenu: View {
         Button { store.open(task) } label: { Label("Open", systemImage: "arrow.up.right.square") }
         if store.canEdit(task) {
             Button { store.toggleDone(task) } label: { Label(task.done ? "Not done" : "Done", systemImage: task.done ? "circle" : "checkmark.circle") }
+            if !task.done || TimeTracker.shared.isRunning(task.id) {
+                let on = TimeTracker.shared.isRunning(task.id)
+                Button { TimeTracker.shared.toggle(task, store: store) } label: { Label(on ? "Stop timer" : "Start timer", systemImage: on ? "stop.circle" : "timer") }
+            }
             Divider()
             if !task.plannedDays.contains(today) {
                 Button { store.plan(task, on: today) } label: { Label("Plan for today", systemImage: "sun.max") }

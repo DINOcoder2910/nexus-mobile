@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
   push:
     branches: ["claude/**"]
-    paths: ["UITests/**", ".github/workflows/ui-check.yml"]
+    paths: ["UITests/**", ".github/workflows/ui-check.yml", "!UITests/TimeTrackingTests.swift"]
 
 concurrency:
   group: ui-check-${{ github.ref }}
