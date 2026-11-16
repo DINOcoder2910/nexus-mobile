@@ -510,6 +510,7 @@ extension BoardController {
         mb.menu = linksMenu()
         mb.showsMenuAsPrimaryAction = true
         mb.accessibilityLabel = "Links"
+        mb.accessibilityIdentifier = "board.links.menu"
         out.append(mb)
         return out
     }

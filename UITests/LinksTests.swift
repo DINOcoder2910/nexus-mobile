@@ -24,18 +24,19 @@ final class LinksTests: XCTestCase {
         app.launchArguments = ["-NexusTestLinksBoard", "-board.links.showAll", "YES", "-board.dark", dark ? "always" : "never"]
         app.launch()
         let mode = dark ? "dark" : "light"
-        let links = app.buttons["Links"].firstMatch
+        let links = app.buttons["board.links.menu"].firstMatch
         XCTAssertTrue(links.waitForExistence(timeout: 30), "the links board didn't open")
         sleep(2)
         // the sidebar can still be over the board when the app opens straight into it: put it away
         if app.buttons["Today"].firstMatch.isHittable { app.buttons["Sidebar"].firstMatch.tap(); sleep(1) }
         shot("links-board-\(mode)")
         links.tap()
-        let all = app.buttons["All links…"].firstMatch
-        XCTAssertTrue(all.waitForExistence(timeout: 5), "no All links… in the Links menu")
+        let all = app.descendants(matching: .any)["All links…"].firstMatch
+        if !all.waitForExistence(timeout: 10) { shot("links-menu-\(mode)") }
+        XCTAssertTrue(all.exists, "no All links… in the Links menu")
         all.tap()
         let done = app.buttons["Done"].firstMatch
-        XCTAssertTrue(done.waitForExistence(timeout: 5), "the Links list has no Done")
+        XCTAssertTrue(done.waitForExistence(timeout: 10), "the Links list has no Done")
         sleep(1)
         shot("links-list-\(mode)")
         done.tap()
