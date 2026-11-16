@@ -20,6 +20,9 @@ enum TestHooks {
     /// `-NexusTestBigBoard`: sample data, then a board as full as a long lesson's (4000 handwritten strokes of 60 points over a page
     /// of PDF), opened; the board times its saves (BoardController.saveBench) and UITests/BoardSpeedTests prints the times.
     static var isBigBoardRun: Bool { ProcessInfo.processInfo.arguments.contains("-NexusTestBigBoard") }
+    /// `-NexusTestSpaceDrag` (with the big board): Insert space is dragged on it, slowly, held for pictures and timed
+    /// (BoardController+Bench.swift, UITests/SpaceLiveTests), instead of the save bench.
+    static var isSpaceDragRun: Bool { ProcessInfo.processInfo.arguments.contains("-NexusTestSpaceDrag") }
 
     static func bigBoard(_ store: NexusStore) {
         if !store.snapshot.isDataFolder { store.makeSample() }
