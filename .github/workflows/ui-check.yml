@@ -2,13 +2,15 @@ name: UI check (simulator)
 
 # Drives the app in an iPad simulator (UITests/) on a GitHub-hosted Mac, sampling the app's main thread every few seconds, so a
 # freeze shows where the app is stuck, then runs the iPhone tests on an iPhone simulator in the SAME job from the same build (one Mac,
-# not two: the account may run only 5 Mac jobs at once). Run by hand (Actions › UI check › Run workflow), or on a push to a branch
-# that touches UITests/.
+# not two: the account may run only 5 Mac jobs at once). Every UI test runs on every push to a branch that changes the app or the
+# tests (the user's rule, Nov 16 2026: nothing ships untested), and by hand (Actions › UI check › Run workflow).
 on:
   workflow_dispatch:
   push:
     branches: ["claude/**"]
-    paths: ["UITests/**", ".github/workflows/ui-check.yml"]
+    # every push that can change what the app does or what the tests check (the app's code, its core package, its resources,
+    # the project file, the tests); docs-only and other workflows' pushes don't run it
+    paths: ["Sources/**", "Packages/**", "Resources/**", "Support/**", "project.yml", "UITests/**", ".github/workflows/ui-check.yml"]
 
 concurrency:
   group: ui-check-${{ github.ref }}
@@ -17,7 +19,7 @@ concurrency:
 jobs:
   ui:
     runs-on: macos-latest
-    timeout-minutes: 75
+    timeout-minutes: 95
     steps:
       - uses: actions/checkout@v4
 
@@ -38,6 +40,7 @@ jobs:
           print(c[0]["udid"])')
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"
           xcrun simctl boot "$UDID" || true
+          xcrun simctl privacy "$UDID" grant calendar app.nexus.mobile || true
 
       - name: Build for testing
         run: |
@@ -47,6 +50,8 @@ jobs:
             CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- 2>&1 | grep -E "error:|BUILD|\*\*" | head -n 100
 
       - name: Run the UI tests, sampling the app
+        # its own limit, so a hung iPad run still leaves time for the iPhone tests and the reports
+        timeout-minutes: 50
         run: |
           mkdir -p samples
           # every 5 s: if the app is running, a 1 s sample of all its threads
@@ -99,7 +104,7 @@ jobs:
           for t in m:
               for a in t.get("attachments",[]):
                   n=a.get("suggestedHumanReadableName","")
-                  if n.startswith("sidebar") or n.startswith("tutor-") or n.startswith("ideas-"): print(a["exportedFileName"] + "\t" + n.split("_")[0])' > wanted.txt 2>/dev/null || true
+                  if n.startswith("sidebar") or n.startswith("tutor-") or n.startswith("ideas-") or n.startswith("claude-"): print(a["exportedFileName"] + "\t" + n.split("_")[0])' > wanted.txt 2>/dev/null || true
           [ -s wanted.txt ] || { echo "no shots to print"; exit 0; }
           while IFS="$(printf '\t')" read -r F N; do
             sips -Z 1400 -s format jpeg -s formatOptions 60 "shots/$F" --out "$N.jpg" >/dev/null || continue
@@ -178,6 +183,7 @@ jobs:
           print(c[0]["udid"])')
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"
           xcrun simctl boot "$UDID" || true
+          xcrun simctl privacy "$UDID" grant calendar app.nexus.mobile || true
 
       - name: Run the iPhone tests
         if: ${{ !cancelled() }}

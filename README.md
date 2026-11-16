@@ -68,7 +68,7 @@ There is no Mac in the loop: every push builds on a GitHub-hosted Mac (`.github/
 
 - One Mac job per check. Build for testing once, then run the iPad and the iPhone simulators one after the other in the same job (as `ui-check.yml` does), never as a matrix or two jobs.
 - Give a push trigger a `paths:` filter, so a check runs only when its screens or tests change.
-- A check written for one feature (like `claude-check.yml` or `spanish-check.yml`) folds into `ui-check.yml` or is deleted before the branch merges, so main doesn't carry it.
+- `ui-check.yml` runs every UI test (iPad, then every `…PhoneTests` class on the iPhone) on every push that changes the app or the tests, so a new feature's tests need no workflow of their own. A check written for one feature (like the old `claude-check.yml`) folds into `ui-check.yml` or is deleted before the branch merges, so main doesn't carry it.
 - Push in batches rather than commit by commit: each push to a branch cancels that branch's older runs, but they've often already held a Mac.
 - Don't add `pull_request` triggers: the builds run on pushes, and the repo is public.
 
