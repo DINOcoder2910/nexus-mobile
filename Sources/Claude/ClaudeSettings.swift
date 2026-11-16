@@ -8,10 +8,6 @@ struct ClaudeSettings: View {
     @State private var addingKey = false
     @State private var wantsAPI = false
 
-    @AppStorage("claude.model") private var chatModel = "sonnet"
-    @AppStorage("claude.briefModel") private var briefModel = "haiku"
-    @AppStorage("claude.dayHours") private var dayHours = 6.0
-
     var body: some View {
         Section {
             Picker("Claude uses", selection: Binding(get: { account.mode }, set: { m in if !account.setMode(m) { wantsAPI = true; addingKey = true } })) {
@@ -34,6 +30,21 @@ struct ClaudeSettings: View {
         } footer: {
             Text("One switch for every Claude feature on this iPad; the Plan / API chip beside each one flips it too. API uses your key from the Claude Console and answers fastest, anywhere. Your plan runs on your computer through the hub: the Duo when Nexus is open there, otherwise the G14. Spending counts only this iPad's API replies; the laptop has its own switch.")
         }
+        .sheet(isPresented: $addingKey) {
+            ClaudeKeyForm(switchAfter: wantsAPI) { addingKey = false; wantsAPI = false }
+                .padding(24)
+                .presentationDetents([.height(280)])
+        }
+    }
+}
+
+/// Settings › Claude chat: the conversation's model, the day brief, how full /plan makes a day. Placed after Usage in SettingsView's Form.
+struct ClaudeChatSettings: View {
+    @AppStorage("claude.model") private var chatModel = "sonnet"
+    @AppStorage("claude.briefModel") private var briefModel = "haiku"
+    @AppStorage("claude.dayHours") private var dayHours = 6.0
+
+    var body: some View {
         Section {
             Picker("Conversation model", selection: $chatModel) {
                 Text("Sonnet").tag("sonnet"); Text("Haiku").tag("haiku"); Text("Opus").tag("opus")
@@ -49,11 +60,6 @@ struct ClaudeSettings: View {
             Text("Claude chat")
         } footer: {
             Text("The conversation (the Claude row, the ✦ button) starts on this model; its header changes it for the next message. Claude reads your data folder and shows each change as a card to accept or reject. The day brief is written once a day from your plans (no files read), with a cheap model; off, the plain summary shows. /plan keeps a day to about this many hours.")
-        }
-        .sheet(isPresented: $addingKey) {
-            ClaudeKeyForm(switchAfter: wantsAPI) { addingKey = false; wantsAPI = false }
-                .padding(24)
-                .presentationDetents([.height(280)])
         }
     }
 }
