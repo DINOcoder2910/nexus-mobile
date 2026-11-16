@@ -200,13 +200,13 @@ struct SpanishWriteView: View {
                 .font(.body)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.sentences)
+                .accessibilityIdentifier("spanish-piece")
                 .frame(minHeight: size == .regular ? 360 : 240)
                 .padding(6)
                 .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.secondary.opacity(0.3)))
                 .overlay(alignment: .topLeading) {
-                    if text.wrappedValue.isEmpty { Text("Write your answer here").foregroundStyle(.tertiary).padding(14).allowsHitTesting(false) }
+                    if text.wrappedValue.isEmpty { Text("Write your answer here").foregroundStyle(.tertiary).padding(14).allowsHitTesting(false).accessibilityHidden(true) }
                 }
-                .accessibilityIdentifier("spanish-piece")
             HStack(spacing: 4) {
                 Text("\(c.counted) words").bold()
                 Text("counted · \(c.paragraphs) \(c.paragraphs == 1 ? "paragraph" : "paragraphs") · " + (c.band == "short" ? "under 70" : c.band == "long" ? "over 150" : "within 70–150"))

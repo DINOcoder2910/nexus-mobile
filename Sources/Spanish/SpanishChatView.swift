@@ -194,6 +194,7 @@ struct SpanishAnswerField: View {
                 .accessibilityIdentifier("spanish-answer")
             Button("Check") { SpanishKeyboard.hide(); onCheck(text) }
                 .buttonStyle(.borderedProminent)
+                .accessibilityIdentifier("spanish-answer-check")
                 .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
     }

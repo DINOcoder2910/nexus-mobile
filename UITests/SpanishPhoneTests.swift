@@ -21,7 +21,7 @@ final class SpanishPhoneTests: XCTestCase {
     }
 
     func el(_ id: String) -> XCUIElement { app.descendants(matching: .any).matching(identifier: id).firstMatch }
-    func text(_ contains: String) -> XCUIElement { app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", contains)).firstMatch }
+    func text(_ contains: String) -> XCUIElement { app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", contains)).firstMatch }
     func type(_ id: String, _ s: String) {
         let f = el(id)
         XCTAssertTrue(f.waitForExistence(timeout: 10), "no \(id)")
@@ -98,8 +98,9 @@ final class SpanishPhoneTests: XCTestCase {
         shot("phone-spanish-chat")
         answer.tap()
         answer.typeText("Fui a Madrid con mi familia.")
-        app.buttons["Check"].firstMatch.tap()
-        XCTAssertTrue(text("Muy bien").waitForExistence(timeout: 25), "the tutor didn't answer the check")
+        el("spanish-answer-check").tap()
+        if !text("Muy bien").waitForExistence(timeout: 25) { shot("phone-spanish-zz-no-answer") }
+        XCTAssertTrue(text("Muy bien").exists, "the tutor didn't answer the check")
         hideKeyboard()
         sleep(2)
         shot("phone-spanish-chat-answered")

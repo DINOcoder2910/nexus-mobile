@@ -22,7 +22,7 @@ final class SpanishPadTests: XCTestCase {
     }
 
     func el(_ id: String) -> XCUIElement { app.descendants(matching: .any).matching(identifier: id).firstMatch }
-    func text(_ contains: String) -> XCUIElement { app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", contains)).firstMatch }
+    func text(_ contains: String) -> XCUIElement { app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", contains)).firstMatch }
     func type(_ id: String, _ s: String) {
         let f = el(id)
         XCTAssertTrue(f.waitForExistence(timeout: 10), "no \(id)")
@@ -103,7 +103,7 @@ final class SpanishPadTests: XCTestCase {
         shot("pad-spanish-chat")
         answer.tap()
         answer.typeText("Fui a Madrid con mi familia.")
-        app.buttons["Check"].firstMatch.tap()
+        el("spanish-answer-check").tap()
         XCTAssertTrue(text("Muy bien").waitForExistence(timeout: 25), "the tutor didn't answer the check")
         sleep(2)
         shot("pad-spanish-chat-answered")
