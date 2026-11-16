@@ -8,7 +8,7 @@ import NexusCore
 ///
 /// Canvas units are board units plus `offset`: a scroll view can't go below 0, so the canvas keeps room left of and above the
 /// content, and grows that room (moving everything, so nothing moves on screen) when you write near the edge.
-/// Saving writes only the tiles that changed, 600 ms after an edit and on leaving; another device's write is read in when there
+/// Saving writes only the tiles that changed, 800 ms after an edit (once the Pencil is up) and on leaving; another device's write is read in when there
 /// is nothing unsaved here.
 final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRecognizerDelegate {
     let root: URL
@@ -482,9 +482,20 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         guard !readOnly else { return }
         dirty = true
         saveWork?.cancel()
-        let work = DispatchWorkItem { [weak self] in self?.saveNow() }
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            // the Pencil is on the glass (the next stroke has begun): save once it lifts, so a save never lands in the middle of a stroke
+            if self.penDown { self.changed(); return }
+            self.saveNow()
+        }
         saveWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: work)
+    }
+
+    /// A stroke (or a scroll) is under way.
+    var penDown: Bool {
+        let g = canvas.drawingGestureRecognizer.state
+        return canvas.isTracking || g == .began || g == .changed
     }
 
     @objc func saveNowSelector() { HangWatch.note("board: app resigning active, saving"); saveNow() }
@@ -552,7 +563,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
 
     /// Another device (sync) or app wrote the board: read it again, unless something here isn't saved yet (that wins on the next save).
     func checkOutside() {
-        guard !dirty, presentedViewController == nil, !canvas.isTracking else { return }
+        guard !dirty, presentedViewController == nil, !penDown else { return }
         let now = fileStamps()
         guard now != stamps else { return }
         if takeOutsideWords(now) { return } // only words changed (the laptop typing): the ink and its undo stay as they are
