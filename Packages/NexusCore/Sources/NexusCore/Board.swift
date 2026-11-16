@@ -270,6 +270,9 @@ public final class TileMemo {
 
     /// Makes every tile's text ahead of the first save (on a board just opened, that save would otherwise turn every stroke into
     /// text, seconds on a long lesson). Run it away from the main thread; a save meanwhile waits for one tile at most.
+    /// True once `prime` has made every tile (the UI check's bench waits for it).
+    public private(set) var primed = false
+
     public func prime(_ c: BoardContent) {
         var byKey: [String: (s: [BoardStroke], i: [BoardItem])] = [:]
         for s in c.strokes { byKey[s.tileKey, default: ([], [])].s.append(s) }
@@ -279,6 +282,7 @@ public final class TileMemo {
             _ = textLocked(key, strokes: t.s, items: t.i)
             lock.unlock()
         }
+        primed = true
     }
 
     /// Each stroke's points hashed once: keyed by the points' storage, which an unchanged stroke shares from one save to the next
