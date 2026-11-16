@@ -163,6 +163,17 @@ final class FolderTests: XCTestCase {
         XCTAssertEqual(none, "tasks:\n  - id: abcd\n    title: One\n")
     }
 
+    func testATaskWrittenOnOneLineIsOpenedToEditIt() throws {
+        let yaml = "tasks:\n  - id: aa01\n    title: Supplements\n    subtasks:\n      - {id: aa02, title: 'Background, essay', due: 2026-10-15}\n      - {id: aa03, title: Short}\n  - {id: aa04, title: Submit, plan: [2026-10-01, 2026-10-02]}\n"
+        let a = try YamlEdit.setField(yaml, id: "aa02", key: "plan", yaml: "[2026-10-10]")
+        XCTAssertEqual(a, "tasks:\n  - id: aa01\n    title: Supplements\n    subtasks:\n      - id: aa02\n        title: 'Background, essay'\n        due: 2026-10-15\n        plan: [2026-10-10]\n      - {id: aa03, title: Short}\n  - {id: aa04, title: Submit, plan: [2026-10-01, 2026-10-02]}\n")
+        let b = try YamlEdit.setField(yaml, id: "aa04", key: "plan", yaml: nil)
+        XCTAssertTrue(b.hasSuffix("  - id: aa04\n    title: Submit\n"), b)
+        let c = try YamlEdit.addTask(yaml, id: "aa05", title: "Under Short", parent: "aa03")
+        XCTAssertEqual(try TaskFile.parse(c, file: "t.yaml", workstream: nil).tasks.count, 5)
+        XCTAssertThrowsError(try YamlEdit.setField(yaml, id: "zz99", key: "plan", yaml: "[]"))
+    }
+
     func testEditsKeepCommentsAndTheRest() throws {
         let yaml = "# my tasks\ntasks:\n  # first one\n  - id: aaaa\n    title: A   # inline\n    plan: [2026-11-01]\n\n  - title: B\n    id: bbbb\n    key: true\n"
         let a = try YamlEdit.setField(yaml, id: "aaaa", key: "done", yaml: "2026-11-11")
