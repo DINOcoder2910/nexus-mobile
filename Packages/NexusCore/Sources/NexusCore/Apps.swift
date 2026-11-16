@@ -14,7 +14,7 @@ public enum Apps {
 
     // MARK: application systems (several campuses, one application)
 
-    public struct AppSystem: Equatable {
+    public struct AppSystem: Equatable, Identifiable {
         public let id, name, short: String
         public let unitids: [Int]
     }

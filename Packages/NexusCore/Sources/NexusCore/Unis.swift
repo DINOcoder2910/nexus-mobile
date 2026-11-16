@@ -99,6 +99,7 @@ public struct UniRow: Identifiable, Equatable {
     public var dropped: School?
     /// The tier of a school with no folder at all (tiers.yaml).
     public var t: LooseTier?
+    public init(key: String, u: UniSchool?, s: School?, dropped: School?, t: LooseTier?) { self.key = key; self.u = u; self.s = s; self.dropped = dropped; self.t = t }
     public var mine: Bool { s != nil }
     public var applying: Bool { s?.applying == true }
     public var name: String { s?.name ?? u?.name ?? "" }

@@ -314,7 +314,7 @@ public struct AppsEditor {
         }
         guard let u = row.u else { throw Failure.cannot("That school is not in the database.") }
         return try addSchool(u.folder, model: m, unitid: u.id, short: u.short != u.folder ? u.short : nil, tier: tier, level: level, round: round,
-                             dl: round.flatMap { u.rounds[$0]?.dl }, start: start, snapshot: snapshot, today: today)
+                             dl: nil, start: start, snapshot: snapshot, today: today)
     }
 
     public func setApplied(_ s: School, _ on: Bool, model m: AppsModel, today: String) throws -> Change {
