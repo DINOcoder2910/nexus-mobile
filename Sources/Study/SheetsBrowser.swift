@@ -84,7 +84,7 @@ struct SheetsBrowser: View {
         SheetRow(sheet: s, root: store.folder, onUnit: { filter.unit = $0 }) { preview = $0 }
     }
 
-    private func countText(_ total: Int, _ shown: Int) -> Text {
+    private func countText(_ total: Int, _ shown: Int) -> some View {
         Text(shown == total ? sheetCount(total) : "\(shown) of \(total) sheets").textCase(nil)
     }
 
