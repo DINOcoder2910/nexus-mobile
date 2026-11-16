@@ -51,6 +51,7 @@ struct Sidebar: View {
         let s = store.snapshot
         if !notebooksOnly {
             Section {
+                row(.home, "Home", "house", count: nil)
                 row(.today, "Today", "sun.max", count: p.planned(on: store.today).count)
                 row(.planner, "Planner", "rectangle.split.3x1", count: nil)
                 row(.calendar, "Calendar", "calendar", count: nil)
@@ -105,7 +106,9 @@ struct Sidebar: View {
 
             if !notebooksOnly {
                 Section {
+                    if s.isDataFolder { row(.files(""), "Files", "folder", count: nil) }
                     row(.settings, "Settings", "gearshape", count: nil)
+                    row(.guide, "How Nexus works", "questionmark.circle", count: nil)
                 } footer: {
                     if s.readOnlyReason != nil { Label("Read-only", systemImage: "lock").font(.caption) }
                 }

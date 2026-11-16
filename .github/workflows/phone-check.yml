@@ -1,13 +1,13 @@
-name: Phone check (iPhone simulator)
+name: Phone check (iPhone and iPad simulators)
 
-# The iPhone's UI tests (UITests/*PhoneTests.swift; each skips itself on the iPad) on an iPhone simulator, with their screenshots
-# ("phone-…") printed in the log as base64 JPEGs for a reader that can't download artifacts. Run by hand, or on a push to a branch
-# that touches the iPhone tests or this file.
+# The every-feature-on-both-devices UI tests: UITests/*PhoneTests.swift on an iPhone simulator and UITests/*PadTests.swift on an
+# iPad one (each class skips itself on the other device), with their screenshots ("phone-…", "pad-…") printed in the log as base64
+# JPEGs for a reader that can't download artifacts. Run by hand, or on a push to a branch that touches those tests or this file.
 on:
   workflow_dispatch:
   push:
     branches: ["claude/**"]
-    paths: ["UITests/*PhoneTests.swift", ".github/workflows/phone-check.yml"]
+    paths: ["UITests/*PhoneTests.swift", "UITests/*PadTests.swift", ".github/workflows/phone-check.yml"]
 
 concurrency:
   group: phone-check-${{ github.ref }}
@@ -15,6 +15,10 @@ concurrency:
 
 jobs:
   phone:
+    strategy:
+      fail-fast: false
+      matrix:
+        device: [iPhone, iPad]
     runs-on: macos-latest
     timeout-minutes: 40
     steps:
@@ -25,13 +29,13 @@ jobs:
           brew install xcodegen
           xcodegen generate
 
-      - name: Pick an iPhone simulator
+      - name: Pick a simulator
         id: sim
         run: |
           UDID=$(xcrun simctl list devices available -j | python3 -c '
           import json,sys
           d=json.load(sys.stdin)["devices"]
-          c=[x for k,v in d.items() if "iOS" in k for x in v if x["name"].startswith("iPhone")]
+          c=[x for k,v in d.items() if "iOS" in k for x in v if x["name"].startswith("${{ matrix.device }}")]
           c.sort(key=lambda x: (("Pro" not in x["name"]) or ("Max" in x["name"]), x["name"]))
           print(c[0]["udid"], c[0]["name"], file=sys.stderr)
           print(c[0]["udid"])')
@@ -47,11 +51,12 @@ jobs:
             -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" -derivedDataPath DerivedData \
             CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- 2>&1 | grep -E "error:|BUILD|\*\*" | head -n 100
 
-      - name: Run the iPhone tests
+      - name: Run the tests
         timeout-minutes: 25
         run: |
           echo 1 > status.txt
-          ONLY=$(grep -ho "class [A-Za-z0-9_]*PhoneTests" UITests/*.swift | awk '{print "-only-testing:NexusMobileUITests/" $2}' | sort -u | tr '\n' ' ')
+          SUFFIX=$([ "${{ matrix.device }}" = iPad ] && echo PadTests || echo PhoneTests)
+          ONLY=$(grep -ho "class [A-Za-z0-9_]*$SUFFIX" UITests/*.swift | awk '{print "-only-testing:NexusMobileUITests/" $2}' | sort -u | tr '\n' ' ')
           echo "running: $ONLY"
           set +e
           xcodebuild test-without-building -project NexusMobile.xcodeproj -scheme NexusMobileUITests \
@@ -61,7 +66,7 @@ jobs:
           echo "xcodebuild test exited $STATUS"
           echo "$STATUS" > status.txt
 
-      - name: iPhone screenshots in the log (base64 JPEG)
+      - name: Screenshots in the log (base64 JPEG)
         if: always()
         run: |
           mkdir -p phoneshots
@@ -71,7 +76,7 @@ jobs:
           for t in json.load(open("phoneshots/manifest.json")):
               for a in t.get("attachments",[]):
                   n=a.get("suggestedHumanReadableName","")
-                  if n.startswith("phone-"): print(a["exportedFileName"] + "\t" + n.split("_")[0])' > phonewanted.txt 2>/dev/null || true
+                  if n.startswith("phone-") or n.startswith("pad-"): print(a["exportedFileName"] + "\t" + n.split("_")[0])' > phonewanted.txt 2>/dev/null || true
           while IFS=$'\t' read -r F N; do
             [ -f "phoneshots/$F" ] || continue
             sips -Z 1400 -s format jpeg -s formatOptions 60 "phoneshots/$F" --out "$N.jpg" >/dev/null || continue
@@ -83,7 +88,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: phone-check
+          name: phone-check-${{ matrix.device }}
           path: |
             phoneshots
             phone.log

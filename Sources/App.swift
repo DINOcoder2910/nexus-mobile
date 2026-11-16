@@ -145,6 +145,10 @@ struct WindowRoot: View {
 /// Where the sidebar can take you.
 enum Screen: Hashable {
     case today, planner, calendar, tasks, someday, inbox, workstream(String), boards, boardSearch, settings, study
+    /// Home (the laptop's first screen) and How Nexus works.
+    case home, guide
+    /// Files: a folder of the data folder ("" is the folder itself).
+    case files(String)
     /// A notebook's page (its path in the data folder, "notebooks/Chem").
     case notebook(String)
 }
@@ -318,11 +322,14 @@ struct RootView: View {
     /// One screen. `go` is where a link inside it goes (the split view's selection, or a push on the iPhone's tab).
     @ViewBuilder
     private func screenView(_ s: Screen, go: @escaping (Screen) -> Void) -> some View {
-        if !store.snapshot.isDataFolder, s != .boards, s != .settings, s != .calendar {
+        if !store.snapshot.isDataFolder, s != .boards, s != .settings, s != .calendar, s != .guide {
             FolderSetupView()
         } else {
             switch s {
             case .today: TodayView()
+            case .home: HomeView(go: go)
+            case .files(let path): FilesView(path: path, go: go)
+            case .guide: GuideView()
             case .planner: PlannerView()
             case .calendar: CalendarView()
             case .tasks: TasksView(lens: .all)

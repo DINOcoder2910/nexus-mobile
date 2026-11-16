@@ -56,6 +56,51 @@ final class ParityPhoneTests: XCTestCase {
         shot("phone-week-next")
     }
 
+    /// Home, Files, How Nexus works and Share into Nexus, from the More tab.
+    func testMoreHasTheNewPlaces() {
+        app.launch()
+        let sample = app.buttons["Try with sample data"]
+        if sample.waitForExistence(timeout: 10) { sample.tap() }
+        let more = app.tabBars.buttons["More"]
+        XCTAssertTrue(more.waitForExistence(timeout: 15), "no More tab")
+        more.tap()
+
+        func openRow(_ name: String) {
+            let row = app.buttons[name].firstMatch
+            if !row.waitForExistence(timeout: 3) { app.swipeUp() }
+            XCTAssertTrue(row.waitForExistence(timeout: 10), "More has no \(name)")
+            row.tap()
+            sleep(2)
+        }
+        func back() {
+            app.navigationBars.buttons.element(boundBy: 0).tap()
+            sleep(1)
+        }
+
+        openRow("Home")
+        XCTAssertTrue(app.descendants(matching: .any)["home-fig-slipped"].waitForExistence(timeout: 10), "Home has no figures")
+        shot("phone-home")
+        app.swipeUp()
+        sleep(1)
+        shot("phone-home-lower")
+        back()
+
+        openRow("Files")
+        XCTAssertTrue(app.navigationBars["Files"].waitForExistence(timeout: 10), "Files didn't open")
+        shot("phone-files")
+        let nb = app.buttons["file-notebooks"].firstMatch
+        if nb.exists { nb.tap(); sleep(2); shot("phone-files-folder"); back() }
+        back()
+
+        openRow("How Nexus works")
+        shot("phone-guide")
+        back()
+
+        openRow("Settings")
+        openRow("Share into Nexus")
+        shot("phone-share")
+    }
+
     func testBoardSplitScreen() {
         app.launchArguments = ["-NexusTestPdfBoard"]
         app.launch()
