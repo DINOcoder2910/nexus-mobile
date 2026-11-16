@@ -132,7 +132,7 @@ jobs:
             echo "SHOT-END"
           done < rich/list.txt
 
-      - name: PDF zoom and board speed screenshots in the log (base64 JPEG)
+      - name: PDF zoom, board speed and links screenshots in the log (base64 JPEG)
         if: always()
         run: |
           python3 -c '
@@ -141,7 +141,7 @@ jobs:
           for t in m:
               for a in t.get("attachments",[]):
                   n=a.get("suggestedHumanReadableName","")
-                  if n.startswith("zoom-") or n.startswith("speed-"): print(a["exportedFileName"] + "\t" + n)' 2>/dev/null > zoomshots.txt || true
+                  if n.startswith("zoom-") or n.startswith("speed-") or n.startswith("links-"): print(a["exportedFileName"] + "\t" + n)' 2>/dev/null > zoomshots.txt || true
           while IFS=$'\t' read -r F N; do
             [ -n "$F" ] || continue
             sips -Z 1200 -s format jpeg -s formatOptions 60 "shots/$F" --out z.jpg >/dev/null
