@@ -67,11 +67,21 @@ final class SidebarSpeedTests: XCTestCase {
         reach(next, "Page 04")
         let t0 = Date()
         next.tap()
+        // the board takes over: the sidebar goes away
+        let away = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == false"), object: app.buttons["New task"].firstMatch)
+        _ = XCTWaiter().wait(for: [away], timeout: 15)
+        print("UISTEP \(Date().timeIntervalSince1970) time switch boards: \(String(format: "%.2f", Date().timeIntervalSince(t0))) s")
+        sleep(1)
+        // back to the sidebar: the new board's row is the selected one
+        if !app.buttons["New task"].firstMatch.isHittable {
+            let side = app.buttons["Sidebar"].firstMatch
+            XCTAssertTrue(side.waitForExistence(timeout: 5), "no Sidebar button on the board")
+            side.tap()
+            sleep(1)
+        }
         let cell = app.cells.containing(.staticText, identifier: "Page 04").firstMatch
         let selected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "selected == true"), object: cell)
         let ok = XCTWaiter().wait(for: [selected], timeout: 10) == .completed
-        print("UISTEP \(Date().timeIntervalSince1970) time switch boards: \(String(format: "%.2f", Date().timeIntervalSince(t0))) s")
-        sleep(2)
         let b = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         b.name = "sidebar-many-board-open"
         b.lifetime = .keepAlways
