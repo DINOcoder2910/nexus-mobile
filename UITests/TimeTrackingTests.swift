@@ -42,6 +42,10 @@ final class TimeTrackingTests: XCTestCase {
     func testTimeTracking() {
         // Today, with the running timer (the iPad's sidebar row, the iPhone's pill) and "… tracked" under the date
         XCTAssertTrue(app.staticTexts["Redox worksheet"].firstMatch.waitForExistence(timeout: 20), "Today isn't up")
+        // the system's notifications question (the reminders ask on a first launch) would cover the screenshots
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let ask = springboard.alerts.firstMatch
+        if ask.waitForExistence(timeout: 4) { ask.buttons.element(boundBy: 0).tap() }
         sleep(2)
         XCTAssertTrue(app.buttons["Stop the timer"].firstMatch.waitForExistence(timeout: 5), "no running timer showing")
         shot("time-1-today")
@@ -64,9 +68,13 @@ final class TimeTrackingTests: XCTestCase {
         if title.exists && title.isHittable { title.tap() } else { app.staticTexts["Q1–5"].firstMatch.tap() }
         let timer = app.buttons["task-timer"].firstMatch
         var tries = 0
-        while !(timer.exists && timer.isHittable) && tries < 8 { app.swipeUp(); tries += 1 }
+        while !(timer.exists && timer.isHittable) && tries < 12 { app.swipeUp(velocity: .slow); tries += 1 }
         XCTAssertTrue(timer.exists, "no Time section in the task panel")
-        app.swipeUp()
+        // bring the section up near the top of the panel so its sessions show under it
+        if timer.isHittable {
+            let from = timer.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            from.press(forDuration: 0.1, thenDragTo: from.withOffset(CGVector(dx: 0, dy: -220)))
+        }
         sleep(1)
         shot("time-3-panel")
         // close the panel
