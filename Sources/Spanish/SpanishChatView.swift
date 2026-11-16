@@ -67,6 +67,7 @@ struct SpanishChatBody: View {
             Divider()
             if chat.review != nil { SpanishMemoryReview(chat: chat).frame(maxWidth: wide ? 760 : .infinity) } else { composer }
         }
+        .spanishKeyboardDone()
     }
 
     // MARK: messages
@@ -181,9 +182,9 @@ struct SpanishAnswerField: View {
                 .lineLimit(1...4)
                 .textFieldStyle(.roundedBorder)
                 .autocorrectionDisabled()
-                .onSubmit { onCheck(text) }
+                .onSubmit { SpanishKeyboard.hideOnPhone(); onCheck(text) }
                 .accessibilityIdentifier("spanish-answer")
-            Button("Check") { onCheck(text) }
+            Button("Check") { SpanishKeyboard.hideOnPhone(); onCheck(text) }
                 .buttonStyle(.borderedProminent)
                 .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }

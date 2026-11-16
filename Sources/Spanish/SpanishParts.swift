@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import WebKit
 import NexusCore
 
@@ -311,6 +312,30 @@ struct SpanishToken: View {
 
 extension String {
     var nonEmpty: String? { isEmpty ? nil : self }
+}
+
+/// The iPhone's keyboard covers half the screen, so the Spanish pages hide it once Check or Mark is pressed (the answer shows below)
+/// and give it a Done button. The iPad keeps the keyboard, so the next sentence can be typed at once.
+enum SpanishKeyboard {
+    @MainActor static func hideOnPhone() {
+        guard Device.isPhone else { return }
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+}
+
+extension View {
+    /// A Done button above the iPhone's keyboard. One per page.
+    func spanishKeyboardDone() -> some View {
+        toolbar {
+            if Device.isPhone {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
+                        .accessibilityIdentifier("spanish-keyboard-done")
+                }
+            }
+        }
+    }
 }
 
 /// A finished or running check: the sentence, the mistakes with their fixes, the structures, the three layers.

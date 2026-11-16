@@ -29,7 +29,11 @@ final class SpanishPhoneTests: XCTestCase {
         f.typeText(s)
     }
     func back() { app.navigationBars.buttons.element(boundBy: 0).tap(); sleep(1) }
-    func hideKeyboard() { if app.keyboards.count > 0 { app.navigationBars.firstMatch.tap() } }
+    func hideKeyboard() {
+        guard app.keyboards.count > 0 else { return }
+        let done = app.buttons["spanish-keyboard-done"].firstMatch
+        if done.exists { done.tap() } else { app.navigationBars.firstMatch.tap() }
+    }
 
     func openSpanish() {
         app.launchArguments = ["-NexusSpanishDemo"]
@@ -56,8 +60,8 @@ final class SpanishPhoneTests: XCTestCase {
         hideKeyboard()
         sleep(1)
         shot("phone-spanish-checked")
-        app.buttons["helado"].firstMatch.tap()
-        XCTAssertTrue(text("ice cream").waitForExistence(timeout: 5), "no meaning for helado")
+        app.buttons["playa"].firstMatch.tap()
+        XCTAssertTrue(text("beach").waitForExistence(timeout: 5), "no meaning for playa")
         shot("phone-spanish-word")
         app.buttons["SpanishDict"].firstMatch.tap()
         XCTAssertTrue(el("spanishdict-page").waitForExistence(timeout: 5), "no SpanishDict sheet")

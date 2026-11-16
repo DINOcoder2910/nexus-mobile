@@ -42,6 +42,7 @@ struct SpanishHomeContent: View {
         .navigationTitle(lib.workstream(workstreamId).map { "Spanish · \($0.name)" } ?? "Spanish")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { if lib.workstream(workstreamId) != nil { toolbar } }
+        .spanishKeyboardDone()
         .navigationDestination(item: $route) { r in
             switch r {
             case .chat: SpanishChatView(workstreamId: workstreamId)
@@ -169,6 +170,7 @@ struct SpanishHomeContent: View {
         let run = SpanishCheckRun(text: t, question: question.trimmingCharacters(in: .whitespacesAndNewlines))
         lib.current[workstreamId] = run
         draft = ""
+        SpanishKeyboard.hideOnPhone()
         Task { await run.run(store, wsId: workstreamId) }
     }
 
