@@ -118,7 +118,7 @@ struct SchoolPage: View {
     // MARK: the header: status and the next step
 
     private func header(_ s: School, _ m: AppsModel, _ r: UniRow?) -> some View {
-        Card {
+        AppsCard {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 3) {
@@ -232,7 +232,7 @@ struct SchoolPage: View {
     private func work(_ s: School, _ m: AppsModel) -> some View {
         let snap = store.snapshot
         let tasks = snap.order.compactMap { snap.tasks[$0] }.filter { $0.workstream == s.id && !$0.done && !$0.someday }
-        Card(title: "Tasks", count: tasks.count, action: ("Add", { store.capture = .init(workstream: s.id, parent: nil, plan: nil) })) {
+        AppsCard(title: "Tasks", count: tasks.count, action: ("Add", { store.capture = .init(workstream: s.id, parent: nil, plan: nil) })) {
             if tasks.isEmpty { Text("Nothing open.").font(.subheadline).foregroundStyle(.secondary) }
             ForEach(tasks.prefix(12)) { t in TaskRow(task: t, showWorkstream: false, showCrumb: false, compact: true) }
             if tasks.count > 12 { Button("All \(tasks.count) tasks") { go(.workstream(s.id)) }.font(.subheadline) }
@@ -240,7 +240,7 @@ struct SchoolPage: View {
 
         if s.applying || !s.requirements.isEmpty {
             let done = s.requirements.filter { $0.done || $0.na }.count
-            Card(title: "Checklist", count: nil, trailing: s.requirements.isEmpty ? nil : "\(done) of \(s.requirements.count)", action: ("Add", { addingReq = true })) {
+            AppsCard(title: "Checklist", count: nil, trailing: s.requirements.isEmpty ? nil : "\(done) of \(s.requirements.count)", action: ("Add", { addingReq = true })) {
                 ForEach(Array(s.requirements.enumerated()), id: \.offset) { i, q in
                     HStack(alignment: .top, spacing: 10) {
                         Button { AppsData.shared.edit(store) { e, _ in try e.toggleRequirement(s, at: i) } } label: {
@@ -263,7 +263,7 @@ struct SchoolPage: View {
             }
         }
 
-        Card(title: "Essays", count: s.essays.count, action: ("Add a prompt", { addingEssay = true })) {
+        AppsCard(title: "Essays", count: s.essays.count, action: ("Add a prompt", { addingEssay = true })) {
             if s.essays.isEmpty {
                 Text(s.research.prompts.isEmpty ? "No prompts yet. Add the ones the school asks." : "\(s.research.prompts.count) prompt\(s.research.prompts.count == 1 ? "" : "s") in the research; they become essays when you start applying.")
                     .font(.subheadline).foregroundStyle(.secondary)
@@ -279,7 +279,7 @@ struct SchoolPage: View {
 
         let advice = CounsellorAdvice.about(s, store: store)
         if !advice.isEmpty {
-            Card(title: "Counsellor", count: nil) {
+            AppsCard(title: "Counsellor", count: nil) {
                 ForEach(advice, id: \.line) { a in
                     VStack(alignment: .leading, spacing: 2) {
                         Text(a.line).font(.subheadline)
@@ -296,7 +296,7 @@ struct SchoolPage: View {
     private func facts(_ s: School, _ m: AppsModel, _ r: UniRow?) -> some View {
         AboutCard(school: s)
 
-        Card(title: "Rounds and numbers", count: nil) {
+        AppsCard(title: "Rounds and numbers", count: nil) {
             ForEach(Apps.roundKeys, id: \.self) { k in
                 let info = Apps.roundInfo(s, r?.u, k)
                 Button { editingRound = k } label: {
@@ -328,12 +328,12 @@ struct SchoolPage: View {
             if let c = s.research.checked { Text("Site checked \(SiteFacts.fmtDate(c))\(s.research.checkedLegacy ? " (old file)" : "")").font(.caption).foregroundStyle(.secondary) }
         }
 
-        Card(title: "Notes", count: nil, action: (notes == nil ? "Add" : "Edit", { editingNotes = notes ?? "" })) {
+        AppsCard(title: "Notes", count: nil, action: (notes == nil ? "Add" : "Edit", { editingNotes = notes ?? "" })) {
             if let n = notes, !n.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { NoteText(text: n) }
             else { Text("Nothing yet: notes.md in \(s.folder).").font(.subheadline).foregroundStyle(.secondary) }
         }
 
-        Card(title: "Sources", count: s.research.sources.count, action: ("Add", { addingSource = true })) {
+        AppsCard(title: "Sources", count: s.research.sources.count, action: ("Add", { addingSource = true })) {
             if s.research.sources.isEmpty { Text("No links yet.").font(.subheadline).foregroundStyle(.secondary) }
             ForEach(s.research.sources, id: \.0) { k, v in
                 HStack {
@@ -366,7 +366,7 @@ struct RoundKey: Identifiable { let k: String; var id: String { k } }
 // MARK: - a card
 
 /// A titled card, the school page's and the tracker's unit.
-struct Card<Content: View>: View {
+struct AppsCard<Content: View>: View {
     var title: String?
     var count: Int?
     var trailing: String?
@@ -407,7 +407,7 @@ struct AboutCard: View {
         let data = AppsData.shared
         let p = SchoolProfile(school.rawResearch["profile"])
         let busy = data.researching[school.id]
-        Card(title: "About", count: nil, action: busy == nil ? (p == nil ? "Research with Claude" : "Research again", { data.research(school, store: store) }) : nil) {
+        AppsCard(title: "About", count: nil, action: busy == nil ? (p == nil ? "Research with Claude" : "Research again", { data.research(school, store: store) }) : nil) {
             if let busy { HStack(spacing: 8) { ProgressView(); Text(busy).font(.subheadline).foregroundStyle(.secondary) } }
             if let n = data.researchNote[school.id] { Text(n).font(.caption).foregroundStyle(.secondary) }
             if let p {
