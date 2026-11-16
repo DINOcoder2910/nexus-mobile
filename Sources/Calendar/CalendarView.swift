@@ -164,6 +164,7 @@ struct CalendarView: View {
                 Label(mode.label, systemImage: "calendar")
                     .labelStyle(.titleAndIcon)
             }
+            .accessibilityIdentifier("calendar-view")
         }
         ToolbarItem(placement: .topBarLeading) {
             Button { withAnimation(.snappy) { placing.toggle() } } label: {

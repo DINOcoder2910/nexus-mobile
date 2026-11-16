@@ -39,27 +39,21 @@ final class ParityPhoneTests: XCTestCase {
         let calTab = app.tabBars.buttons["Calendar"]
         XCTAssertTrue(calTab.waitForExistence(timeout: 15), "no Calendar tab")
         calTab.tap()
-        sleep(2)
-        app.tap() // lets the interruption monitor answer a permission alert
-        // the view menu shows the current view's name (Day on a fresh phone)
-        let menu = app.navigationBars.buttons.matching(NSPredicate(format: "label IN %@", ["Day", "3 days", "Week", "Month", "List"])).firstMatch
+        // the view menu (the calendar button at the top right; its label is the current view's name)
+        let menu = app.descendants(matching: .any)["calendar-view"].firstMatch
         XCTAssertTrue(menu.waitForExistence(timeout: 10), "no view menu")
+        sleep(1)
         menu.tap()
-        var week = app.buttons["Week"].firstMatch
-        // the views may sit in a "View" submenu of the menu
-        if !week.waitForExistence(timeout: 3) {
-            shot("phone-calendar-menu")
-            let view = app.buttons["View"].firstMatch
-            if view.exists { view.tap() }
-            week = app.buttons["Week"].firstMatch
-            if !week.waitForExistence(timeout: 3) { week = app.staticTexts["Week"].firstMatch }
-        }
+        sleep(2)
+        shot("phone-calendar-menu")
+        let week = app.buttons.matching(NSPredicate(format: "label == 'Week' AND identifier != 'calendar-view'")).firstMatch
         XCTAssertTrue(week.waitForExistence(timeout: 5), "the iPhone's view menu has no Week")
         week.tap()
         sleep(2)
         shot("phone-week")
-        // seven day headers, each opening its day
-        app.swipeLeft()
+        // the next week
+        let later = app.buttons["Later"].firstMatch
+        if later.exists && later.isHittable { later.tap() } else { app.swipeLeft() }
         sleep(2)
         shot("phone-week-next")
     }
