@@ -45,7 +45,15 @@ final class ParityPhoneTests: XCTestCase {
         let menu = app.navigationBars.buttons.matching(NSPredicate(format: "label IN %@", ["Day", "3 days", "Week", "Month", "List"])).firstMatch
         XCTAssertTrue(menu.waitForExistence(timeout: 10), "no view menu")
         menu.tap()
-        let week = app.buttons["Week"].firstMatch
+        var week = app.buttons["Week"].firstMatch
+        // the views may sit in a "View" submenu of the menu
+        if !week.waitForExistence(timeout: 3) {
+            shot("phone-calendar-menu")
+            let view = app.buttons["View"].firstMatch
+            if view.exists { view.tap() }
+            week = app.buttons["Week"].firstMatch
+            if !week.waitForExistence(timeout: 3) { week = app.staticTexts["Week"].firstMatch }
+        }
         XCTAssertTrue(week.waitForExistence(timeout: 5), "the iPhone's view menu has no Week")
         week.tap()
         sleep(2)
@@ -67,7 +75,8 @@ final class ParityPhoneTests: XCTestCase {
 
         func openRow(_ name: String) {
             let row = app.buttons[name].firstMatch
-            if !row.waitForExistence(timeout: 3) { app.swipeUp() }
+            var tries = 0
+            while !row.waitForExistence(timeout: 2) && tries < 8 { app.swipeUp(); tries += 1 }
             XCTAssertTrue(row.waitForExistence(timeout: 10), "More has no \(name)")
             row.tap()
             sleep(2)

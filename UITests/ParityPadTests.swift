@@ -45,7 +45,8 @@ final class ParityPadTests: XCTestCase {
 
         side("Settings")
         let share = app.buttons["Share into Nexus"].firstMatch
-        if !share.waitForExistence(timeout: 3) { app.swipeUp(); app.swipeUp() }
+        var tries = 0
+        while !share.waitForExistence(timeout: 2) && tries < 8 { app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.7, dy: 0.7)).press(forDuration: 0.05, thenDragTo: app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.7, dy: 0.2))); tries += 1 }
         XCTAssertTrue(share.waitForExistence(timeout: 10), "Settings has no Share into Nexus")
         share.tap()
         sleep(2)
