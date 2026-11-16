@@ -61,11 +61,14 @@ struct IdeasView: View {
         .navigationTitle("Ideas")
         .preferredColorScheme(ProcessInfo.processInfo.arguments.contains("-NexusTestDark") ? .dark : nil)
         .task {
+            if WindowRouter.shared.focusIdeas { WindowRouter.shared.focusIdeas = false; adding = true }
             model.attach(store)
             model.autoSort()
+            var n = 0
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(2))
                 model.reloadIfChanged()
+                n += 1; if n % 30 == 0 { model.autoSort() } // (each minute: ten quiet minutes after the last idea, the batch goes)
             }
         }
         .onChange(of: store.toast?.id) { _, _ in model.reloadIfChanged() }

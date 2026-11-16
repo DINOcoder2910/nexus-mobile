@@ -295,11 +295,26 @@ public enum Ideas {
         let g = group(items); let w = g.waiting.count; let open = w + g.topics.reduce(0) { $0 + $1.rows.count }
         return (open == 1 ? "1 idea" : "\(open) ideas") + (w > 0 ? " · \(w) new" : "")
     }
-    /// A batch is due: 5 or more waiting, or one waiting since before today.
-    public static func due(_ items: [Idea], today: String) -> Bool {
+    /// Ideas dumped in a row are sorted together this long after the last one (the laptop's ideas.js QUIET_MS).
+    public static let quiet: TimeInterval = 10 * 60
+    /// A batch is due: 5 or more waiting, one waiting since before today, or (with `now`) the newest waiting one written `quiet` ago or more.
+    public static func due(_ items: [Idea], today: String, now: Date? = nil) -> Bool {
         let w = group(items).waiting
-        return w.count >= batchAt || w.contains { ($0.added ?? today) < today }
+        if w.isEmpty { return false }
+        if w.count >= batchAt || w.contains(where: { ($0.added ?? today) < today }) { return true }
+        guard let now else { return false }
+        let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime]
+        let last = w.compactMap { $0.edited.flatMap { f.date(from: $0) } }.max()
+        guard let last else { return false }
+        return now.timeIntervalSince(last) >= quiet
     }
+    /// The status line for waiting ideas (the laptop's waitLine).
+    public static func waitLine(_ n: Int) -> String {
+        (n == 1 ? "1 new idea waits" : "\(n) new ideas wait") + " to be sorted. Claude sorts them about \(Int(quiet / 60)) minutes after the last one is added."
+    }
+    /// Sorting a batch: Haiku (quick and cheap; the laptop's setting can pick Sonnet there). Working on one idea: Sonnet.
+    public static let sortModel = "haiku"
+    public static let workModel = "sonnet"
 
     // MARK: sorting a batch with Claude
 

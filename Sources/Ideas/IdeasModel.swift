@@ -3,8 +3,8 @@ import NexusCore
 
 /// Ideas on the iPad and iPhone: the data folder's nexus-ideas.yaml (NexusCore Ideas, the laptop's Customize › Ideas), read when the
 /// screen shows and whenever the file changes underneath (sync, the laptop), written whole after each edit with Undo on the bar.
-/// Claude sorts the new ones in a batch (5 waiting, or one from an earlier day, while the screen is open; Sort now any time), through
-/// ClaudeClient (the app-wide Plan / API switch). "Claude" on an idea: a change to Nexus is marked for Claude and waits for the laptop's
+/// Claude (Haiku) sorts the new ones in a batch (5 waiting, one from an earlier day, or 10 minutes after the last one, while the screen is
+/// open; the laptop does the same in the background while Nexus runs; Sort now any time), through ClaudeClient (the app-wide Plan / API switch). "Claude" on an idea: a change to Nexus is marked for Claude and waits for the laptop's
 /// change door; anything else Claude works on once, and its reply is kept with the idea.
 @MainActor
 @Observable
@@ -115,7 +115,7 @@ final class IdeasModel {
         working.insert(x.id)
         save(x.who == "claude" ? items : Ideas.setWho(items, x.id, "claude", now: now), message: nil)
         let repeats = items.filter { $0.sameAs == x.id }
-        let req = ClaudeRequest(model: "sonnet", system: Ideas.workSystem, messages: [.user(Ideas.workPrompt(x, repeats: repeats))], maxTokens: 1200)
+        let req = ClaudeRequest(model: Ideas.workModel, system: Ideas.workSystem, messages: [.user(Ideas.workPrompt(x, repeats: repeats))], maxTokens: 1200)
         Task {
             do {
                 let r = try await ClaudeClient.shared.stream(req) { _ in }
@@ -133,7 +133,7 @@ final class IdeasModel {
     // MARK: sorting
 
     func autoSort() {
-        guard loaded, error == nil, !sorting, Ideas.due(items, today: today) else { return }
+        guard loaded, error == nil, !sorting, Ideas.due(items, today: today, now: Date()) else { return }
         let key = Ideas.organisePrompt(items).batch.joined(separator: ",")
         if key == failedBatch { return }
         sort(auto: true)
@@ -143,7 +143,7 @@ final class IdeasModel {
         let (batch, prompt) = Ideas.organisePrompt(items)
         guard !batch.isEmpty else { if !auto { last = "Nothing new to sort." }; return }
         sorting = true; last = nil
-        let req = ClaudeRequest(model: "sonnet", system: Ideas.organiseSystemPlain, messages: [.user(prompt)], maxTokens: 4096)
+        let req = ClaudeRequest(model: Ideas.sortModel, system: Ideas.organiseSystemPlain, messages: [.user(prompt)], maxTokens: 4096)
         Task {
             defer { sorting = false }
             do {
@@ -167,7 +167,7 @@ final class IdeasModel {
         if sorting { return w == 1 ? "Claude is sorting the new idea…" : "Claude is sorting the \(min(w, Ideas.batchMax)) new ideas…" }
         if let last { return last }
         if w == 0 { return "Everything is sorted." }
-        return (w == 1 ? "1 new idea waits" : "\(w) new ideas wait") + " to be sorted. Claude sorts them once \(Ideas.batchAt) wait, or the day after."
+        return Ideas.waitLine(w)
     }
 
     /// The UI check's ideas (-NexusTestIdeas): sorted ones in topics, one Claude worked on, a repeat, two new.

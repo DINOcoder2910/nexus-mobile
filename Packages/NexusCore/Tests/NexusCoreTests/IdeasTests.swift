@@ -118,6 +118,21 @@ final class IdeasTests: XCTestCase {
         XCTAssertFalse(Ideas.due(Array(five.prefix(4)), today: "2026-11-13"))
     }
 
+    /// The laptop's quiet rule (ideas.js organiseDue): ten minutes after the newest waiting idea, not before; nothing waiting is never due.
+    func testQuietRule() {
+        var a = Idea(id: "q1", text: "a"); a.added = "2026-11-13"; a.edited = "2026-11-13T09:40:00Z"
+        var b = Idea(id: "q2", text: "b"); b.added = "2026-11-13"; b.edited = "2026-11-13T09:55:00Z"
+        let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime]
+        let t0 = f.date(from: "2026-11-13T10:00:00Z")!
+        XCTAssertFalse(Ideas.due([a, b], today: "2026-11-13", now: t0))
+        XCTAssertTrue(Ideas.due([a, b], today: "2026-11-13", now: t0.addingTimeInterval(5 * 60)))
+        XCTAssertTrue(Ideas.due([a], today: "2026-11-13", now: t0))
+        var done = a; done.organised = "2026-11-13"
+        XCTAssertFalse(Ideas.due([done], today: "2026-11-13", now: t0.addingTimeInterval(86400)))
+        XCTAssertFalse(Ideas.due([Idea(id: "n", text: "n")], today: "2026-11-13", now: t0))
+        XCTAssertEqual(Ideas.sortModel, "haiku")
+    }
+
     func testBatchPromptAndAnswer() {
         var old = Idea(id: "old", text: "week view"); old.title = "Planner week view"; old.topic = "Nexus"; old.organised = "d"
         let items = [old, Idea(id: "n1", text: "um a week view"), Idea(id: "n2", text: "run a 10k")]
