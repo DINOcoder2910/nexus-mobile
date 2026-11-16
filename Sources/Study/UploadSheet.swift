@@ -67,7 +67,7 @@ final class SheetUpload {
     static let maxBytes = 80 * 1024 * 1024
     static let ocrFirstN = 3, maxPages = 80, ocrMax = 30
 
-    init(workstreamId: String) { self.workstreamId = workstreamId }
+    nonisolated init(workstreamId: String) { self.workstreamId = workstreamId }
 
     var study: StudyLibrary.Study? { StudyLibrary.shared.study(workstreamId) }
     var current: Item? { items.first { ![.filed, .skipped].contains($0.status) } }

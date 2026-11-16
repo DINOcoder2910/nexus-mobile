@@ -83,11 +83,11 @@ struct PracticeView: View {
             Text("Sort each one: \(StudyUnits.practiceOptions(k).joined(separator: " / "))").font(.headline)
             if levels.count > 1 {
                 Text("Which").font(.subheadline).foregroundStyle(.secondary)
-                Picker("Which", selection: $level) {
+                let which = Picker("Which", selection: $level) {
                     ForEach(levels, id: \.id) { lv in Text("\(lv.label) (\(count(k, lv.id)))").tag(lv.id) }
                 }
-                .pickerStyle(size == .regular ? .segmented : .inline)
                 .labelsHidden()
+                if size == .regular { which.pickerStyle(.segmented) } else { which.pickerStyle(.inline) }
             }
             Text("How").font(.subheadline).foregroundStyle(.secondary)
             Picker("How", selection: $mode) {
