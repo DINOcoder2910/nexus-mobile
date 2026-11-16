@@ -90,11 +90,15 @@ final class SpanishPadTests: XCTestCase {
         shot("pad-spanish-history")
         app.buttons["Pick: Me gusta los deportes."].firstMatch.tap()
         app.buttons["Pick: Ayer compre una camiseta para mi madre."].firstMatch.tap()
+        sleep(1)
+        print("UISTEP move enabled: \(el("spanish-move").isEnabled)")
+        shot("pad-spanish-picked")
         el("spanish-move").tap()
 
         // the tutor: its answer streams, its question is a checker card
         let answer = el("spanish-answer")
-        XCTAssertTrue(answer.waitForExistence(timeout: 20), "no checker card from the tutor")
+        if !answer.waitForExistence(timeout: 20) { shot("pad-spanish-zz-no-card") }
+        XCTAssertTrue(answer.exists, "no checker card from the tutor")
         sleep(1)
         shot("pad-spanish-chat")
         answer.tap()
