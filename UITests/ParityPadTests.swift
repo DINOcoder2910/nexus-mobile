@@ -20,8 +20,11 @@ final class ParityPadTests: XCTestCase {
     }
 
     func side(_ name: String) {
-        let row = app.buttons[name].firstMatch.exists ? app.buttons[name].firstMatch : app.staticTexts[name].firstMatch
-        if !row.waitForExistence(timeout: 3) { app.collectionViews.firstMatch.swipeUp() }
+        func find() -> XCUIElement { app.buttons[name].firstMatch.exists ? app.buttons[name].firstMatch : app.staticTexts[name].firstMatch }
+        var row = find()
+        // the sample folder's groups (Applications' schools among them) can push the last rows down more than one screen
+        var swipes = 0
+        while !row.waitForExistence(timeout: 3) && swipes < 4 { app.collectionViews.firstMatch.swipeUp(); swipes += 1; row = find() }
         XCTAssertTrue(row.waitForExistence(timeout: 10), "the sidebar has no \(name)")
         row.tap()
         sleep(2)
