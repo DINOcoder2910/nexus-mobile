@@ -23,8 +23,10 @@ final class BoardSaveSpeedTests: XCTestCase {
 
     func testAFullBoardSavesQuickly() {
         // the app writes the big board, opens it and saves it ten times (a minute or more in the simulator's debug build): the screen
-        // can't be read while the app is busy, and the app's own breadcrumbs time each save, so the first look waits for all that
-        sleep(100)
+        // can't be read while the app is busy, and the app's own breadcrumbs time each save, so the first look waits for all that.
+        // 150 s, not 100: on a loaded GitHub Mac the saves ran past 100 s and the first look failed with "Timed out while evaluating
+        // UI query" (Nov 16 2026), which says nothing about the app's speed (the bench's own numbers do)
+        sleep(150)
         let insert = app.buttons["Insert"].firstMatch
         XCTAssertTrue(insert.waitForExistence(timeout: 60), "the big board didn't open")
         if app.staticTexts["Planner"].firstMatch.isHittable {
