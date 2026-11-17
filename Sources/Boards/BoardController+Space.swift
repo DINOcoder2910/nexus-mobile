@@ -103,7 +103,8 @@ extension BoardController {
             let b = p.box
             guard y > b.minY, y < b.maxY else { continue }
             if let band, b.maxX < band.lowerBound || b.minX > band.upperBound { continue }
-            if let s = p.segments.first(where: { CGFloat($0.y) <= y && y < CGFloat($0.y + $0.h) }) {
+            // a line on a part's top edge (the bottom of room opened in the page) is in the room, not on the page
+            if let s = p.segments.first(where: { CGFloat($0.y) + 0.5 <= y && y < CGFloat($0.y + $0.h) }) {
                 return PdfSpot(id: id, printout: p, inside: s, above: nil)
             }
             let above = p.segments.filter { CGFloat($0.y + $0.h) <= y }.max { $0.y < $1.y }
@@ -211,7 +212,7 @@ extension BoardController {
                 if CGFloat(start) < line { end = max(end, CGFloat(stopAt)) }
             }
             if let spot {
-                for s in spot.printout.segments where CGFloat(s.y) < line { end = max(end, CGFloat(s.y + s.h)) }
+                for s in spot.printout.segments where CGFloat(s.y) + 0.5 < line { end = max(end, CGFloat(s.y + s.h)) }
             }
             if end > -CGFloat.infinity { plan.limit = min(plan.limit, line - end - 2) }
         }
