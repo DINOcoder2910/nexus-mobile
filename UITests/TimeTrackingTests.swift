@@ -74,9 +74,10 @@ class TimeTrackingTests: XCTestCase {
         var tries = 0
         while !(timer.exists && timer.isHittable) && tries < 12 { app.swipeUp(velocity: .slow); tries += 1 }
         XCTAssertTrue(timer.exists, "no Time section in the task panel")
-        // bring the section up near the top of the panel so its sessions show under it
+        // bring the section up near the top of the panel so its sessions show under it; the drag starts mid-screen, since one
+        // from the section itself can start at the iPhone's bottom edge, which is the home gesture (the app went to the background)
         if timer.isHittable {
-            let from = timer.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            let from = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6))
             from.press(forDuration: 0.1, thenDragTo: from.withOffset(CGVector(dx: 0, dy: -220)))
         }
         sleep(1)
