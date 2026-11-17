@@ -75,9 +75,10 @@ jobs:
         if: always()
         run: |
           [ "$(cat status.txt 2>/dev/null)" = 0 ] && { echo "tests passed"; exit 0; }
-          for f in $(ls samples/*.txt 2>/dev/null | tail -n 4); do
-            echo "=================== $f"
-            awk '/Thread_[0-9]+.*com.apple.main-thread/{on=1} on{print; n++} n>=70{exit}' "$f" | cut -c1-200
+          ls samples | wc -l
+          for f in $(ls samples/*.txt 2>/dev/null | tail -n 3); do
+            echo "=================== $f: the app's own frames on the main thread"
+            awk '/Thread_[0-9]+.*com.apple.main-thread/{on=1} /Thread_[0-9]+/ && !/main-thread/{if(on)exit} on' "$f" | grep "NexusMobile.debug.dylib" | sed -E 's/^[ +!:|]*//' | sort -k2 | uniq -c -f1 | sort -rn | head -n 40 | cut -c1-220
           done
 
       - name: Screenshots in the log (base64 JPEG)

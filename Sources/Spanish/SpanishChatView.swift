@@ -47,7 +47,8 @@ struct SpanishChatBody: View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 14) {
+                    // not lazy: a chat is short, and a lazy stack scrolled to its end while rows grow kept relaying out on the iPhone
+                    VStack(alignment: .leading, spacing: 14) {
                         if chat.messages.isEmpty && !chat.busy {
                             Text("Ask anything, or say what to practise (\"quiz me on the preterite\", \"teach me the negative imperative\"). The tutor asks you to write and checks it with the checker.")
                                 .font(.callout).foregroundStyle(.secondary)
