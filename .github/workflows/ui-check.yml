@@ -19,7 +19,7 @@ concurrency:
 jobs:
   ui:
     runs-on: macos-latest
-    timeout-minutes: 95
+    timeout-minutes: 110
     steps:
       - uses: actions/checkout@v4
 
@@ -50,8 +50,8 @@ jobs:
             CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- 2>&1 | grep -E "error:|BUILD|\*\*" | head -n 100
 
       - name: Run the UI tests, sampling the app
-        # its own limit, so a hung iPad run still leaves time for the iPhone tests and the reports
-        timeout-minutes: 50
+        # its own limit, so a hung iPad run still leaves time for the iPhone tests and the reports (25 tests took 48 min on Nov 16)
+        timeout-minutes: 70
         run: |
           mkdir -p samples
           # every 5 s: if the app is running, a 1 s sample of all its threads
