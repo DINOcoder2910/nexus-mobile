@@ -253,7 +253,7 @@ struct SpanishToken: View {
         .buttonStyle(.plain)
         .accessibilityLabel(mark.map { m in m.kind == "good" ? "\(word), right" : "\(word), should be \(m.right)" } ?? word)
         .popover(isPresented: $open) {
-            pop.padding(16).frame(minWidth: 240, idealWidth: 300, maxWidth: 340).presentationCompactAdaptation(.popover)
+            pop.font(.body).padding(16).frame(minWidth: 240, idealWidth: 300, maxWidth: 360).presentationCompactAdaptation(.popover)
         }
     }
 
