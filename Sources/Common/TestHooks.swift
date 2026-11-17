@@ -11,6 +11,7 @@ enum TestHooks {
         manyNotebooks(store)
         if ProcessInfo.processInfo.arguments.contains("-NexusTestBigBoard") { bigBoard(store); return }
         if ProcessInfo.processInfo.arguments.contains("-NexusTestLinksBoard") { linksBoard(store); return }
+        if ProcessInfo.processInfo.arguments.contains("-NexusTestTime") { timeSessions(store); return }
         guard ProcessInfo.processInfo.arguments.contains("-NexusTestPdfBoard") else { return }
         if !store.snapshot.isDataFolder { store.makeSample() }
         let dir = "notebooks/PDF zoom"
@@ -101,6 +102,9 @@ enum TestHooks {
     /// `-NexusTestBigBoard`: sample data, then a board as full as a long lesson's (4000 handwritten strokes of 60 points over a page
     /// of PDF), opened; the board times its saves (BoardController.saveBench) and UITests/BoardSpeedTests prints the times.
     static var isBigBoardRun: Bool { ProcessInfo.processInfo.arguments.contains("-NexusTestBigBoard") }
+    /// `-NexusTestSpaceDrag` (with the big board): Insert space is dragged on it, slowly, held for pictures and timed
+    /// (BoardController+Bench.swift, UITests/SpaceLiveTests), instead of the save bench.
+    static var isSpaceDragRun: Bool { ProcessInfo.processInfo.arguments.contains("-NexusTestSpaceDrag") }
 
     static func bigBoard(_ store: NexusStore) {
         if !store.snapshot.isDataFolder { store.makeSample() }
@@ -159,6 +163,34 @@ enum TestHooks {
         if let meta = c.meta ?? (try? JSONValue.parse(BoardFormat.boardJSON())) { c.meta = BoardFormat.withFeature(meta, BoardLinks.feature) }
         _ = try? BoardFiles.save(c, to: board, write: { u, t in try FolderAccess.write(u, t) })
         store.openBoard = .init(path: rel, focus: nil)
+    }
+
+    /// `-NexusTestTime`: sample data with time tracked this week on this device and on the laptop, and a timer running on
+    /// "Redox worksheet" (UITests/TimeTrackingTests: the running timer, the Time screen, the task panel's Time section).
+    static func timeSessions(_ store: NexusStore) {
+        if !store.snapshot.isDataFolder { store.makeSample() }
+        guard TimeTracker.shared.entries.isEmpty else { return }
+        let now = Date()
+        func at(_ minutesAgo: Double) -> String { TimeLog.stamp(now.addingTimeInterval(-minutesAgo * 60)) }
+        func put(_ device: String, _ list: [TimeLog.Entry]) {
+            var text: String? = nil
+            for e in list { text = TimeLog.append(text, device: device, e) }
+            guard let text else { return }
+            try? FolderAccess.write(store.folder.appendingPathComponent(TimeLog.file(device: device, start: now)), text)
+        }
+        let day = 24 * 60.0
+        put(TimeTracker.device, [
+            .init(task: "smp3", title: "Physics HW sheet", start: at(2 * day + 300), end: at(2 * day + 255)),
+            .init(task: "smp4", title: "Q1–5", start: at(day + 200), end: at(day + 150)),
+            .init(task: "smp4", title: "Q1–5", start: at(180), end: at(140)),
+            .init(task: "smp8", title: "Redox worksheet", start: at(25)),
+        ])
+        put("laptop", [
+            .init(task: "smp9", title: "Flashcards for R3.2", start: at(3 * day + 120), end: at(3 * day + 60)),
+            .init(task: "smp8", title: "Redox worksheet", start: at(day + 90), end: at(day + 20)),
+            .init(task: "smpb", title: "Try the iPad planner", start: at(110), end: at(95)),
+        ])
+        store.reload()
     }
 
     /// Three letter pages of small numbered lines and a fine grid, so a blurry or missing page shows at any zoom.
