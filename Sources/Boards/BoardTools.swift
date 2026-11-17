@@ -63,15 +63,16 @@ final class BoardTools {
     /// Six widths per drawing tool (board units), Extra fine to Extra bold; the eraser keeps its three.
     static func widths(_ t: BoardTool) -> [CGFloat] {
         switch t {
-        case .pencil: return [1.2, 2, 4, 6, 8, 12]
+        case .pencil: return [2.4, 3, 4, 6, 8, 12] // PencilKit draws a pencil 2.4 to 16 wide; the old Fine (2) drew 2.4
         case .highlighter: return [6, 12, 20, 32, 44, 60]
         case .eraser: return [10, 30, 60]
         default: return [1, 1.5, 3, 4.5, 6, 10]
         }
     }
     static let widthNames = ["Extra fine", "Fine", "Medium", "Thick", "Bold", "Extra bold"]
-    /// Where the three widths from before Nov 17 2026 (Fine, Medium, Bold) are now.
-    static let oldWidthSteps = [1, 2, 4]
+    /// Where the three widths from before Nov 17 2026 (Fine, Medium, Bold) are now: the same sizes as they drew. (The pencil's old
+    /// Fine, 2, drew at PencilKit's least, 2.4, which is its first step now.)
+    static func oldWidthSteps(_ t: BoardTool) -> [Int] { t == .pencil ? [0, 2, 4] : [1, 2, 4] }
 
     /// A saved row of colours brought up to `base`: the saved ones in their places, the new ones after them.
     static func fill(_ saved: [String], _ base: [String]) -> [String] {
@@ -112,7 +113,7 @@ final class BoardTools {
         let n = BoardTools.widths(t).count
         if t != .eraser, let v = d.object(forKey: "board.widthStep." + t.rawValue) as? Int { return min(n - 1, max(0, v)) }
         let old = min(2, max(0, d.object(forKey: "board.width." + t.rawValue) as? Int ?? 1))
-        return t == .eraser ? old : BoardTools.oldWidthSteps[old]
+        return t == .eraser ? old : BoardTools.oldWidthSteps(t)[old]
     }
     func setWidthIndex(_ t: BoardTool, _ i: Int) { d.set(i, forKey: (t == .eraser ? "board.width." : "board.widthStep.") + t.rawValue) }
 
@@ -130,7 +131,8 @@ final class BoardTools {
     }
 
     /// The widths of `t` as they are drawn: inside the ink's valid range (PencilKit would clamp them), and each step at least a fifth
-    /// wider than the one before, so no two steps of the row draw the same.
+    /// wider than the one before, so no two steps of the row draw the same. The ranges, from the UI check (iOS 26 simulator): pen
+    /// 0.88–25.7, even line (monoline) 0.5–4, fountain pen 1.5–14, pencil 2.4–16, marker 7.5–60; so the even line, the fountain pen and the highlighter move their thinnest steps up.
     static func drawnWidths(_ t: BoardTool, ink: PKInkingTool.InkType?) -> [CGFloat] {
         var v = widths(t)
         guard let ink else { return v }
