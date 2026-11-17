@@ -90,6 +90,9 @@ struct NexusShortcuts: AppShortcutsProvider {
         AppShortcut(intent: OpenAddSheetIntent(),
                     phrases: ["Open the \(.applicationName) add sheet", "Type a task in \(.applicationName)"],
                     shortTitle: "New task", systemImageName: "square.and.pencil")
+        AppShortcut(intent: SaveTextToNexusIntent(),
+                    phrases: ["Save this to \(.applicationName)", "Save a link to \(.applicationName)"],
+                    shortTitle: "Save to Nexus", systemImageName: "square.and.arrow.down")
         AppShortcut(intent: AddIdeaIntent(),
                     phrases: ["Add an idea to \(.applicationName)", "New idea in \(.applicationName)", "Save an idea in \(.applicationName)"],
                     shortTitle: "Add an idea", systemImageName: "lightbulb")
