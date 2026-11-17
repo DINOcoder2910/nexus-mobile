@@ -1,0 +1,128 @@
+import XCTest
+import PencilKit
+
+/// The pens' colours and widths in the board's bar (Sources/Boards/BoardTools.swift, BoardBar.swift): ten pen colours and eight
+/// highlighter colours, the laptop's, and six widths a tool, Extra fine to Extra bold. A line is written at each width in a different
+/// colour, light and dark. The screenshots ("pens-…") are printed in the UI check log; the iPhone's are in PenOptionsPhoneTests.
+final class PenOptionsTests: XCTestCase {
+    var app = XCUIApplication()
+    static let widths = ["Extra fine", "Fine", "Medium", "Thick", "Bold", "Extra bold"]
+
+    override func setUpWithError() throws {
+        try XCTSkipIf(UIDevice.current.userInterfaceIdiom != .pad, "iPad only")
+        continueAfterFailure = true
+        XCUIDevice.shared.orientation = .landscapeLeft
+    }
+
+    func shot(_ name: String) {
+        let a = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        a.name = name
+        a.lifetime = .keepAlways
+        add(a)
+        print("UISTEP \(Date().timeIntervalSince1970) \(name)")
+    }
+
+    func launch(dark: Bool) {
+        app = XCUIApplication()
+        // fingers draw (the simulator has no Pencil); a fresh set of tools
+        app.launchArguments = ["-NexusTestPdfBoard", "-board.fingersDraw", "YES", "-board.dark", dark ? "always" : "never",
+                               "-board.tool", "pen", "-board.penKind", "pen"]
+        app.launch()
+        XCTAssertTrue(app.buttons["Insert"].firstMatch.waitForExistence(timeout: 30), "the board didn't open")
+        sleep(3)
+        if app.staticTexts["Planner"].firstMatch.isHittable {
+            let side = app.buttons["Sidebar"].firstMatch
+            if side.exists { side.tap(); sleep(2) }
+        }
+    }
+
+    func colours() -> XCUIElementQuery { app.buttons.matching(NSPredicate(format: "label == 'Colour'")) }
+
+    /// The board's canvas: the biggest scroll view on screen.
+    func board() -> XCUIElement {
+        let all = app.scrollViews.allElementsBoundByIndex.filter { $0.exists && $0.isHittable }
+        return all.max(by: { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }) ?? app.windows.firstMatch
+    }
+
+    /// One line at each width, each in the next colour of the row, down the board.
+    func writeLines(_ count: Int) {
+        for (i, w) in Self.widths.enumerated() {
+            let wb = app.buttons[w].firstMatch
+            XCTAssertTrue(wb.waitForExistence(timeout: 5), "no \(w) width")
+            if wb.isHittable { wb.tap() }
+            let c = colours().element(boundBy: i % count)
+            if c.isHittable { c.tap() }
+            let y = 0.18 + 0.1 * CGFloat(i)
+            let from = board().coordinate(withNormalizedOffset: CGVector(dx: 0.22, dy: y))
+            from.press(forDuration: 0.05, thenDragTo: board().coordinate(withNormalizedOffset: CGVector(dx: 0.62, dy: y + 0.03)))
+            usleep(300_000)
+        }
+    }
+
+    func testPenColoursAndWidths() {
+        // what PencilKit allows each ink (the widths are kept inside these; BoardTools.drawnWidths)
+        for (n, ink) in [("pen", PKInkingTool.InkType.pen), ("monoline", .monoline), ("fountain", .fountainPen), ("pencil", .pencil), ("marker", .marker)] {
+            print("UISTEP width range \(n): \(ink.validWidthRange)")
+        }
+        launch(dark: false)
+        XCTAssertEqual(colours().count, 10, "the pen should have ten colours")
+        for w in Self.widths { XCTAssertTrue(app.buttons[w].firstMatch.exists, "no \(w) width") }
+        writeLines(10)
+        shot("pens-pen-light")
+
+        let hl = app.buttons["Highlighter"].firstMatch
+        XCTAssertTrue(hl.waitForExistence(timeout: 5), "no Highlighter tool")
+        hl.tap()
+        sleep(1)
+        XCTAssertEqual(colours().count, 8, "the highlighter should have eight colours")
+        writeLines(8)
+        shot("pens-highlighter-light")
+        app.terminate()
+    }
+
+    func testPenColoursAndWidthsDark() {
+        launch(dark: true)
+        XCTAssertEqual(colours().count, 10)
+        writeLines(10)
+        shot("pens-pen-dark")
+        app.terminate()
+    }
+}
+
+/// The same row on the iPhone: it scrolls sideways under the board's bar. Skips itself on the iPad.
+final class PenOptionsPhoneTests: XCTestCase {
+    let app = XCUIApplication()
+
+    override func setUpWithError() throws {
+        try XCTSkipIf(UIDevice.current.userInterfaceIdiom == .pad, "iPhone only")
+        continueAfterFailure = true
+        XCUIDevice.shared.orientation = .portrait
+    }
+
+    func shot(_ name: String) {
+        let a = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        a.name = name
+        a.lifetime = .keepAlways
+        add(a)
+        print("UISTEP \(Date().timeIntervalSince1970) \(name)")
+    }
+
+    func testPhonePenRow() {
+        app.launchArguments = ["-NexusTestPdfBoard", "-board.tool", "pen", "-board.penKind", "pen"]
+        app.launch()
+        XCTAssertTrue(app.buttons["Insert"].firstMatch.waitForExistence(timeout: 30), "the board didn't open")
+        sleep(3)
+        let colours = app.buttons.matching(NSPredicate(format: "label == 'Colour'"))
+        XCTAssertEqual(colours.count, 10)
+        let first = colours.element(boundBy: 0)
+        let from = first.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        // a line at the Extra bold width
+        let bold = app.buttons["Extra bold"].firstMatch
+        XCTAssertTrue(bold.exists, "no Extra bold width")
+        shot("phone-pens-row")
+        var tries = 0
+        while !bold.isHittable && tries < 4 { from.press(forDuration: 0.05, thenDragTo: from.withOffset(CGVector(dx: -250, dy: 0))); tries += 1; sleep(1) }
+        if bold.isHittable { bold.tap() }
+        shot("phone-pens-row-scrolled")
+    }
+}

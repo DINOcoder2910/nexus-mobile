@@ -207,11 +207,12 @@ final class BoardBar: UIView {
         HoldTarget.shared.actions[ObjectIdentifier(hold)] = edit
         b.addGestureRecognizer(hold)
         b.accessibilityLabel = "Colour"
+        b.accessibilityValue = hex + (selected ? ", picked" : "")
         b.accessibilityHint = "Touch and hold to change this colour"
         return b
     }
 
-    private func widthDot(_ size: CGFloat, selected: Bool, action: @escaping () -> Void) -> UIView {
+    private func widthDot(_ size: CGFloat, selected: Bool, name: String = "Width", action: @escaping () -> Void) -> UIView {
         var c = selected ? UIButton.Configuration.tinted() : UIButton.Configuration.plain()
         c.cornerStyle = .capsule
         let b = UIButton(configuration: c, primaryAction: UIAction { _ in action() })
@@ -224,7 +225,8 @@ final class BoardBar: UIView {
         dot.backgroundColor = .label
         dot.layer.cornerRadius = d / 2
         b.addSubview(dot)
-        b.accessibilityLabel = "Width"
+        b.accessibilityLabel = name
+        b.accessibilityValue = selected ? "Picked" : nil
         return b
     }
 
@@ -378,8 +380,9 @@ final class BoardBar: UIView {
                 }, edit: { [weak b] in b?.editColor(t, i) }))
             }
             rowStack.addArrangedSubview(divider())
-            for (i, w) in BoardTools.widths(t).enumerated() {
-                rowStack.addArrangedSubview(widthDot(w * (t == .highlighter ? 0.5 : 2), selected: tools.widthIndex(t) == i) { [weak b] in
+            // six widths, Extra fine to Extra bold: the dot grows a step at a time, whatever the tool's sizes
+            for i in BoardTools.widths(t).indices {
+                rowStack.addArrangedSubview(widthDot(3 + CGFloat(i) * 3, selected: tools.widthIndex(t) == i, name: BoardTools.widthNames[i]) { [weak b] in
                     tools.setWidthIndex(t, i)
                     b?.toolChanged()
                 })
