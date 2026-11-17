@@ -6,6 +6,11 @@ name: UI check (simulator)
 # tests (the user's rule, Nov 16 2026: nothing ships untested), and by hand (Actions › UI check › Run workflow).
 on:
   workflow_dispatch:
+    inputs:
+      only:
+        description: "Run only this test class (e.g. SpaceLiveTests); empty runs them all"
+        required: false
+        default: ""
   push:
     branches: ["claude/**"]
     # every push that can change what the app does or what the tests check (the app's code, its core package, its resources,
@@ -52,7 +57,16 @@ jobs:
       - name: Run the UI tests, sampling the app
         # its own limit, so a hung iPad run still leaves time for the iPhone tests and the reports (25 tests took 48 min on Nov 16)
         timeout-minutes: 70
+        env:
+          # a push whose commit message says [ui-only: SomeTests] runs only that class (or the Run workflow box's "only"); the name
+          # must end in Tests, so a message that only mentions the marker doesn't narrow the run
+          ONLY_INPUT: ${{ inputs.only }}
+          HEAD_MSG: ${{ github.event.head_commit.message }}
         run: |
+          ONLY="$ONLY_INPUT"
+          [ -n "$ONLY" ] || ONLY=$(printf '%s' "$HEAD_MSG" | sed -n 's/.*\[ui-only: *\([A-Za-z0-9_]*Tests\)\].*/\1/p' | head -n 1)
+          ONLY_ARG=""
+          if [ -n "$ONLY" ]; then ONLY_ARG="-only-testing:NexusMobileUITests/$ONLY"; echo "only $ONLY"; fi
           mkdir -p samples
           # every 5 s: if the app is running, a 1 s sample of all its threads
           ( while true; do
@@ -64,7 +78,7 @@ jobs:
           set +e
           xcodebuild test-without-building -project NexusMobile.xcodeproj -scheme NexusMobileUITests \
             -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" -derivedDataPath DerivedData \
-            -resultBundlePath ui.xcresult 2>&1 | tee ui.log | grep -E "UISTEP|Test Case|error|failed|passed|Hang|hang" | head -n 300
+            -resultBundlePath ui.xcresult $ONLY_ARG 2>&1 | tee ui.log | grep -E "UISTEP|Test Case|error|failed|passed|Hang|hang" | head -n 300
           STATUS=${PIPESTATUS[0]}
           kill $SAMPLER || true
           echo "xcodebuild test exited $STATUS"
@@ -86,7 +100,7 @@ jobs:
           DATA=$(xcrun simctl get_app_container "${{ steps.sim.outputs.udid }}" app.nexus.mobile data 2>/dev/null || true)
           echo "app data: $DATA"
           ls -la "$DATA/Documents/nexus-data/diagnostics" 2>/dev/null || echo "no diagnostics folder"
-          for f in "$DATA"/Documents/nexus-data/diagnostics/*.txt; do [ -f "$f" ] && { echo "=================== $f"; cat "$f"; }; done
+          for f in "$DATA"/Documents/nexus-data/diagnostics/*.txt; do [ -f "$f" ] && { echo "=================== $f"; cat "$f"; }; done; true
 
       - name: Screenshots the tests took, as PNGs
         if: always()
@@ -139,7 +153,7 @@ jobs:
             echo "SHOT-END"
           done < rich/list.txt
 
-      - name: PDF zoom and board speed screenshots in the log (base64 JPEG)
+      - name: PDF zoom, board speed and Insert space screenshots in the log (base64 JPEG)
         if: always()
         run: |
           python3 -c '
@@ -148,7 +162,7 @@ jobs:
           for t in m:
               for a in t.get("attachments",[]):
                   n=a.get("suggestedHumanReadableName","")
-                  if n.startswith("zoom-") or n.startswith("speed-"): print(a["exportedFileName"] + "\t" + n)' 2>/dev/null > zoomshots.txt || true
+                  if n.startswith(("zoom-", "speed-", "space-")): print(a["exportedFileName"] + "\t" + n)' 2>/dev/null > zoomshots.txt || true
           while IFS=$'\t' read -r F N; do
             [ -n "$F" ] || continue
             sips -Z 1200 -s format jpeg -s formatOptions 60 "shots/$F" --out z.jpg >/dev/null
@@ -156,6 +170,11 @@ jobs:
             base64 -i z.jpg | fold -w 3000
             echo "SHOT-END"
           done < zoomshots.txt
+
+      - name: The tests in brief (last, so a log's tail has them)
+        if: always()
+        run: |
+          grep -E "UISTEP|Test Case|error:|XCTAssert|failed" ui.log | cut -c1-400 | tail -n 150 || true
 
       - uses: actions/upload-artifact@v4
         if: always()

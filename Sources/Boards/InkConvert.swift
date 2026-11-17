@@ -110,6 +110,10 @@ final class InkLedger {
 
     func takeBorn() -> [String: Double] { defer { born = [:] }; return born }
 
+    /// After `strokes(_:offset:taken:)`: which stroke of the files each canvas stroke is (in the drawing's order), so Insert space
+    /// can show the canvas's own strokes moving without making them again.
+    private(set) var lastIds: [String] = []
+
     /// The fingerprints of each split stroke's parts on the canvas, by stroke id, so a save that didn't erase from it needn't make them again.
     private var partPrints: [String: [String]] = [:]
 
@@ -154,6 +158,8 @@ final class InkLedger {
             seenAll.append((k, fp, seen))
         }
         var out: [BoardStroke] = []
+        var ids: [String] = []
+        ids.reserveCapacity(seenAll.count)
         var nextKnown: [String: Seen] = [:]
         var nextStored: [String: BoardStroke] = [:]
         var nextParts: [String: [String]] = [:]
@@ -185,7 +191,9 @@ final class InkLedger {
                 }
                 nextStored[s.id] = s
                 out.append(s)
+                ids.append(s.id)
             } else if let seen, used.contains(seen.id), seen.part != nil {
+                ids.append(seen.id)
                 continue // another part of a split stroke already written
             } else {
                 var s = InkConvert.boardStroke(k, offset: offset, id: "")
@@ -196,8 +204,10 @@ final class InkLedger {
                 nextKnown[fp] = Seen(id: s.id, part: nil)
                 nextStored[s.id] = s
                 out.append(s)
+                ids.append(s.id)
             }
         }
+        lastIds = ids
         known = nextKnown
         stored = nextStored
         partPrints = nextParts
