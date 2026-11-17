@@ -27,8 +27,12 @@ final class StudyPadTests: XCTestCase {
     func tap(_ id: String, _ why: String, in list: XCUIElement? = nil) {
         var e = el(id)
         if !e.waitForExistence(timeout: 8) { e = app.buttons[id].firstMatch }
+        // a list only keeps the rows on screen: a row that is gone may be above (the page is still scrolled down), so look up first, then down
+        let l = list ?? app.collectionViews.firstMatch
         var tries = 0
-        while !(e.exists && e.isHittable) && tries < 8 { (list ?? app.collectionViews.firstMatch).swipeUp(); tries += 1 }
+        while !e.exists && tries < 4 { l.swipeDown(); tries += 1 }
+        tries = 0
+        while !(e.exists && e.isHittable) && tries < 8 { l.swipeUp(); tries += 1 }
         XCTAssertTrue(e.waitForExistence(timeout: 5), why)
         e.tap()
     }
