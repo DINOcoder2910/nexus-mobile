@@ -38,14 +38,19 @@ final class SidebarSpeedTests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.staticTexts["Today"].firstMatch.waitForExistence(timeout: 60), "the sidebar isn't up")
         let first = app.buttons["Expand G12 Notebook 01"].firstMatch
-        XCTAssertTrue(first.waitForExistence(timeout: 30), "the notebooks aren't listed")
+        // the notebooks come after the sidebar's own rows (Today … Ideas, Claude), which can put them below the fold, where the
+        // list makes no row until it scrolls: scroll to the first one rather than expect it on screen
+        if !first.waitForExistence(timeout: 10) { reach(first, "G12 Notebook 01") }
+        XCTAssertTrue(first.waitForExistence(timeout: 20), "the notebooks aren't listed")
+        reach(first, "G12 Notebook 01")
         // the counts arrive from the walk away from the main thread (10 sections x 12 boards)
         XCTAssertTrue(app.staticTexts["120"].firstMatch.waitForExistence(timeout: 20), "the board counts never showed")
-        reach(first, "G12 Notebook 01")
-        time("open a notebook", app.buttons["Expand Section 01"].firstMatch, limit: 8) { first.tap() }
+        // timed on the row's own arrow turning (always on screen); what opens under it may be below the fold
+        time("open a notebook", app.buttons["Collapse G12 Notebook 01"].firstMatch, limit: 8) { first.tap() }
         let section = app.buttons["Expand Section 01"].firstMatch
-        // its first board (the last ones are below the fold, where the list hasn't made their rows)
-        time("open a section", app.staticTexts["Page 01"].firstMatch, limit: 8) { section.tap() }
+        reach(section, "Section 01")
+        time("open a section", app.buttons["Collapse Section 01"].firstMatch, limit: 8) { section.tap() }
+        reach(app.staticTexts["Page 01"].firstMatch, "Page 01")
         sleep(1)
         let a = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         a.name = "sidebar-many-light"
