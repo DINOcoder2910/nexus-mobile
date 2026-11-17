@@ -63,6 +63,9 @@ public enum Days {
         return add(iso, -((w + 6) % 7))
     }
 
+    /// "Mon" for a day.
+    public static func shortDay(_ iso: String) -> String { shortDays[weekday(iso)] }
+
     static let shortDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
     static let months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 

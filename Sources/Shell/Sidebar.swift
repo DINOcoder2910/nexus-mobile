@@ -71,6 +71,10 @@ struct Sidebar: View {
         let p = store.planning
         let s = store.snapshot
         if !notebooksOnly {
+            // the running timer, whichever device started it (TimeViews.swift)
+            if s.isDataFolder && TimeTracker.shared.current != nil {
+                Section { SidebarTimerRow() }
+            }
             Section {
                 row(.home, "Home", "house", count: nil)
                 row(.today, "Today", "sun.max", count: p.planned(on: store.today).count)
@@ -133,6 +137,7 @@ struct Sidebar: View {
 
             if !notebooksOnly {
                 Section {
+                    if s.isDataFolder { row(.time, "Time", "timer", count: nil) }
                     if s.isDataFolder { row(.files(""), "Files", "folder", count: nil) }
                     row(.settings, "Settings", "gearshape", count: nil)
                     row(.guide, "How Nexus works", "questionmark.circle", count: nil)
