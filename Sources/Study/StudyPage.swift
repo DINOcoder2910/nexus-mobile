@@ -52,6 +52,15 @@ struct StudyPage: View {
     @ViewBuilder
     private func overview(_ s: StudyLibrary.Study, wide: Bool) -> some View {
         List {
+            if SpanishLibrary.shared.workstream(workstreamId) != nil {
+                Section {
+                    NavigationLink {
+                        SpanishHome(workstreamId: workstreamId)
+                    } label: {
+                        Label("Spanish: checker, tutor, writing, skills", systemImage: "character.bubble")
+                    }
+                }
+            }
             UnitsSection(study: s)
             Section {
                 if s.decks.isEmpty {

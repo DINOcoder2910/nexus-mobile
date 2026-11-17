@@ -206,12 +206,10 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
 
     func titleMenu() -> UIMenu {
         var top: [UIMenuElement] = [UIAction(title: "Board info", image: UIImage(systemName: "info.circle")) { [weak self] _ in self?.showInfo() }]
-        // (an iPhone is too narrow for two panes)
-        if !Device.isPhone {
-            top.append(UIMenu(title: "Side by side", image: UIImage(systemName: "rectangle.split.2x1"), children: [
-                UIDeferredMenuElement.uncached { [weak self] done in done(self?.sideBySideMenu() ?? []) },
-            ]))
-        }
+        // on an iPhone the two panes stack, the board on top (BoardSplitController.stacked)
+        top.append(UIMenu(title: Device.isPhone ? "Split screen" : "Side by side", image: UIImage(systemName: Device.isPhone ? "rectangle.split.1x2" : "rectangle.split.2x1"), children: [
+            UIDeferredMenuElement.uncached { [weak self] done in done(self?.sideBySideMenu() ?? []) },
+        ]))
         return UIMenu(children: top + [
             UIMenu(options: .displayInline, children: [
                 UIAction(title: "All comments", image: UIImage(systemName: "text.bubble")) { [weak self] _ in self?.openComments() },

@@ -7,7 +7,8 @@ import JavaScriptCore
 /// ids, who wrote what, the header with the Google Docs link and tabs) and `text/<id>.md` (the readable copy, the words the board holds).
 /// The laptop's own converters (renderer/src/board/richblock.js, bundled by tools/richtext/build.mjs into Resources/richcore.js) run here
 /// in JavaScriptCore, with no web page, so both apps and the hub's Google Docs bridge read and write the .jsonl the same way.
-/// The copy is written plain (no checksum line), as the laptop writes it until the hub merges blocks by the .jsonl.
+/// The copy ends with its checksum line (`<!-- nexus-copy <hash> -->`), as the laptop writes it, so the laptop and the hub tell a copy Nexus
+/// wrote from one edited by hand: a Nexus copy beside a .jsonl brings nothing in (the .jsonl carries the words and is what gets merged).
 public final class RichWords: @unchecked Sendable {
     /// Who the iPad credits a paragraph it changed to: its sync name (Settings › Sync), "iPad" until one is set.
     public static var device: String {
@@ -92,8 +93,20 @@ public final class RichWords: @unchecked Sendable {
         return r["jsonl"] as? String
     }
 
-    /// A copy's words: its checksum line (`<!-- nexus-copy … -->`, written by a newer Nexus) taken off; Windows line ends read as plain.
+    /// The copy's file for the words `body`: the words, then the checksum line (the laptop's richblock.js copyText, so the hash is the
+    /// same to the bit). Nil when the converters can't run: the copy is then written plain.
+    public func copyText(_ body: String) -> String? {
+        guard let r = call("copyText", [body]), r["ok"] as? Bool == true else { return nil }
+        return r["file"] as? String
+    }
+
+    /// Whether a copy's file ends with a checksum line that matches its words: Nexus wrote it (here or on the laptop), not a hand edit.
+    public func isNexusCopy(_ file: String) -> Bool { (call("copy", [file])?["nexus"] as? Bool) ?? false }
+
+    /// A copy's words: its checksum line (`<!-- nexus-copy … -->`) taken off; Windows line ends read as plain. A checksum line that
+    /// matches comes off exactly (the words keep their own last line end), as the laptop reads it.
     public static func body(_ file: String) -> String {
+        if file.contains("<!-- nexus-copy "), let r = shared.call("copy", [file]), let b = r["body"] as? String { return b }
         var s = file.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
         if let r = s.range(of: #"\n*<!-- nexus-copy [^\n]*-->\s*$"#, options: .regularExpression) { s.removeSubrange(r) }
         return s

@@ -82,7 +82,12 @@ extension BoardController {
             guard rel.hasSuffix(".md"), !rel.contains("~") else { continue } // another draft's words: nothing shown changes
             let id = String(rel.dropFirst(5).dropLast(3))
             guard content.items.contains(where: { $0.id == id && $0.type == "text" }) else { continue }
-            let md = RichWords.body((try? String(contentsOf: boardURL.appendingPathComponent(rel), encoding: .utf8)) ?? "")
+            let file = (try? String(contentsOf: boardURL.appendingPathComponent(rel), encoding: .utf8)) ?? ""
+            let md = RichWords.body(file)
+            // a copy Nexus wrote beside its .jsonl (its checksum line), or one that says what the .jsonl says: the .jsonl carries the words
+            // and is taken next, so the copy brings nothing (the hub may have kept the other device's copy whole beside a merged .jsonl)
+            if let j = try? String(contentsOf: boardURL.appendingPathComponent(RichWords.docFile(id)), encoding: .utf8),
+               let w = RichWords.shared.words(j), w == md || RichWords.shared.isNexusCopy(file) { continue }
             let base = content.textsOnDisk[id]
             content.textsOnDisk[id] = md
             if let took = takeRemoteInOpenBlock(id: id, base: base, theirs: md) {

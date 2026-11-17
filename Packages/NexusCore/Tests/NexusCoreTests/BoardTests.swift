@@ -153,7 +153,8 @@ final class BoardTests: XCTestCase {
         XCTAssertEqual(read("B.board/tiles/-1_1.json"), before)
         // 0_0 keeps its text item, the stroke is gone
         XCTAssertEqual(read("B.board/tiles/0_0.json"), BoardTests.fieldsLine + "\"strokes\":[],\n\"items\":[\n{\"id\":\"txt22\",\"type\":\"text\",\"x\":50,\"y\":50,\"w\":560}\n]}\n")
-        XCTAssertEqual(read("B.board/text/txt22.md"), "# Hello\n- [x] one\n")
+        XCTAssertEqual(read("B.board/text/txt22.md").map(RichWords.body), "# Hello\n- [x] one\n")
+        XCTAssertTrue(RichWords.shared.isNexusCopy(read("B.board/text/txt22.md") ?? ""), "with its checksum line")
         XCTAssertTrue(BoardFiles.changes(c).tiles.isEmpty)
 
         // the text block removed: its tile is written empty and its markdown deleted

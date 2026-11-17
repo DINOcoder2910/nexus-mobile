@@ -140,6 +140,7 @@ struct DeckView: View {
     @State private var session: SessionBox?
     @State private var clock = StudyLibrary.now
     @State private var practising = false
+    @State private var addingCard = false
     @Environment(\.horizontalSizeClass) private var size
 
     struct SessionBox: Identifiable { let id = UUID(); var session: StudySession }
@@ -163,18 +164,28 @@ struct DeckView: View {
         .onChange(of: prefs) { _, p in if let d = file?.deck { DeckPrefs.set(p, workstreamId, d.id) } }
         .toolbar {
             // what the deck has beyond review: on the iPad as buttons, on the iPhone in a More menu
-            if let d = file?.deck, !d.practice.isEmpty {
+            if let d = file?.deck, !d.practice.isEmpty || canAddCard(d) {
                 ToolbarItem(placement: .primaryAction) {
                     if size == .regular {
-                        Button { practising = true } label: { Label("Practice classifying", systemImage: "square.grid.2x2") }
-                            .labelStyle(.titleAndIcon)
+                        HStack(spacing: 14) {
+                            if canAddCard(d) {
+                                Button { addingCard = true } label: { Label("Add a card", systemImage: "plus") }.labelStyle(.titleAndIcon)
+                            }
+                            if !d.practice.isEmpty {
+                                Button { practising = true } label: { Label("Practice classifying", systemImage: "square.grid.2x2") }.labelStyle(.titleAndIcon)
+                            }
+                        }
                     } else {
                         Menu {
-                            Button { practising = true } label: { Label("Practice classifying", systemImage: "square.grid.2x2") }
+                            if canAddCard(d) { Button { addingCard = true } label: { Label("Add a card", systemImage: "plus") } }
+                            if !d.practice.isEmpty { Button { practising = true } label: { Label("Practice classifying", systemImage: "square.grid.2x2") } }
                         } label: { Label("More", systemImage: "ellipsis.circle") }
                     }
                 }
             }
+        }
+        .sheet(isPresented: $addingCard) {
+            SpanishAddCardSheet(workstreamId: workstreamId, draft: SpanishCards.Draft(deck: file?.deck?.id ?? SpanishLibrary.shared.defaultDeck(workstreamId)))
         }
         .navigationDestination(isPresented: $practising) { PracticeView(workstreamId: workstreamId, path: path) }
         .fullScreenCover(item: $session) { box in
@@ -185,6 +196,9 @@ struct DeckView: View {
             }
         }
     }
+
+    /// A Spanish workstream's flip deck takes new cards (the Spanish tools' Add a card).
+    private func canAddCard(_ d: StudyDeck) -> Bool { d.flip && SpanishLibrary.shared.workstream(workstreamId) != nil && lib.canWrite(store) }
 
     private func dir(_ deck: StudyDeck) -> StudyDeck.Direction { deck.flip || !deck.reversible ? .forward : prefs.dir }
     private func ids(_ deck: StudyDeck) -> [String] { StudySession.cardIds(deck, tag: deck.flip ? prefs.tag : "") }

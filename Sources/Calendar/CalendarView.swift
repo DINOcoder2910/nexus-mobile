@@ -18,7 +18,8 @@ enum CalMode: String, CaseIterable, Identifiable {
         }
     }
 
-    static var available: [CalMode] { Device.isPhone ? [.day, .three, .month, .list] : allCases }
+    /// Every view on both devices; the iPhone's Week is drawn narrow (TimeGridView.narrow).
+    static var available: [CalMode] { allCases }
 }
 
 /// Something drawn on the calendar: an event from the device's calendars, a task planned at a time, or a deadline.
@@ -163,6 +164,7 @@ struct CalendarView: View {
                 Label(mode.label, systemImage: "calendar")
                     .labelStyle(.titleAndIcon)
             }
+            .accessibilityIdentifier("calendar-view")
         }
         ToolbarItem(placement: .topBarLeading) {
             Button { withAnimation(.snappy) { placing.toggle() } } label: {

@@ -39,6 +39,7 @@ struct WorkstreamView: View {
                 headerSection
                 tasksSection
                 studySection
+                SpanishWorkstreamSection(workstreamId: workstreamId)
                 somedaySection
                 doneSection
                 notesSection
@@ -58,10 +59,23 @@ struct WorkstreamView: View {
                 }
             }
         }
+        .spanishSetupMenu(workstreamId)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button(action: add) { Label("Add a task", systemImage: "plus") }
                     .disabled(store.snapshot.readOnlyReason != nil)
+            }
+            // Claude, behind the ⋯ menu: about this workstream, and File my Inbox on the Inbox
+            ToolbarItem(placement: .secondaryAction) {
+                Button {
+                    let w = store.workstream(workstreamId)
+                    ClaudeChatSession.open(looking: w.map { "\($0.name) (\($0.folder))" } ?? "the Inbox (inbox.yaml)")
+                } label: {
+                    Label("Ask Claude about this", systemImage: "sparkles")
+                }
+            }
+            if workstreamId == nil {
+                ToolbarItem(placement: .secondaryAction) { FileInboxButton() }
             }
         }
     }
