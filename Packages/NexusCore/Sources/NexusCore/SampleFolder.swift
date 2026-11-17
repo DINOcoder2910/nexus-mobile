@@ -94,7 +94,7 @@ public enum SampleFolder {
             ("R3.3", "Electron sharing reactions", "not-yet"), ("R3.4", "Electron-pair sharing reactions", "not-yet"),
         ]
         text("study/units.yaml", "units:\n" + units.map { u in
-            "  - code: \(u.0)\n    title: \(u.1)\n    status: \(u.2)\n" + (u.0 == "R3.2" ? "    notes: Oxidation states done; electrochemical cells next.\n    evidence: Redox worksheet, class notes\n" : "")
+            "  - code: \(u.0)\n    title: '\(u.1.replacingOccurrences(of: "'", with: "''"))'\n    status: \(u.2)\n" + (u.0 == "R3.2" ? "    notes: Oxidation states done; electrochemical cells next.\n    evidence: Redox worksheet, class notes\n" : "")
         }.joined())
         let o = "[strong acid, weak acid, strong base, weak base]"
         text("study/decks/acids.yaml", """
