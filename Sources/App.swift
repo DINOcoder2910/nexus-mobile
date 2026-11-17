@@ -148,6 +148,12 @@ struct WindowRoot: View {
 /// Where the sidebar can take you.
 enum Screen: Hashable {
     case today, planner, calendar, tasks, someday, inbox, workstream(String), boards, boardSearch, settings, study, ideas
+    /// A workstream's Spanish study (its id).
+    case spanish(String)
+    /// Home (the laptop's first screen) and How Nexus works.
+    case home, guide
+    /// Files: a folder of the data folder ("" is the folder itself).
+    case files(String)
     /// The Claude conversation as its own screen (the iPad also has it as a column beside any screen).
     case claude
     /// A notebook's page (its path in the data folder, "notebooks/Chem").
@@ -307,8 +313,12 @@ struct RootView: View {
         case .notebook(let path): return "the notebook \(path)"
         case .settings: return "Settings"
         case .study: return "Study"
+        case .spanish(let id): return "Spanish study" + (store.workstream(id).map { " (\($0.name))" } ?? "")
         case .ideas: return "Ideas"
         case .claude: return "Claude"
+        case .home: return "Home"
+        case .guide: return "How Nexus works"
+        case .files(let path): return path.isEmpty ? "Files (the data folder)" : "Files: \(path)"
         }
     }
 
@@ -373,11 +383,14 @@ struct RootView: View {
     /// One screen. `go` is where a link inside it goes (the split view's selection, or a push on the iPhone's tab).
     @ViewBuilder
     private func screenView(_ s: Screen, go: @escaping (Screen) -> Void) -> some View {
-        if !store.snapshot.isDataFolder, s != .boards, s != .settings, s != .calendar {
+        if !store.snapshot.isDataFolder, s != .boards, s != .settings, s != .calendar, s != .guide {
             FolderSetupView()
         } else {
             switch s {
             case .today: TodayView()
+            case .home: HomeView(go: go)
+            case .files(let path): FilesView(path: path, go: go)
+            case .guide: GuideView()
             case .planner: PlannerView()
             case .calendar: CalendarView()
             case .tasks: TasksView(lens: .all)
@@ -389,6 +402,7 @@ struct RootView: View {
             case .notebook(let path): NotebookPage(path: path, go: go)
             case .settings: SettingsView()
             case .study: StudyHome()
+            case .spanish(let id): SpanishHome(workstreamId: id)
             case .ideas: IdeasView()
             case .claude: ClaudeChatView()
             }

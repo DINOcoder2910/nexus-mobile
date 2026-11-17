@@ -81,7 +81,16 @@ final class SidebarTreeTests: XCTestCase {
         expand("Chemistry")
         expand("R3 Energetics")
         expand("Week 1")
-        XCTAssertTrue(app.staticTexts["Calorimetry"].firstMatch.waitForExistence(timeout: 5), "Week 1's boards aren't listed")
+        // Week 1's boards come right under it, which may be below the fold (the list makes no row there until it scrolls): the
+        // rows above the notebooks grow (Ideas, Claude), so scroll to them rather than expect them on screen
+        let calorimetry = app.staticTexts["Calorimetry"].firstMatch
+        if !calorimetry.waitForExistence(timeout: 3) { app.collectionViews.firstMatch.swipeUp(velocity: .slow) }
+        if !calorimetry.waitForExistence(timeout: 5) {
+            shot("sidebar-missing-Calorimetry-\(mode)")
+            let rows = app.staticTexts.allElementsBoundByIndex.prefix(40).map(\.label).joined(separator: " | ")
+            XCTFail("Week 1's boards aren't listed; texts: \(rows)")
+            return
+        }
         // the whole open tree on screen (rows below the fold aren't there to find)
         reach(app.staticTexts["Biology"].firstMatch, "Biology")
         // OneNote's order (notebook.json), not by name: Week 2 before Week 1, a notebook's notebooks before its boards, Hess's law
