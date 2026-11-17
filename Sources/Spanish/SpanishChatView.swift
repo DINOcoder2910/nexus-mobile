@@ -69,7 +69,7 @@ struct SpanishChatBody: View {
             Divider()
             if chat.review != nil { SpanishMemoryReview(chat: chat).frame(maxWidth: wide ? 760 : .infinity) } else { composer }
         }
-        .spanishKeyboardDone()
+        // no Done bar over the keyboard here: the answer field it would close goes away on Check (the conversation scrolls the keyboard away)
     }
 
     // MARK: messages

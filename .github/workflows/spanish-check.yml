@@ -54,13 +54,31 @@ jobs:
         run: |
           echo 1 > status.txt
           CLASS=$([ "${{ matrix.device }}" = iPad ] && echo SpanishPadTests || echo SpanishPhoneTests)
+          # every 5 s: if the app is running, a 1 s sample of all its threads (a freeze shows where the app is stuck)
+          mkdir -p samples
+          ( while true; do
+              PID=$(pgrep -x NexusMobile | head -n 1)
+              if [ -n "$PID" ]; then sudo sample "$PID" 1 -mayDie -file "samples/s-$(date +%s).txt" >/dev/null 2>&1; fi
+              sleep 4
+            done ) &
+          SAMPLER=$!
           set +e
           xcodebuild test-without-building -project NexusMobile.xcodeproj -scheme NexusMobileUITests \
             -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" -derivedDataPath DerivedData \
             -only-testing:NexusMobileUITests/$CLASS -resultBundlePath es.xcresult 2>&1 | tee es.log | grep -E "UISTEP|Test Case|error|failed|passed|skipped"
           STATUS=${PIPESTATUS[0]}
+          kill $SAMPLER || true
           echo "xcodebuild test exited $STATUS"
           echo "$STATUS" > status.txt
+
+      - name: Main thread in the last samples (only when the tests failed)
+        if: always()
+        run: |
+          [ "$(cat status.txt 2>/dev/null)" = 0 ] && { echo "tests passed"; exit 0; }
+          for f in $(ls samples/*.txt 2>/dev/null | tail -n 4); do
+            echo "=================== $f"
+            awk '/Thread_[0-9]+.*com.apple.main-thread/{on=1} on{print; n++} n>=70{exit}' "$f" | cut -c1-200
+          done
 
       - name: Screenshots in the log (base64 JPEG)
         if: always()
