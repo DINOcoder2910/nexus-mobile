@@ -14,7 +14,11 @@ enum TestHooks {
         if !store.snapshot.isDataFolder { store.makeSample() }
         let dir = "notebooks/PDF zoom"
         let url = store.folder.appendingPathComponent(dir, isDirectory: true)
-        if NotebookActions.names(in: url).contains(where: { $0.hasSuffix(".board") }) { return }
+        // made by an earlier test on this simulator: open it again (UITests/PenOptionsTests runs after PdfZoomTests)
+        if let made = NotebookActions.names(in: url).first(where: { $0.hasSuffix(".board") }) {
+            store.openBoard = .init(path: dir + "/" + made, focus: nil)
+            return
+        }
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         try? NotebookActions().newBoard(pdfData: finePrint(), named: "Zoom test", in: dir, store)
     }
