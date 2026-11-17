@@ -190,6 +190,13 @@ public enum LiveBoard {
         for (id, mine) in ch.texts.sorted(by: { $0.key < $1.key }) {
             guard let diskFile = read(BoardFormat.textFile(id)) else { continue }
             let disk = RichWords.body(diskFile)
+            // a copy Nexus wrote beside its .jsonl (its checksum line), or one that says what the .jsonl says: the .jsonl, merged below,
+            // carries the other device's words. (The hub keeps one device's copy whole beside a .jsonl it merged by paragraph: taking that
+            // copy would undo what this iPad saved meanwhile.)
+            if RichWords.isMain(id), let j = read(RichWords.docFile(id)), let w = RichWords.shared.words(j), w == disk || RichWords.shared.isNexusCopy(diskFile) {
+                r.content.textsOnDisk[id] = disk
+                continue
+            }
             let base = c.textsOnDisk[id]
             if disk == (base ?? "") || disk == mine { continue }
             if let merged = mergeBlock(base: base, mine: mine, theirs: disk) {

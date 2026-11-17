@@ -6,14 +6,17 @@ import NexusCore
 /// Side by side: the board on the left and, when asked, a second pane on the right: Today or the Calendar (to plan while you write),
 /// another board, the same board again (each pane its own place and zoom; the two save through the same merge as the laptop and the
 /// iPad), one of the board's PDFs on its own, or any PDF from the Files app. Drag the divider to share the width; close the second
-/// pane from its own bar.
+/// pane from its own bar. On a phone-width screen the panes stack instead: the board on top, the second pane below, the divider
+/// dragged up and down.
 final class BoardSplitController: UIViewController {
     let main: UINavigationController
     private(set) var side: UIViewController?
     private let divider = UIView()
     private let grip = UIView()
-    /// The left pane's share of the width while two are shown.
+    /// The first pane's share (of the width side by side, of the height stacked) while two are shown.
     private var share: CGFloat = 0.5
+    /// A phone-width screen stacks the panes, the board on top (BoardBar.compactWidth's cut-off).
+    var stacked: Bool { view.bounds.width < BoardBar.compactWidth }
     let root: URL
     weak var store: NexusStore?
     var onSaved: ((String) -> Void)?
@@ -53,18 +56,30 @@ final class BoardSplitController: UIViewController {
             divider.isHidden = true
             return
         }
-        let gap: CGFloat = 8
-        let left = (b.width * share).rounded()
-        main.view.frame = CGRect(x: 0, y: 0, width: left - gap / 2, height: b.height)
-        side.view.frame = CGRect(x: left + gap / 2, y: 0, width: b.width - left - gap / 2, height: b.height)
         divider.isHidden = false
-        divider.frame = CGRect(x: left - gap / 2, y: 0, width: gap, height: b.height)
-        grip.frame = CGRect(x: gap / 2 - 2, y: b.height / 2 - 24, width: 4, height: 48)
+        if stacked {
+            // a finger needs more than 8 points to catch the divider
+            let gap: CGFloat = 14
+            let top = (b.height * share).rounded()
+            main.view.frame = CGRect(x: 0, y: 0, width: b.width, height: top - gap / 2)
+            side.view.frame = CGRect(x: 0, y: top + gap / 2, width: b.width, height: b.height - top - gap / 2)
+            divider.frame = CGRect(x: 0, y: top - gap / 2, width: b.width, height: gap)
+            grip.frame = CGRect(x: b.width / 2 - 24, y: gap / 2 - 2, width: 48, height: 4)
+        } else {
+            let gap: CGFloat = 8
+            let left = (b.width * share).rounded()
+            main.view.frame = CGRect(x: 0, y: 0, width: left - gap / 2, height: b.height)
+            side.view.frame = CGRect(x: left + gap / 2, y: 0, width: b.width - left - gap / 2, height: b.height)
+            divider.frame = CGRect(x: left - gap / 2, y: 0, width: gap, height: b.height)
+            grip.frame = CGRect(x: gap / 2 - 2, y: b.height / 2 - 24, width: 4, height: 48)
+        }
     }
 
     @objc private func dragged(_ g: UIPanGestureRecognizer) {
-        let x = g.location(in: view).x
-        share = min(0.8, max(0.2, x / max(1, view.bounds.width)))
+        let p = g.location(in: view)
+        share = stacked
+            ? min(0.8, max(0.25, p.y / max(1, view.bounds.height)))
+            : min(0.8, max(0.2, p.x / max(1, view.bounds.width)))
         view.setNeedsLayout()
     }
 
@@ -75,7 +90,7 @@ final class BoardSplitController: UIViewController {
         view.addSubview(nav.view)
         nav.didMove(toParent: self)
         side = nav
-        share = 0.5
+        share = stacked ? 0.55 : 0.5 // stacked, the board keeps a little more: its bar takes room
         view.setNeedsLayout()
         UIView.animate(withDuration: 0.25) { self.view.layoutIfNeeded() }
     }

@@ -2,13 +2,16 @@ import XCTest
 import UIKit
 
 /// Time tracking on the iPad and the iPhone, on sample data with time tracked this week here and on the laptop and a timer running
-/// (-NexusTestTime, TestHooks.timeSessions). The screenshots named "time-…" are printed into the time-check log (time-check.yml),
-/// so a cloud thread can show them before asking for a ship. Runs on whichever simulator the workflow picks.
-final class TimeTrackingTests: XCTestCase {
+/// (-NexusTestTime, TestHooks.timeSessions). `ui-check.yml` runs this class on the iPad and `TimeTrackingPhoneTests` (the same steps)
+/// on the iPhone; their "time-…" / "phone-time-…" screenshots are printed into its log, so a cloud thread can show them before a ship.
+class TimeTrackingTests: XCTestCase {
     let app = XCUIApplication()
     var phone: Bool { UIDevice.current.userInterfaceIdiom == .phone }
+    /// The device this class runs on (the iPhone's subclass says true).
+    class var forPhone: Bool { false }
 
-    override func setUp() {
+    override func setUpWithError() throws {
+        try XCTSkipIf(phone != Self.forPhone, Self.forPhone ? "iPhone only" : "iPad only")
         continueAfterFailure = true
         XCUIDevice.shared.orientation = phone ? .portrait : .landscapeLeft
         app.launchArguments = ["-NexusTestTime"]
@@ -17,7 +20,8 @@ final class TimeTrackingTests: XCTestCase {
         if sample.waitForExistence(timeout: 5) { sample.tap() }
     }
 
-    func shot(_ name: String) {
+    func shot(_ base: String) {
+        let name = phone ? "phone-" + base : base
         print("UISTEP \(Date().timeIntervalSince1970) \(name)")
         let a = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         a.name = name
@@ -102,4 +106,9 @@ final class TimeTrackingTests: XCTestCase {
             shot("time-6-session")
         }
     }
+}
+
+/// The same steps on the iPhone (`ui-check.yml` runs every "…PhoneTests" class on its iPhone simulator).
+final class TimeTrackingPhoneTests: TimeTrackingTests {
+    override class var forPhone: Bool { true }
 }

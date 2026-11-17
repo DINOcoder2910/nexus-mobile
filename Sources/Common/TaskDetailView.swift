@@ -30,6 +30,18 @@ struct TaskDetailView: View {
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .confirmationAction) { Button("Done") { commitTitle(t); commitFields(t); dismiss() } }
+                        // the laptop's "drag a task onto Claude": the conversation, told which task this is
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button {
+                                commitTitle(t); commitFields(t)
+                                let looking = "the task “\(t.text)” (id \(t.id) in \(t.file))"
+                                dismiss()
+                                DispatchQueue.main.asyncAfter(deadline: .now() + (Device.isPhone ? 0.45 : 0.1)) { ClaudeChatSession.open(looking: looking) }
+                            } label: {
+                                Label("Ask Claude", systemImage: "sparkles")
+                            }
+                            .accessibilityIdentifier("task-ask-claude")
+                        }
                     }
                     .onAppear { title = t.title; fill(t) }
                     .onChange(of: t.title) { _, new in if !titleFocused { title = new } }

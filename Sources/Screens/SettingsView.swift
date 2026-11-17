@@ -57,9 +57,13 @@ struct SettingsView: View {
 
             ReminderSettingsView()
 
+            ShareSettings()
+
             ClaudeSettings()
 
             UsageSettings()
+
+            ClaudeChatSettings()
 
             TutorSettings()
 

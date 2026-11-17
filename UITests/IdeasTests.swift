@@ -60,7 +60,12 @@ final class IdeasTests: XCTestCase {
         let credits = app.staticTexts["Anthropic API credits"].firstMatch
         _ = credits.waitForExistence(timeout: 10)
         for _ in 0..<12 where !(credits.exists && credits.isHittable) { app.swipeUp() }
-        app.swipeUp()
+        // bring the Usage section up to the top of the screen (a full swipe here could carry it past the top, out of the list)
+        if credits.isHittable {
+            credits.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+                .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: 0.18)))
+            sleep(1)
+        }
         // the picture first, so a failure below still shows what Settings held
         shot("ideas-ipad-settings-usage-light")
         XCTAssertTrue(credits.exists, "no Usage section in Settings")
