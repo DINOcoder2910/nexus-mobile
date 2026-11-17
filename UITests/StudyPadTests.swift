@@ -99,10 +99,14 @@ final class StudyPadTests: XCTestCase {
         sleep(1)
         shot("pad-study-upload-describe")
         sort.tap()
-        let file = el("upload-file")
-        XCTAssertTrue(file.waitForExistence(timeout: 30), "the upload's form didn't come up")
+        // the form's top (Claude's summary): File it is at the bottom of a list that only makes the rows on screen
+        XCTAssertTrue(el("upload-summary").waitForExistence(timeout: 30), "the upload's form didn't come up")
         sleep(1)
         shot("pad-study-upload-form")
+        let file = el("upload-file")
+        var n = 0
+        while !(file.exists && file.isHittable) && n < 8 { app.swipeUp(); n += 1 }
+        XCTAssertTrue(file.exists, "no File it")
         file.tap()
         XCTAssertTrue(el("upload-undo").waitForExistence(timeout: 10), "no Undo after filing")
         sleep(1)

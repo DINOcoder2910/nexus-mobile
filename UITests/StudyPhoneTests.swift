@@ -106,13 +106,17 @@ final class StudyPhoneTests: XCTestCase {
         let sort = el("upload-sort")
         XCTAssertTrue(sort.waitForExistence(timeout: 10), "the upload doesn't ask what the file is")
         sort.tap()
-        let file = el("upload-file")
-        XCTAssertTrue(file.waitForExistence(timeout: 30), "the upload's form didn't come up")
+        // the form's top (Claude's summary): File it is at the bottom of a list that only makes the rows on screen
+        XCTAssertTrue(el("upload-summary").waitForExistence(timeout: 30), "the upload's form didn't come up")
         sleep(1)
         shot("phone-study-upload-form")
         app.swipeUp(); sleep(1)
         shot("phone-study-upload-form-lower")
-        tap("upload-file", "no File it")
+        let file = el("upload-file")
+        var n = 0
+        while !(file.exists && file.isHittable) && n < 8 { app.swipeUp(); n += 1 }
+        XCTAssertTrue(file.exists, "no File it")
+        file.tap()
         XCTAssertTrue(el("upload-undo").waitForExistence(timeout: 10), "no Undo after filing")
         sleep(1)
         shot("phone-study-upload-filed")
