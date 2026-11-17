@@ -143,7 +143,7 @@ enum TestHooks {
     /// (UITests/LinksTests: the links' look, light and dark, and the Links list).
     static func linksBoard(_ store: NexusStore) {
         if !store.snapshot.isDataFolder { store.makeSample() }
-        let dir = "notebooks/Chemistry"
+        let dir = "notebooks/Bridge check" // not a name another UI test looks for (SidebarTreeTests expects no top-level Chemistry)
         let url = store.folder.appendingPathComponent(dir, isDirectory: true)
         if let b = NotebookActions.names(in: url).first(where: { $0.hasSuffix(".board") }) { store.openBoard = .init(path: dir + "/" + b, focus: nil); return }
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
