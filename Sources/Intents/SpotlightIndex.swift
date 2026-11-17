@@ -34,13 +34,31 @@ enum SpotlightIndex {
             a.keywords = w.aliases
             items.append(CSSearchableItem(uniqueIdentifier: "ws:\(w.id)", domainIdentifier: domain, attributeSet: a))
         }
-        for nb in Notebook.list(store.folder) {
-            for (b, place) in nb.allBoards {
-                let a = CSSearchableItemAttributeSet(contentType: .content)
-                a.title = b.name
-                a.contentDescription = "Board in \(place)"
-                items.append(CSSearchableItem(uniqueIdentifier: "board:\(b.path)", domainIdentifier: domain, attributeSet: a))
-            }
+        // the boards: a walk of every notebook folder (over a thousand boards after the OneNote import), away from the main thread
+        let root = store.folder
+        generation += 1
+        pending = items
+        let gen = generation
+        Task.detached(priority: .utility) {
+            let boards = Notebook.list(root).flatMap { nb in nb.allBoards.map { [$0.board.path, $0.board.name, $0.place] } }
+            await MainActor.run { finish(boards: boards, generation: gen) }
+        }
+    }
+
+    /// Bumped by each update, so an older walk that finishes late doesn't index over a newer one.
+    private static var generation = 0
+    /// The tasks and workstreams of the latest update, waiting for its boards.
+    private static var pending: [CSSearchableItem] = []
+
+    private static func finish(boards: [[String]], generation gen: Int) {
+        guard gen == generation else { return }
+        var items = pending
+        pending = []
+        for b in boards {
+            let a = CSSearchableItemAttributeSet(contentType: .content)
+            a.title = b[1]
+            a.contentDescription = "Board in \(b[2])"
+            items.append(CSSearchableItem(uniqueIdentifier: "board:\(b[0])", domainIdentifier: domain, attributeSet: a))
         }
 
         let key = items.map { "\($0.uniqueIdentifier)|\($0.attributeSet.title ?? "")|\($0.attributeSet.contentDescription ?? "")" }
@@ -54,6 +72,7 @@ enum SpotlightIndex {
     }
 
     static func clear() {
+        generation += 1
         guard !lastKey.isEmpty else { return }
         lastKey = ""
         CSSearchableIndex.default().deleteSearchableItems(withDomainIdentifiers: [domain])

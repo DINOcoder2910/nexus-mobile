@@ -129,6 +129,9 @@ final class WindowRouter {
     var openTask: String?
     /// The add sheet is asked for.
     var addSheet = false
+    /// Ideas is asked for (the "Add an idea" shortcut that opens the app), with the cursor in its add box.
+    var ideas = false
+    var focusIdeas = false
 }
 
 /// One window: its own store (its task panel, add sheet, Undo and open board), on the shared data folder.
@@ -144,9 +147,15 @@ struct WindowRoot: View {
 
 /// Where the sidebar can take you.
 enum Screen: Hashable {
-    case today, planner, calendar, tasks, someday, inbox, workstream(String), boards, boardSearch, settings, study
+    case today, planner, calendar, tasks, someday, inbox, workstream(String), boards, boardSearch, settings, study, ideas
     /// A workstream's Spanish study (its id).
     case spanish(String)
+    /// Home (the laptop's first screen) and How Nexus works.
+    case home, guide
+    /// Files: a folder of the data folder ("" is the folder itself).
+    case files(String)
+    /// The Claude conversation as its own screen (the iPad also has it as a column beside any screen).
+    case claude
     /// A notebook's page (its path in the data folder, "notebooks/Chem").
     case notebook(String)
 }
@@ -191,6 +200,7 @@ struct RootView: View {
         }
         .onChange(of: screen) { _, now in
             guard let now else { return }
+            if !Device.isPhone && ClaudeChatSession.shared.presented == "main" { ClaudeChatSession.shared.conversation("main").looking = lookingName(now) }
             store.openBoard = nil
             // the iPhone has no selection: the screen goes to its tab, and the ask is cleared so the same one works again
             if Device.isPhone { showOnPhone(now); screen = nil }
@@ -221,6 +231,7 @@ struct RootView: View {
         .onChange(of: calendar.version) { _, _ in reminders.reschedule() }
         .onChange(of: router.openTask) { _, _ in answerRouter() }
         .onChange(of: router.addSheet) { _, _ in answerRouter() }
+        .onChange(of: router.ideas) { _, _ in answerRouter() }
         .task {
             AppServices.start()
             if router.front == nil { router.front = windowId }
@@ -257,11 +268,58 @@ struct RootView: View {
             } else {
                 NavigationStack {
                     detail
+                        .toolbar {
+                            // the laptop's pinned Claude column (Ctrl+Shift+J): the conversation beside the screen
+                            if screen != .claude && store.snapshot.isDataFolder {
+                                ToolbarItem(placement: .topBarTrailing) {
+                                    Button {
+                                        if claude.presented == nil { ClaudeChatSession.open(looking: lookingName(screen ?? .today)) } else { claude.presented = nil }
+                                    } label: {
+                                        Label("Claude", systemImage: claude.presented == nil ? "sparkles" : "sparkles.rectangle.stack.fill")
+                                    }
+                                    .accessibilityIdentifier("claude-column")
+                                }
+                            }
+                        }
                 }
                 .id(screen)
+                .inspector(isPresented: Binding(get: { claude.presented != nil && screen != .claude }, set: { if !$0 { claude.presented = nil } })) {
+                    // its own header row in view (an inspector's toolbar items would join the screen's toolbar, even while it is closed)
+                    Group {
+                        if let key = claude.presented {
+                            ClaudeChatView(conversation: key, onClose: { claude.presented = nil }, inColumn: true)
+                        }
+                    }
+                    .inspectorColumnWidth(min: 320, ideal: 400, max: 520)
+                }
             }
         }
         .overlay(alignment: .bottom) { UndoBar().animation(.snappy, value: store.toast) }
+    }
+
+    private var claude: ClaudeChatSession { .shared }
+
+    /// What Claude is told the user is looking at, for a screen.
+    private func lookingName(_ s: Screen) -> String {
+        switch s {
+        case .today: return "Today"
+        case .planner: return "the Planner (this week)"
+        case .calendar: return "the Calendar"
+        case .tasks: return "Tasks"
+        case .someday: return "Someday"
+        case .inbox: return "the Inbox (inbox.yaml)"
+        case .workstream(let id): return store.workstream(id).map { "\($0.name) (\($0.folder))" } ?? id
+        case .boards, .boardSearch: return "Notebooks"
+        case .notebook(let path): return "the notebook \(path)"
+        case .settings: return "Settings"
+        case .study: return "Study"
+        case .spanish(let id): return "Spanish study" + (store.workstream(id).map { " (\($0.name))" } ?? "")
+        case .ideas: return "Ideas"
+        case .claude: return "Claude"
+        case .home: return "Home"
+        case .guide: return "How Nexus works"
+        case .files(let path): return path.isEmpty ? "Files (the data folder)" : "Files: \(path)"
+        }
     }
 
     /// A reminder tapped or Siri's add sheet: the window in front answers.
@@ -274,6 +332,11 @@ struct RootView: View {
         if router.addSheet {
             router.addSheet = false
             store.capture = .init(workstream: nil, parent: nil, plan: nil)
+        }
+        if router.ideas {
+            router.ideas = false
+            router.focusIdeas = true
+            screen = .ideas
         }
     }
 
@@ -320,11 +383,14 @@ struct RootView: View {
     /// One screen. `go` is where a link inside it goes (the split view's selection, or a push on the iPhone's tab).
     @ViewBuilder
     private func screenView(_ s: Screen, go: @escaping (Screen) -> Void) -> some View {
-        if !store.snapshot.isDataFolder, s != .boards, s != .settings, s != .calendar {
+        if !store.snapshot.isDataFolder, s != .boards, s != .settings, s != .calendar, s != .guide {
             FolderSetupView()
         } else {
             switch s {
             case .today: TodayView()
+            case .home: HomeView(go: go)
+            case .files(let path): FilesView(path: path, go: go)
+            case .guide: GuideView()
             case .planner: PlannerView()
             case .calendar: CalendarView()
             case .tasks: TasksView(lens: .all)
@@ -337,6 +403,8 @@ struct RootView: View {
             case .settings: SettingsView()
             case .study: StudyHome()
             case .spanish(let id): SpanishHome(workstreamId: id)
+            case .ideas: IdeasView()
+            case .claude: ClaudeChatView()
             }
         }
     }
@@ -369,6 +437,13 @@ struct RootView: View {
             .tabItem { Label("More", systemImage: "ellipsis.circle") }
             .tag(PhoneTab.more)
         }
+        // Claude opened from a screen (Today's menu, a task, Plan with Claude's result): a sheet over the tabs
+        .sheet(isPresented: Binding(get: { ClaudeChatSession.shared.presented != nil }, set: { if !$0 { ClaudeChatSession.shared.presented = nil } })) {
+            NavigationStack {
+                ClaudeChatView(conversation: ClaudeChatSession.shared.presented ?? "main", onClose: { ClaudeChatSession.shared.presented = nil })
+            }
+            .environment(store)
+        }
         // a board takes the whole phone; its sidebar button (and Close) go back to the tabs
         .fullScreenCover(item: Binding(get: { store.openBoard }, set: { store.openBoard = $0 })) { target in
             BoardPanes(main: target, columns: Binding(get: { .detailOnly }, set: { if $0 != .detailOnly { store.openBoard = nil } }))
@@ -384,8 +459,8 @@ struct RootView: View {
             }
         }
         .overlay(alignment: .bottomTrailing) {
-            // the Calendar has its own + (a new event) in its bottom bar
-            if which != .calendar && store.snapshot.isDataFolder && store.snapshot.readOnlyReason == nil {
+            // the Calendar has its own + (a new event) in its bottom bar; Claude has its box and send button there
+            if which != .calendar && path.wrappedValue.last != .claude && store.snapshot.isDataFolder && store.snapshot.readOnlyReason == nil {
                 Button { addFrom(which, path.wrappedValue.last) } label: {
                     Image(systemName: "plus")
                         .font(.title2.weight(.semibold))

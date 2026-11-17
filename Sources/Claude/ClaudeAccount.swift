@@ -5,7 +5,7 @@ import NexusCore
 /// Plan or API on the iPad: one app-wide switch (Settings › Claude, and the Plan / API chip beside every Claude feature), the API key and
 /// what this iPad spent with it this month. The mode lives in UserDefaults ("claudeMode"; API by default on the iPad, the approved board
 /// proposal: fastest, works anywhere), the key in the Keychain (only its last 4 characters are ever shown again), the spending in
-/// Application Support (claude-api-spend.json), never in the data folder. The laptop has its own switch (docs/areas.md "Plan or API").
+/// Application Support (claude-api-spend.json); a copy of its monthly totals goes to the data folder's usage/<device>.json (UsageSettings.swift). The laptop has its own switch (docs/areas.md "Plan or API").
 @MainActor
 @Observable
 final class ClaudeAccount {
@@ -78,6 +78,7 @@ final class ClaudeAccount {
     func addSpend(_ usd: Double, usage: ClaudeUsage?) {
         spend.add(usd: usd, usage: usage)
         Self.saveSpend(spend)
+        UsageFile.writeSpend(spend) // (the data folder's usage/<device>.json, for the laptop's and the other device's Usage bars)
     }
     var spendText: String { ClaudeSpend.text(spend.month()) }
 

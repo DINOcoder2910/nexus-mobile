@@ -76,7 +76,7 @@ final class MDLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
         let chars = characterRange(forGlyphRange: glyphsToShow, actualGlyphRange: nil)
         storage.enumerateAttribute(BlockStyler.mathKey, in: chars, options: []) { value, range, _ in
             guard let box = value as? BlockStyler.MathBox, let r = mathRect(box, at: range.location) else { return }
-            box.image.draw(in: r.offsetBy(dx: origin.x, dy: origin.y))
+            box.picture()?.draw(in: r.offsetBy(dx: origin.x, dy: origin.y))
         }
     }
 
