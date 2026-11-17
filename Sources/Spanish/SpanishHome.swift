@@ -23,7 +23,7 @@ struct SpanishHomeContent: View {
     @Environment(\.spanish) private var actions
     @State private var route: SpanishRoute?
     @State private var historyOpen = false
-    @State private var chatOver = false
+    @State private var pageWidth: CGFloat = 0
     @State private var allChats = false
     @State private var addingPrompt = false
     @State private var question = ""
@@ -48,13 +48,9 @@ struct SpanishHomeContent: View {
             switch r {
             case .chat: SpanishChatView(workstreamId: workstreamId)
             case .writing: SpanishHost(workstreamId: workstreamId) { SpanishWritingList(workstreamId: workstreamId) }
-            // History and Skills push the chat over themselves (a second route can't replace the one already shown).
-            case .history:
-                SpanishHistoryList(workstreamId: workstreamId, onMove: { e in if !e.isEmpty { prepareChat(first: SpanishCheck.moveToChatText(e)); chatOver = true } })
-                    .navigationDestination(isPresented: $chatOver) { SpanishChatView(workstreamId: workstreamId, onClose: { chatOver = false; route = nil }) }
-            case .skills:
-                SpanishHost(workstreamId: workstreamId) { SpanishSkillsPage(workstreamId: workstreamId, onPractise: { prepareChat(first: $0); chatOver = true }) }
-                    .navigationDestination(isPresented: $chatOver) { SpanishChatView(workstreamId: workstreamId, onClose: { chatOver = false; route = nil }) }
+            // From History or Skills the chat takes their place (one destination: a second one nested inside it hangs the iPhone)
+            case .history: SpanishHistoryList(workstreamId: workstreamId, onMove: moveToChat)
+            case .skills: SpanishHost(workstreamId: workstreamId) { SpanishSkillsPage(workstreamId: workstreamId, onPractise: { openChat(first: $0) }) }
             }
         }
         .sheet(isPresented: $addingPrompt) { SpanishPromptSheet(workstreamId: workstreamId) }
@@ -66,9 +62,12 @@ struct SpanishHomeContent: View {
 
     // MARK: the two layouts
 
+    /// Two columns when there is room; one when the page is narrow (SpanishDict open beside it, Split View).
     private func ipad(_ w: Workstream) -> some View {
-        ScrollView {
-            HStack(alignment: .top, spacing: 20) {
+        let twoColumns = pageWidth == 0 || pageWidth >= 880
+        let layout = twoColumns ? AnyLayout(HStackLayout(alignment: .top, spacing: 20)) : AnyLayout(VStackLayout(alignment: .leading, spacing: 20))
+        return ScrollView {
+            layout {
                 VStack(alignment: .leading, spacing: 20) {
                     card { checker(w) }
                     card { tutor(w) }
@@ -78,10 +77,12 @@ struct SpanishHomeContent: View {
                     card { writing }
                     card { skills }
                 }
-                .frame(width: 360)
+                .frame(width: twoColumns ? 360 : nil)
+                .frame(maxWidth: twoColumns ? nil : .infinity)
             }
             .padding(20)
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { pageWidth = $0 }
         .background(Color(.systemGroupedBackground))
     }
 

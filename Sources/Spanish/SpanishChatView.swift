@@ -5,8 +5,6 @@ import NexusCore
 /// the memory review. On the iPad the conversation sits in a readable column; on the iPhone it fills the screen.
 struct SpanishChatView: View {
     let workstreamId: String
-    /// When the chat was pushed over History or Skills: back to the Spanish page itself, not to that list.
-    var onClose: (() -> Void)? = nil
     @Environment(NexusStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var size
@@ -35,7 +33,7 @@ struct SpanishChatView: View {
         }
     }
 
-    private func close() { if let onClose { onClose() } else { dismiss() } }
+    private func close() { dismiss() }
 }
 
 struct SpanishChatBody: View {
