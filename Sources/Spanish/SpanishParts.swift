@@ -289,15 +289,21 @@ struct SpanishToken: View {
                         .font(.footnote).foregroundStyle(.secondary)
                 }
             }
-            HStack {
-                Button { open = false; actions.dict(lookup) } label: { Label("SpanishDict", systemImage: "book") }
-                if let d = cardDraft {
-                    Button { open = false; actions.addCard(d) } label: { Label("Add to vocab", systemImage: "plus") }
-                }
+            // side by side when they fit, one above the other in a narrow popover (never cut off)
+            ViewThatFits(in: .horizontal) {
+                HStack { popButtons }
+                VStack(alignment: .leading, spacing: 8) { popButtons }
             }
             .buttonStyle(.bordered).controlSize(.small)
             .lineLimit(1)
-            .fixedSize()
+        }
+    }
+
+    @ViewBuilder
+    private var popButtons: some View {
+        Button { open = false; actions.dict(lookup) } label: { Label("SpanishDict", systemImage: "book") }
+        if let d = cardDraft {
+            Button { open = false; actions.addCard(d) } label: { Label("Add to vocab", systemImage: "plus") }
         }
     }
 
