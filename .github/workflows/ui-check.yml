@@ -118,7 +118,7 @@ jobs:
           for t in m:
               for a in t.get("attachments",[]):
                   n=a.get("suggestedHumanReadableName","")
-                  if n.startswith("sidebar") or n.startswith("tutor-") or n.startswith("ideas-") or n.startswith("claude-") or n.startswith("pad-spanish") or n.startswith("time-") or n.startswith("pens-"): print(a["exportedFileName"] + "\t" + n.split("_")[0])' > wanted.txt 2>/dev/null || true
+                  if n.startswith("sidebar") or n.startswith("tutor-") or n.startswith("ideas-") or n.startswith("claude-") or n.startswith("pad-spanish") or n.startswith("pad-study") or n.startswith("time-") or n.startswith("pens-"): print(a["exportedFileName"] + "\t" + n.split("_")[0])' > wanted.txt 2>/dev/null || true
           [ -s wanted.txt ] || { echo "no shots to print"; exit 0; }
           while IFS="$(printf '\t')" read -r F N; do
             sips -Z 1400 -s format jpeg -s formatOptions 60 "shots/$F" --out "$N.jpg" >/dev/null || continue
@@ -153,7 +153,7 @@ jobs:
             echo "SHOT-END"
           done < rich/list.txt
 
-      - name: PDF zoom, board speed and Insert space screenshots in the log (base64 JPEG)
+      - name: PDF zoom, board speed, Insert space and links screenshots in the log (base64 JPEG)
         if: always()
         run: |
           python3 -c '
@@ -162,7 +162,7 @@ jobs:
           for t in m:
               for a in t.get("attachments",[]):
                   n=a.get("suggestedHumanReadableName","")
-                  if n.startswith(("zoom-", "speed-", "space-")): print(a["exportedFileName"] + "\t" + n)' 2>/dev/null > zoomshots.txt || true
+                  if n.startswith(("zoom-", "speed-", "space-", "links-")): print(a["exportedFileName"] + "\t" + n)' 2>/dev/null > zoomshots.txt || true
           while IFS=$'\t' read -r F N; do
             [ -n "$F" ] || continue
             sips -Z 1200 -s format jpeg -s formatOptions 60 "shots/$F" --out z.jpg >/dev/null

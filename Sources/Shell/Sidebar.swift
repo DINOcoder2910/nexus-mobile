@@ -81,8 +81,14 @@ struct Sidebar: View {
                 row(.planner, "Planner", "rectangle.split.3x1", count: nil)
                 row(.calendar, "Calendar", "calendar", count: nil)
                 row(.tasks, "Tasks", "checklist", count: nil)
-                if s.isDataFolder && StudyLibrary.shared.hasDecks {
+                if s.isDataFolder && s.workstreams.values.contains(where: { $0.kind == "school" }) {
+                    row(.applications, "Applications", "graduationcap", count: nil)
+                }
+                if s.isDataFolder && StudyLibrary.shared.hasStudy {
                     row(.study, "Study", "rectangle.on.rectangle.angled", count: StudyLibrary.shared.dueTotal)
+                }
+                if s.isDataFolder && StudyTools.shown(store) {
+                    row(.studyTools, "Study tools", "atom", count: nil)
                 }
                 if s.isDataFolder { SpanishSidebarRows(row: { row($0, $1, $2, count: nil) }) }
                 row(.ideas, "Ideas", "lightbulb", count: nil)
@@ -97,7 +103,7 @@ struct Sidebar: View {
                     ForEach(s.groups) { g in
                         DisclosureGroup(isExpanded: open(g.id)) {
                             ForEach(s.workstreams(in: g).filter { !$0.finished }) { w in
-                                link(.workstream(w.id)) {
+                                link(w.kind == "school" ? .school(w.id) : .workstream(w.id)) {
                                     HStack(spacing: 10) {
                                         Circle().fill(store.color(workstream: w.id)).frame(width: 9, height: 9)
                                         Text(w.name).lineLimit(1).foregroundStyle(w.parked ? .secondary : .primary)
@@ -152,6 +158,7 @@ struct Sidebar: View {
             Label(title, systemImage: icon)
                 .badge(count ?? 0)
         }
+        .accessibilityIdentifier("sidebar-" + title)
     }
 
     /// A row that goes to a screen: on the iPad it selects it (the split view shows it), on the iPhone it pushes it.

@@ -73,6 +73,46 @@ public enum YamlEdit {
         return v
     }
 
+    /// Finds the task with this id, first opening it into block form when it is written on one line as a flow map
+    /// ("- {id: aa02, title: Background essay}", as the laptop's files may have it), so its fields can be edited line by line.
+    static func findOpening(_ lines: inout [String], id: String) -> Block? {
+        if let b = find(lines, id: id) { return b }
+        for (n, line) in lines.enumerated() {
+            guard let d = dash(line) else { continue }
+            let rest = line.dropFirst(d.1).trimmingCharacters(in: .whitespaces)
+            guard rest.hasPrefix("{"), rest.hasSuffix("}"), let parts = flowPairs(String(rest.dropFirst().dropLast())),
+                  parts.contains(where: { $0.0 == "id" && unquote($0.1) == id }) else { continue }
+            let pad = String(repeating: " ", count: d.1)
+            let opened = parts.enumerated().map { i, kv in (i == 0 ? String(line.prefix(d.1)) : pad) + kv.0 + ":" + (kv.1.isEmpty ? "" : " " + kv.1) }
+            lines.replaceSubrange(n...n, with: opened)
+            return find(lines, id: id)
+        }
+        return nil
+    }
+
+    /// "id: aa02, title: 'A, B', plan: [x, y]" -> its (key, raw value) pairs; nil when it is not a plain flow map.
+    static func flowPairs(_ body: String) -> [(String, String)]? {
+        var parts: [String] = [], cur = "", depth = 0, quote: Character? = nil
+        for c in body {
+            if let q = quote { cur.append(c); if c == q { quote = nil }; continue }
+            switch c {
+            case "'", "\"": quote = c; cur.append(c)
+            case "[", "{": depth += 1; cur.append(c)
+            case "]", "}": depth -= 1; cur.append(c)
+            case "," where depth == 0: parts.append(cur); cur = ""
+            default: cur.append(c)
+            }
+        }
+        if !cur.trimmingCharacters(in: .whitespaces).isEmpty { parts.append(cur) }
+        var out: [(String, String)] = []
+        for p in parts {
+            let t = p.trimmingCharacters(in: .whitespaces)
+            guard let key = keyName(Substring(t)) else { return nil }
+            out.append((key, String(t.dropFirst(key.count + 1)).trimmingCharacters(in: .whitespaces)))
+        }
+        return out.isEmpty ? nil : out
+    }
+
     /// Finds the task with this id.
     static func find(_ lines: [String], id: String) -> Block? {
         for (n, line) in lines.enumerated() {
@@ -154,7 +194,7 @@ public enum YamlEdit {
     /// Sets a task's own field to a value already written as YAML (a scalar, a flow list or map), or removes it (`nil`).
     public static func setField(_ text: String, id: String, key: String, yaml value: String?) throws -> String {
         var (lines, trailing) = split(text)
-        guard let b = find(lines, id: id) else { throw Failure.notFound(id) }
+        guard let b = findOpening(&lines, id: id) else { throw Failure.notFound(id) }
         let pad = String(repeating: " ", count: b.fieldIndent)
         let dashPrefix = String(lines[b.item].prefix(b.fieldIndent))
         if let k = b.keys.first(where: { $0.name == key }) {
@@ -207,7 +247,7 @@ public enum YamlEdit {
             return body.enumerated().map { $0.offset == 0 ? pad + "- " + $0.element : pad + "  " + $0.element }
         }
         if let parent {
-            guard let b = find(lines, id: parent) else { throw Failure.notFound(parent) }
+            guard let b = findOpening(&lines, id: parent) else { throw Failure.notFound(parent) }
             if let k = b.keys.first(where: { $0.name == "subtasks" }) {
                 let inline = lines[k.start].dropFirst(b.fieldIndent).dropFirst("subtasks:".count).trimmingCharacters(in: .whitespaces)
                 if inline == "[]" || (inline.isEmpty && k.end == k.start + 1) {

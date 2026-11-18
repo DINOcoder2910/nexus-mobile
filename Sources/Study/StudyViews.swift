@@ -8,24 +8,28 @@ struct StudyHome: View {
 
     var body: some View {
         List {
-            let studies = lib.studies.filter { !$0.decks.isEmpty }
+            let studies = lib.studies
             if studies.isEmpty {
                 Section {
-                    EmptyNote(title: "No study decks yet",
-                              detail: "Decks are the YAML files in a workstream's study/decks folder. Make them on the laptop (Study tab); they come here with sync.",
+                    EmptyNote(title: "No study folders yet",
+                              detail: "A workstream's Study is its study/ folder: decks, units and practice sheets. Make them on the laptop (Study tab); they come here with sync.",
                               icon: "rectangle.on.rectangle.angled")
                         .listRowBackground(Color.clear)
                 }
             } else {
                 let due = lib.dueTotal
-                Section {
-                    Text(due == 0 ? "Nothing due right now." : "\(due) \(due == 1 ? "card" : "cards") due.")
-                        .font(.title3.weight(.semibold))
-                        .listRowBackground(Color.clear)
+                if lib.hasDecks {
+                    Section {
+                        Text(due == 0 ? "Nothing due right now." : "\(due) \(due == 1 ? "card" : "cards") due.")
+                            .font(.title3.weight(.semibold))
+                            .listRowBackground(Color.clear)
+                    }
                 }
                 ForEach(studies) { s in
                     Section {
+                        StudyPageRow(study: s)
                         DeckRows(study: s)
+                        PracticeRows(study: s)
                     } header: {
                         HStack(spacing: 8) {
                             Circle().fill(store.color(workstream: s.id)).frame(width: 9, height: 9)
@@ -42,7 +46,30 @@ struct StudyHome: View {
     }
 }
 
-/// A workstream's decks as rows that open the deck.
+/// A row that opens a workstream's whole Study page (units, sheets, tools), with what it has.
+struct StudyPageRow: View {
+    let study: StudyLibrary.Study
+
+    var body: some View {
+        let units = study.units ?? []
+        let done = units.filter { $0.status == "done" }.count
+        let parts = [units.isEmpty ? nil : "\(done) of \(units.count) units done", sheetCount(study.sheets.sheets.count), study.isChemistry ? "tools" : nil].compactMap { $0 }
+        NavigationLink {
+            StudyPage(workstreamId: study.id)
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "books.vertical").foregroundStyle(Theme.accent).frame(width: 22)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Units, sheets and tools")
+                    Text(parts.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        }
+        .accessibilityIdentifier("study-page-" + study.id)
+    }
+}
+
+// A workstream's decks as rows that open the deck.
 struct DeckRows: View {
     let study: StudyLibrary.Study
 
@@ -112,6 +139,9 @@ struct DeckView: View {
     @State private var prefs = DeckPrefs()
     @State private var session: SessionBox?
     @State private var clock = StudyLibrary.now
+    @State private var practising = false
+    @State private var addingCard = false
+    @Environment(\.horizontalSizeClass) private var size
 
     struct SessionBox: Identifiable { let id = UUID(); var session: StudySession }
 
@@ -132,6 +162,32 @@ struct DeckView: View {
         .studyRefresh(store)
         .onAppear { if let d = file?.deck { prefs = DeckPrefs.of(workstreamId, d.id) } }
         .onChange(of: prefs) { _, p in if let d = file?.deck { DeckPrefs.set(p, workstreamId, d.id) } }
+        .toolbar {
+            // what the deck has beyond review: on the iPad as buttons, on the iPhone in a More menu
+            if let d = file?.deck, !d.practice.isEmpty || canAddCard(d) {
+                ToolbarItem(placement: .primaryAction) {
+                    if size == .regular {
+                        HStack(spacing: 14) {
+                            if canAddCard(d) {
+                                Button { addingCard = true } label: { Label("Add a card", systemImage: "plus") }.labelStyle(.titleAndIcon)
+                            }
+                            if !d.practice.isEmpty {
+                                Button { practising = true } label: { Label("Practice classifying", systemImage: "square.grid.2x2") }.labelStyle(.titleAndIcon)
+                            }
+                        }
+                    } else {
+                        Menu {
+                            if canAddCard(d) { Button { addingCard = true } label: { Label("Add a card", systemImage: "plus") } }
+                            if !d.practice.isEmpty { Button { practising = true } label: { Label("Practice classifying", systemImage: "square.grid.2x2") } }
+                        } label: { Label("More", systemImage: "ellipsis.circle") }
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $addingCard) {
+            SpanishAddCardSheet(workstreamId: workstreamId, draft: SpanishCards.Draft(deck: file?.deck?.id ?? SpanishLibrary.shared.defaultDeck(workstreamId)))
+        }
+        .navigationDestination(isPresented: $practising) { PracticeView(workstreamId: workstreamId, path: path) }
         .fullScreenCover(item: $session) { box in
             ReviewView(session: box.session, workstreamId: workstreamId) { more in
                 session = nil
@@ -140,6 +196,9 @@ struct DeckView: View {
             }
         }
     }
+
+    /// A Spanish workstream's flip deck takes new cards (the Spanish tools' Add a card).
+    private func canAddCard(_ d: StudyDeck) -> Bool { d.flip && SpanishLibrary.shared.workstream(workstreamId) != nil && lib.canWrite(store) }
 
     private func dir(_ deck: StudyDeck) -> StudyDeck.Direction { deck.flip || !deck.reversible ? .forward : prefs.dir }
     private func ids(_ deck: StudyDeck) -> [String] { StudySession.cardIds(deck, tag: deck.flip ? prefs.tag : "") }

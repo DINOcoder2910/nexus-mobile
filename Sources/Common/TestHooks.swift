@@ -10,6 +10,7 @@ enum TestHooks {
         nestedNotebooks(store)
         manyNotebooks(store)
         if ProcessInfo.processInfo.arguments.contains("-NexusTestBigBoard") { bigBoard(store); return }
+        if ProcessInfo.processInfo.arguments.contains("-NexusTestLinksBoard") { linksBoard(store); return }
         if ProcessInfo.processInfo.arguments.contains("-NexusTestTime") { timeSessions(store); return }
         guard ProcessInfo.processInfo.arguments.contains("-NexusTestPdfBoard") else { return }
         if !store.snapshot.isDataFolder { store.makeSample() }
@@ -147,6 +148,28 @@ enum TestHooks {
         } else if let b = NotebookActions.names(in: url).first(where: { $0.hasSuffix(".board") }) {
             store.openBoard = .init(path: dir + "/" + b, focus: nil)
         }
+    }
+
+    /// `-NexusTestLinksBoard`: sample data, then a board "Redox" with three typed blocks and two links, opened
+    /// (UITests/LinksTests: the links' look, light and dark, and the Links list).
+    static func linksBoard(_ store: NexusStore) {
+        if !store.snapshot.isDataFolder { store.makeSample() }
+        let dir = "notebooks/Bridge check" // not a name another UI test looks for (SidebarTreeTests expects no top-level Chemistry)
+        let url = store.folder.appendingPathComponent(dir, isDirectory: true)
+        if let b = NotebookActions.names(in: url).first(where: { $0.hasSuffix(".board") }) { store.openBoard = .init(path: dir + "/" + b, focus: nil); return }
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        guard let rel = try? NotebookActions().makeBoard("Redox", in: dir, store) else { return }
+        let board = store.folder.appendingPathComponent(rel, isDirectory: true)
+        guard var c = try? BoardFiles.load(board) else { return }
+        let texts = [("t1", 80.0, 80.0, "## Oxidation\nLoss of electrons. The oxidation state goes **up**."),
+                     ("t2", 80.0, 420.0, "## Reduction\nGain of electrons. The oxidation state goes **down**."),
+                     ("t3", 640.0, 600.0, "OIL RIG: Oxidation Is Loss, Reduction Is Gain")]
+        for (id, x, y, md) in texts { c.items.append(BoardItem(id: id, type: "text", x: x, y: y)); c.texts[id] = md }
+        if let k1 = BoardLinks.make(id: "k1", a: .object([("on", .string("t1"))]), b: .object([("on", .string("t2"))]), x: 80, y: 80) { c.items.append(k1) }
+        if let k2 = BoardLinks.make(id: "k2", a: .object([("on", .string("t2"))]), b: .object([("on", .string("t3"))]), color: BoardLinks.colors[1], x: 80, y: 420) { c.items.append(k2) }
+        if let meta = c.meta ?? (try? JSONValue.parse(BoardFormat.boardJSON())) { c.meta = BoardFormat.withFeature(meta, BoardLinks.feature) }
+        _ = try? BoardFiles.save(c, to: board, write: { u, t in try FolderAccess.write(u, t) })
+        store.openBoard = .init(path: rel, focus: nil)
     }
 
     /// `-NexusTestTime`: sample data with time tracked this week on this device and on the laptop, and a timer running on

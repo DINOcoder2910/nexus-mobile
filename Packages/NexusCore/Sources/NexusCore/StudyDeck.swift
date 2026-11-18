@@ -19,6 +19,20 @@ public struct StudyDeck: Equatable, Sendable {
     public var groups: [Group]
     public var sources: [Source]
     public var cards: [Card]
+    /// Practice classifying: items to sort into the deck's options (never in FSRS).
+    public var practice: [PracticeItem] = []
+
+    /// One item of a deck's `practice:` list (HCl → strong acid), with the rule card that explains it.
+    public struct PracticeItem: Equatable, Sendable, Identifiable {
+        public var id: String
+        public var name: String
+        public var formula: String
+        public var answer: String
+        public var rule: String
+        /// required, common or extra.
+        public var level: String
+        public var note: String
+    }
 
     public struct Column: Equatable, Sendable { public var key: String; public var label: String }
     public struct Group: Equatable, Sendable { public var id: String; public var title: String }
@@ -118,12 +132,21 @@ public struct StudyDeck: Equatable, Sendable {
             }
             let t = str(s); return t.isEmpty ? nil : Source(title: t, url: "")
         }
+        // the classification drill: members, each with its answer and the rule card that explains it; no FSRS
+        var seenP = Set<String>(), practice: [PracticeItem] = []
+        for p in (val(m, "practice")?.sequence ?? []).compactMap(\.mapping) {
+            let pid = str(val(p, "id")), name = str(val(p, "name")).trimmed, formula = str(val(p, "formula")).trimmed, answer = str(val(p, "answer")).trimmed
+            guard !pid.trimmed.isEmpty, !answer.isEmpty, !name.isEmpty || !formula.isEmpty, seenP.insert(pid).inserted else { continue }
+            let level = str(val(p, "level"))
+            practice.append(PracticeItem(id: pid.trimmed, name: name, formula: formula, answer: answer, rule: str(val(p, "rule")).trimmed,
+                                         level: ["required", "common", "extra"].contains(level) ? level : "required", note: str(val(p, "note")).trimmed))
+        }
         let flip = isTrue(val(m, "flip"))
         let title = str(val(m, "title")).trimmed
         let deck = StudyDeck(id: id, title: title.isEmpty ? id : title, description: str(val(m, "description")).trimmed,
                              reversible: isTrue(val(m, "reversible")) && !flip, flip: flip, language: str(val(m, "language")).trimmed,
                              kind: str(val(m, "kind")).trimmed, unit: str(val(m, "unit")).trimmed, columns: columns, groups: groups,
-                             sources: sources, cards: cards)
+                             sources: sources, cards: cards, practice: practice)
         return Parsed(deck: deck, error: nil, problems: problems)
     }
     /// The deck's sections for its list: the deck's groups in order, then cards with no (or an unknown) group.
