@@ -39,6 +39,7 @@ struct WorkstreamView: View {
                 headerSection
                 tasksSection
                 studySection
+                SpanishWorkstreamSection(workstreamId: workstreamId)
                 somedaySection
                 doneSection
                 notesSection
@@ -58,6 +59,7 @@ struct WorkstreamView: View {
                 }
             }
         }
+        .spanishSetupMenu(workstreamId)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button(action: add) { Label("Add a task", systemImage: "plus") }

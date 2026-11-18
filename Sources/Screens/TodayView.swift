@@ -61,11 +61,15 @@ struct TodayView: View {
         let planned = p.planned(on: store.today)
         let hours = p.load(on: store.today)
         let open = planned.filter { !$0.done }.count
+        // time tracked today on every device (TimeTracker), shown once there is a minute of it
+        let tracked = TimeLog.daySeconds(TimeTracker.shared.entries, store.today)
+        let words: [String?] = [open == 0 ? "Nothing left on the plan" : "\(open) planned",
+                                hours > 0 ? hoursText(hours) : nil,
+                                p.slipped.isEmpty ? nil : "\(p.slipped.count) slipped",
+                                tracked >= 60 ? "\(TimeLog.spent(tracked)) tracked" : nil]
         return VStack(alignment: .leading, spacing: 4) {
             Text(longDate(store.today)).font(.largeTitle.weight(.bold))
-            Text([open == 0 ? "Nothing left on the plan" : "\(open) planned",
-                  hours > 0 ? hoursText(hours) : nil,
-                  p.slipped.isEmpty ? nil : "\(p.slipped.count) slipped"].compactMap { $0 }.joined(separator: " · "))
+            Text(words.compactMap { $0 }.joined(separator: " · "))
                 .foregroundStyle(.secondary)
             if cal.eventsOnPlan, let next = cal.next(today: store.today) {
                 Button { eventSheet = .show(next.event) } label: {

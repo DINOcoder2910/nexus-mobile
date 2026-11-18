@@ -71,6 +71,7 @@ final class NexusStore {
         today = Days.today()
         snapshot = DataFolder.load(url)
         fingerprint = DataFolder.fingerprint(url)
+        TimeTracker.shared.load(url)
         ShortcutCenter.shared.onWrite = { NotificationCenter.default.post(name: NexusStore.wrote, object: nil) }
         loadShortcuts()
         let nc = NotificationCenter.default
@@ -124,6 +125,7 @@ final class NexusStore {
         snapshot = DataFolder.load(folder)
         fingerprint = DataFolder.fingerprint(folder)
         loadShortcuts()
+        TimeTracker.shared.load(folder)
         onReload?()
     }
 
@@ -206,7 +208,10 @@ final class NexusStore {
 
     /// Done or not done.
     func toggleDone(_ t: NexusTask) {
-        if t.done { perform { try $0.untick(t, in: $1) } } else { perform { try $0.tick(t, in: $1, today: today) } }
+        if t.done { perform { try $0.untick(t, in: $1) } } else {
+            TimeTracker.shared.ticked(t, store: self) // a timer on it (or a subtask the tick ticks) stops
+            perform { try $0.tick(t, in: $1, today: today) }
+        }
     }
 
     func plan(_ t: NexusTask, on day: String, time: String? = nil) { perform { try $0.plan(t, on: day, time: time, in: $1) } }

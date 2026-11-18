@@ -6,6 +6,7 @@ import NexusCore
 /// board saved, ten times, and the times are shown in a label UITests/BoardSaveSpeedTests reads.
 extension BoardController {
     func saveBenchIfAsked() {
+        if TestHooks.isSpaceDragRun { spaceBenchIfAsked(); return }
         guard TestHooks.isBigBoardRun, !readOnly, view.viewWithTag(9_191) == nil else { return }
         let label = UILabel()
         label.tag = 9_191

@@ -99,6 +99,8 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     var spaceSideways = false
     var spaceBandRange: ClosedRange<CGFloat>?
     let spaceGuide = UIView(), spaceBand = CAShapeLayer(), spaceLine = CAShapeLayer(), spaceLabel = UILabel()
+    /// The Insert space drag shown live (SpaceLive.swift), while you drag and until the board has drawn the result.
+    var spaceLive: SpaceLive?
     var lastZoomLabel = 0
     var lastBarKey = ""
     /// Set when the board sits beside the sidebar: the bar's sidebar button calls it.
@@ -222,6 +224,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         super.viewWillDisappear(animated)
         HangWatch.note("board: view will disappear")
         if presentedViewController == nil { endWriting() }
+        cancelSpaceDrag()
         rememberPlace()
         tutorBoardClosing()
         recordingBoardClosing()
@@ -430,6 +433,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         }
         writing?.place()
         paintLinks()
+        if spaceLive != nil { placeSpaceInk() }
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) { syncWorld() }
@@ -569,7 +573,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
 
     /// Another device (sync) or app wrote the board: read it again, unless something here isn't saved yet (that wins on the next save).
     func checkOutside() {
-        guard !dirty, presentedViewController == nil, !penDown else { return }
+        guard !dirty, presentedViewController == nil, !penDown, spaceLive == nil else { return }
         let now = fileStamps()
         guard now != stamps else { return }
         if takeOutsideWords(now) { return } // only words changed (the laptop typing): the ink and its undo stay as they are
