@@ -62,6 +62,8 @@ struct Sidebar: View {
         .refreshable { store.reload(); notebookTree.dropAll() }
         // the study decks: read with the folder (their due count is the Study row's number)
         .task(id: store.snapshot.loadedAt) { StudyLibrary.shared.refreshIfChanged(store) }
+        // the Spanish workstreams (the Spanish row), read with the folder too
+        .task(id: store.snapshot.loadedAt) { SpanishDemo.prepare(store); SpanishLibrary.shared.refreshIfChanged(store) }
     }
 
     @ViewBuilder
@@ -69,6 +71,10 @@ struct Sidebar: View {
         let p = store.planning
         let s = store.snapshot
         if !notebooksOnly {
+            // the running timer, whichever device started it (TimeViews.swift)
+            if s.isDataFolder && TimeTracker.shared.current != nil {
+                Section { SidebarTimerRow() }
+            }
             Section {
                 row(.home, "Home", "house", count: nil)
                 row(.today, "Today", "sun.max", count: p.planned(on: store.today).count)
@@ -78,6 +84,7 @@ struct Sidebar: View {
                 if s.isDataFolder && StudyLibrary.shared.hasDecks {
                     row(.study, "Study", "rectangle.on.rectangle.angled", count: StudyLibrary.shared.dueTotal)
                 }
+                if s.isDataFolder { SpanishSidebarRows(row: { row($0, $1, $2, count: nil) }) }
                 row(.ideas, "Ideas", "lightbulb", count: nil)
                 if s.isDataFolder {
                     row(.claude, "Claude", "sparkles", count: ClaudeChatSession.shared.conversation("main").pendingCount)
@@ -130,6 +137,7 @@ struct Sidebar: View {
 
             if !notebooksOnly {
                 Section {
+                    if s.isDataFolder { row(.time, "Time", "timer", count: nil) }
                     if s.isDataFolder { row(.files(""), "Files", "folder", count: nil) }
                     row(.settings, "Settings", "gearshape", count: nil)
                     row(.guide, "How Nexus works", "questionmark.circle", count: nil)

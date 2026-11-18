@@ -79,6 +79,28 @@ public enum InsertSpace {
         return any ? lo...hi : nil
     }
 
+    /// What a drag of `by` does, shown live while dragging and done on letting go: room added (a drag of 4 or more), room taken
+    /// away (4 or more back) as far as `limit` allows in whole units, or nothing (a smaller drag, or no room to take).
+    public static func applied(_ by: Double, limit: Double) -> Double {
+        if by >= 4 { return by }
+        guard by <= -4 else { return 0 }
+        let can = min(-by, limit).rounded(.down)
+        return can >= 1 ? -can : 0
+    }
+
+    /// While dragging, the moving ink is drawn by itself and the board's own copy of it is hidden: the region hidden, across the
+    /// drag (`lo`...`hi`; everything when nil, else the column and the moving ink's own extent) and from a little before the line
+    /// on (`pad` before it, so a stroke's width over the line goes too). Sideways, read x as y.
+    public static func hidden(line: Double, band: ClosedRange<Double>?, moving: [Box], sideways: Bool = false, pad: Double = 12) -> (from: Double, across: ClosedRange<Double>?) {
+        guard let band else { return (line - pad, nil) }
+        var lo = band.lowerBound, hi = band.upperBound
+        for b in moving {
+            lo = min(lo, sideways ? b.minY : b.minX)
+            hi = max(hi, sideways ? b.maxY : b.maxX)
+        }
+        return (line - pad, (lo - pad)...(hi + pad))
+    }
+
     /// True when a thing whose box is `b` moves for room at `line`: it starts at or past the line and (with a band) lies in it.
     public static func moves(_ b: Box, line: Double, sideways: Bool = false, band: ClosedRange<Double>? = nil) -> Bool {
         let start = sideways ? b.minX : b.minY

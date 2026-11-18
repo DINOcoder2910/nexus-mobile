@@ -1,10 +1,20 @@
 name: Build iPad app
 
-# Every push builds on a GitHub-hosted Mac: the NexusCore tests and the unsigned app, side by side.
+# Every push builds the unsigned app on a GitHub-hosted Mac, in ONE job: the NexusCore tests first (only when the push changed
+# Packages/, or when that can't be told), then the app. One job, not two, because the account may run only 5 Mac jobs at once
+# and every thread's pushes share them; waiting for a second Mac took longer than the 2 minutes the tests take.
 # main publishes the "latest" download; any other branch publishes its own "preview-<branch>", so a branch can be tried on the iPad before it lands.
+# Pushes that only touch docs, Markdown, UI tests or other workflows don't build (the app would be the same).
 on:
   push:
     branches: [main, "claude/**"]
+    paths:
+      - "**"
+      - "!docs/**"
+      - "!**/*.md"
+      - "!UITests/**"
+      - "!.github/workflows/**"
+      - ".github/workflows/build.yml"
   workflow_dispatch:
 
 permissions:
@@ -15,29 +25,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
-    runs-on: macos-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-      - name: NexusCore tests (data folder, YAML edits, planning)
-        run: |
-          set -o pipefail
-          # the failures first (they are above the last 150 lines when there are many tests)
-          swift test --package-path Packages/NexusCore 2>&1 | tee /tmp/test.log | tail -n 150 || { echo "---- failures"; grep -E "error:|failed \(" /tmp/test.log | head -n 80; exit 1; }
-
   build:
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
 
       - name: Show Xcode
         run: xcodebuild -version
 
+      - name: Did this push change the core package?
+        id: core
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          # run the tests unless we can tell for sure that Packages/ didn't change (a new branch, a manual run or a force push can't tell)
+          RUN=yes
+          if [ "${{ github.event_name }}" = "push" ] && [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ] \
+             && git fetch -q --depth=1 origin "$BEFORE" 2>/dev/null; then
+            if git diff --quiet "$BEFORE" "$GITHUB_SHA" -- Packages/; then RUN=no; fi
+          fi
+          echo "Run the NexusCore tests: $RUN"
+          echo "run=$RUN" >> "$GITHUB_OUTPUT"
+
+      - name: NexusCore tests (data folder, YAML edits, planning)
+        if: steps.core.outputs.run == 'yes'
+        run: |
+          set -o pipefail
+          # the failures first (they are above the last 150 lines when there are many tests)
+          swift test --package-path Packages/NexusCore 2>&1 | tee /tmp/test.log | tail -n 150 || { echo "---- failures"; grep -E "error:|failed \(" /tmp/test.log | head -n 80; exit 1; }
+
       - name: Generate the Xcode project
         run: |
-          brew install xcodegen
+          command -v xcodegen >/dev/null || brew install xcodegen
           xcodegen generate
 
       - name: Build (unsigned; Sideloadly signs it on install)
@@ -61,7 +81,7 @@ jobs:
           path: NexusMobile.ipa
 
   publish:
-    needs: [test, build]
+    needs: [build]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4

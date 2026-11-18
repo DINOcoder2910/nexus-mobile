@@ -73,7 +73,10 @@ final class PenOptionsTests: XCTestCase {
         let hl = app.buttons["Highlighter"].firstMatch
         XCTAssertTrue(hl.waitForExistence(timeout: 5), "no Highlighter tool")
         hl.tap()
-        sleep(1)
+        // the bar is rebuilt for the new tool: wait for its row to change
+        var tries = 0
+        while colours().count != 8 && tries < 10 { usleep(500_000); tries += 1 }
+        if colours().count != 8 { shot("pens-highlighter-picked") }
         XCTAssertEqual(colours().count, 8, "the highlighter should have eight colours")
         writeLines(8)
         shot("pens-highlighter-light")

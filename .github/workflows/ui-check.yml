@@ -1,12 +1,21 @@
 name: UI check (simulator)
 
 # Drives the app in an iPad simulator (UITests/) on a GitHub-hosted Mac, sampling the app's main thread every few seconds, so a
-# freeze shows where the app is stuck. Run by hand (Actions › UI check › Run workflow), or on a push to a branch that touches UITests/.
+# freeze shows where the app is stuck, then runs the iPhone tests on an iPhone simulator in the SAME job from the same build (one Mac,
+# not two: the account may run only 5 Mac jobs at once). Every UI test runs on every push to a branch that changes the app or the
+# tests (the user's rule, Nov 16 2026: nothing ships untested), and by hand (Actions › UI check › Run workflow).
 on:
   workflow_dispatch:
+    inputs:
+      only:
+        description: "Run only this test class (e.g. SpaceLiveTests); empty runs them all"
+        required: false
+        default: ""
   push:
     branches: ["claude/**"]
-    paths: ["UITests/**", ".github/workflows/ui-check.yml"]
+    # every push that can change what the app does or what the tests check (the app's code, its core package, its resources,
+    # the project file, the tests); docs-only and other workflows' pushes don't run it
+    paths: ["Sources/**", "Packages/**", "Resources/**", "Support/**", "project.yml", "UITests/**", ".github/workflows/ui-check.yml"]
 
 concurrency:
   group: ui-check-${{ github.ref }}
@@ -15,13 +24,13 @@ concurrency:
 jobs:
   ui:
     runs-on: macos-latest
-    timeout-minutes: 45
+    timeout-minutes: 110
     steps:
       - uses: actions/checkout@v4
 
       - name: Generate the Xcode project
         run: |
-          brew install xcodegen
+          command -v xcodegen >/dev/null || brew install xcodegen
           xcodegen generate
 
       - name: Pick an iPad simulator
@@ -36,6 +45,7 @@ jobs:
           print(c[0]["udid"])')
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"
           xcrun simctl boot "$UDID" || true
+          xcrun simctl privacy "$UDID" grant calendar app.nexus.mobile || true
 
       - name: Build for testing
         run: |
@@ -45,7 +55,18 @@ jobs:
             CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- 2>&1 | grep -E "error:|BUILD|\*\*" | head -n 100
 
       - name: Run the UI tests, sampling the app
+        # its own limit, so a hung iPad run still leaves time for the iPhone tests and the reports (25 tests took 48 min on Nov 16)
+        timeout-minutes: 70
+        env:
+          # a push whose commit message says [ui-only: SomeTests] runs only that class (or the Run workflow box's "only"); the name
+          # must end in Tests, so a message that only mentions the marker doesn't narrow the run
+          ONLY_INPUT: ${{ inputs.only }}
+          HEAD_MSG: ${{ github.event.head_commit.message }}
         run: |
+          ONLY="$ONLY_INPUT"
+          [ -n "$ONLY" ] || ONLY=$(printf '%s' "$HEAD_MSG" | sed -n 's/.*\[ui-only: *\([A-Za-z0-9_]*Tests\)\].*/\1/p' | head -n 1)
+          ONLY_ARG=""
+          if [ -n "$ONLY" ]; then ONLY_ARG="-only-testing:NexusMobileUITests/$ONLY"; echo "only $ONLY"; fi
           mkdir -p samples
           # every 5 s: if the app is running, a 1 s sample of all its threads
           ( while true; do
@@ -57,7 +78,7 @@ jobs:
           set +e
           xcodebuild test-without-building -project NexusMobile.xcodeproj -scheme NexusMobileUITests \
             -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" -derivedDataPath DerivedData \
-            -resultBundlePath ui.xcresult 2>&1 | tee ui.log | grep -E "UISTEP|Test Case|error|failed|passed|Hang|hang" | head -n 300
+            -resultBundlePath ui.xcresult $ONLY_ARG 2>&1 | tee ui.log | grep -E "UISTEP|Test Case|error|failed|passed|Hang|hang" | head -n 300
           STATUS=${PIPESTATUS[0]}
           kill $SAMPLER || true
           echo "xcodebuild test exited $STATUS"
@@ -79,7 +100,7 @@ jobs:
           DATA=$(xcrun simctl get_app_container "${{ steps.sim.outputs.udid }}" app.nexus.mobile data 2>/dev/null || true)
           echo "app data: $DATA"
           ls -la "$DATA/Documents/nexus-data/diagnostics" 2>/dev/null || echo "no diagnostics folder"
-          for f in "$DATA"/Documents/nexus-data/diagnostics/*.txt; do [ -f "$f" ] && { echo "=================== $f"; cat "$f"; }; done
+          for f in "$DATA"/Documents/nexus-data/diagnostics/*.txt; do [ -f "$f" ] && { echo "=================== $f"; cat "$f"; }; done; true
 
       - name: Screenshots the tests took, as PNGs
         if: always()
@@ -97,7 +118,7 @@ jobs:
           for t in m:
               for a in t.get("attachments",[]):
                   n=a.get("suggestedHumanReadableName","")
-                  if n.startswith("sidebar") or n.startswith("tutor-") or n.startswith("ideas-") or n.startswith("pens-"): print(a["exportedFileName"] + "\t" + n.split("_")[0])' > wanted.txt 2>/dev/null || true
+                  if n.startswith("sidebar") or n.startswith("tutor-") or n.startswith("ideas-") or n.startswith("claude-") or n.startswith("pad-spanish") or n.startswith("time-") or n.startswith("pens-"): print(a["exportedFileName"] + "\t" + n.split("_")[0])' > wanted.txt 2>/dev/null || true
           [ -s wanted.txt ] || { echo "no shots to print"; exit 0; }
           while IFS="$(printf '\t')" read -r F N; do
             sips -Z 1400 -s format jpeg -s formatOptions 60 "shots/$F" --out "$N.jpg" >/dev/null || continue
@@ -132,7 +153,7 @@ jobs:
             echo "SHOT-END"
           done < rich/list.txt
 
-      - name: PDF zoom and board speed screenshots in the log (base64 JPEG)
+      - name: PDF zoom, board speed and Insert space screenshots in the log (base64 JPEG)
         if: always()
         run: |
           python3 -c '
@@ -141,7 +162,7 @@ jobs:
           for t in m:
               for a in t.get("attachments",[]):
                   n=a.get("suggestedHumanReadableName","")
-                  if n.startswith("zoom-") or n.startswith("speed-"): print(a["exportedFileName"] + "\t" + n)' 2>/dev/null > zoomshots.txt || true
+                  if n.startswith(("zoom-", "speed-", "space-")): print(a["exportedFileName"] + "\t" + n)' 2>/dev/null > zoomshots.txt || true
           while IFS=$'\t' read -r F N; do
             [ -n "$F" ] || continue
             sips -Z 1200 -s format jpeg -s formatOptions 60 "shots/$F" --out z.jpg >/dev/null
@@ -149,6 +170,11 @@ jobs:
             base64 -i z.jpg | fold -w 3000
             echo "SHOT-END"
           done < zoomshots.txt
+
+      - name: The tests in brief (last, so a log's tail has them)
+        if: always()
+        run: |
+          grep -E "UISTEP|Test Case|error:|XCTAssert|failed" ui.log | cut -c1-400 | tail -n 150 || true
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -160,32 +186,14 @@ jobs:
             ui.log
             ui.xcresult
 
-      # last, so a reader that sees only the log's end (its last few thousand lines) still sees which tests failed and why
-      - name: Test summary
-        if: always()
-        run: |
-          grep -E "UISTEP|Test Case .*(passed|failed)|error: -\[|XCTAssert|Executed [0-9]+ test" ui.log 2>/dev/null | grep -v "SHOT" | cut -c1-400 | tail -n 250 || true
-
-      - name: Result
-        if: always()
-        run: exit $(cat status.txt 2>/dev/null || echo 1)
-
-  # The iPhone, beside the iPad job: every UI test class named "…PhoneTests" (each skips itself on the iPad) on an iPhone simulator.
-  # Its screenshots whose name has "phone" are printed in the log like the iPad's.
-  phone:
-    runs-on: macos-latest
-    timeout-minutes: 40
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Generate the Xcode project
-        run: |
-          brew install xcodegen
-          xcodegen generate
-
+      # The iPhone, in the same job (one Mac, not two): every UI test class named "…PhoneTests" (each skips itself on the iPad), on an
+      # iPhone simulator, from the same build (build-for-testing builds for the simulator, not for one device).
+      # Its screenshots whose name has "phone" are printed in the log like the iPad's.
       - name: Pick an iPhone simulator
-        id: sim
+        id: phonesim
+        if: ${{ !cancelled() }}
         run: |
+          xcrun simctl shutdown "${{ steps.sim.outputs.udid }}" || true
           UDID=$(xcrun simctl list devices available -j | python3 -c '
           import json,sys
           d=json.load(sys.stdin)["devices"]
@@ -194,28 +202,24 @@ jobs:
           print(c[0]["udid"])')
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"
           xcrun simctl boot "$UDID" || true
-
-      - name: Build for testing
-        run: |
-          set -o pipefail
-          xcodebuild build-for-testing -project NexusMobile.xcodeproj -scheme NexusMobileUITests \
-            -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" -derivedDataPath DerivedData \
-            CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- 2>&1 | grep -E "error:|BUILD|\*\*" | head -n 100
+          xcrun simctl privacy "$UDID" grant calendar app.nexus.mobile || true
 
       - name: Run the iPhone tests
+        if: ${{ !cancelled() }}
         timeout-minutes: 25
         run: |
-          echo 1 > status.txt
+          echo 1 > phone-status.txt
+          [ -d DerivedData/Build/Products ] || { echo "the build for testing failed, so no iPhone run"; exit 0; }
           ONLY=$(grep -ho "class [A-Za-z0-9_]*PhoneTests" UITests/*.swift | awk '{print "-only-testing:NexusMobileUITests/" $2}' | sort -u | tr '\n' ' ')
-          [ -n "$ONLY" ] || { echo "no iPhone tests"; echo 0 > status.txt; exit 0; }
+          [ -n "$ONLY" ] || { echo "no iPhone tests"; echo 0 > phone-status.txt; exit 0; }
           echo "running: $ONLY"
           set +e
           xcodebuild test-without-building -project NexusMobile.xcodeproj -scheme NexusMobileUITests \
-            -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" -derivedDataPath DerivedData $ONLY \
+            -destination "platform=iOS Simulator,id=${{ steps.phonesim.outputs.udid }}" -derivedDataPath DerivedData $ONLY \
             -resultBundlePath phone.xcresult 2>&1 | tee phone.log | grep -E "UISTEP|Test Case|error|failed|passed|skipped"
           STATUS=${PIPESTATUS[0]}
           echo "xcodebuild test exited $STATUS"
-          echo "$STATUS" > status.txt
+          echo "$STATUS" > phone-status.txt
 
       - name: The test log's end (when it stopped early)
         if: always()
@@ -248,6 +252,18 @@ jobs:
             phoneshots
             phone.log
 
-      - name: Result
+      # last, so a reader that sees only the log's end (its last few thousand lines) still sees which tests failed and why
+      - name: Test summary
         if: always()
-        run: exit $(cat status.txt 2>/dev/null || echo 1)
+        run: |
+          echo "==== iPad"
+          grep -E "UISTEP|Test Case .*(passed|failed)|error: -\[|XCTAssert|Executed [0-9]+ test" ui.log 2>/dev/null | grep -v "SHOT" | cut -c1-400 | tail -n 250 || true
+          echo "==== iPhone"
+          grep -E "Test Case .*(passed|failed)|error: -\[|XCTAssert|Executed [0-9]+ test" phone.log 2>/dev/null | grep -v "SHOT" | cut -c1-400 | tail -n 80 || true
+
+      - name: Result (iPad and iPhone)
+        if: always()
+        run: |
+          IPAD=$(cat status.txt 2>/dev/null || echo 1); PHONE=$(cat phone-status.txt 2>/dev/null || echo 1)
+          echo "iPad tests exited $IPAD, iPhone tests exited $PHONE"
+          [ "$IPAD" = "0" ] && [ "$PHONE" = "0" ]
