@@ -148,6 +148,7 @@ final class BoardBar: UIView {
         c.cornerStyle = .medium
         let b = UIButton(configuration: c, primaryAction: UIAction { _ in action() })
         b.accessibilityLabel = label
+        if selected { b.accessibilityTraits.insert(.selected) } // VoiceOver says which tool is on
         b.toolTip = label
         b.tintColor = selected ? .tintColor : .label
         return b

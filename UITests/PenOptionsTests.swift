@@ -22,15 +22,18 @@ final class PenOptionsTests: XCTestCase {
         print("UISTEP \(Date().timeIntervalSince1970) \(name)")
     }
 
-    func launch(dark: Bool, tool: String = "pen") {
+    func launch(dark: Bool) {
         app = XCUIApplication()
-        // fingers draw (the simulator has no Pencil); a fresh set of tools; each stroke's width shown in the probe label
+        // fingers draw (the simulator has no Pencil); each stroke's width shown in the probe label. The tool isn't passed here:
+        // a launch argument outranks what the app saves, so a tool passed that way can't be changed in the bar.
         app.launchArguments = ["-NexusTestPdfBoard", "-NexusTestPenProbe", "-board.fingersDraw", "YES", "-board.dark", dark ? "always" : "never",
-                               "-board.tool", tool, "-board.penKind", "pen"]
+                               "-board.penKind", "pen"]
         app.launch()
         XCTAssertTrue(app.buttons["Insert"].firstMatch.waitForExistence(timeout: 30), "the board didn't open")
         sleep(3)
         hideSidebar()
+        tap(until: { self.button("Pen").isSelected }) { self.button("Pen") }
+        XCTAssertTrue(button("Pen").isSelected, "the Pen should be picked")
     }
 
     /// The sidebar floats over the board in landscape: put it away with the board bar's Sidebar button (the rightmost of the two).
@@ -122,18 +125,12 @@ final class PenOptionsTests: XCTestCase {
         writeLines(10, ink: "pen")
         shot("pens-pen-light")
 
-        // the Highlighter, tapped where it shows in the bar
+        // the Highlighter
         let hl = button("Highlighter")
         XCTAssertTrue(hl.waitForExistence(timeout: 5), "no Highlighter tool")
         tap(until: { self.colours().count == 8 }) { self.button("Highlighter") }
         XCTAssertEqual(colours().count, 8, "tapping Highlighter should show its eight colours")
-        if colours().count != 8 {
-            // the tap didn't take: start on the highlighter instead, to see its row and widths all the same
-            shot("pens-highlighter-picked")
-            app.terminate()
-            launch(dark: false, tool: "highlighter")
-            XCTAssertEqual(colours().count, 8, "the highlighter should have eight colours")
-        }
+        XCTAssertTrue(button("Highlighter").isSelected, "the Highlighter should be picked")
         writeLines(8, ink: "marker")
         shot("pens-highlighter-light")
         app.terminate()
