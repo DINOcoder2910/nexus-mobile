@@ -48,6 +48,12 @@ final class PenOptionsTests: XCTestCase {
 
     func colours() -> XCUIElementQuery { app.buttons.matching(NSPredicate(format: "label == 'Colour'")) }
 
+    /// The button with this label that can be tapped (the bar's compact layout keeps a hidden copy of the tool buttons).
+    func button(_ label: String) -> XCUIElement {
+        app.buttons.matching(NSPredicate(format: "label == %@", label)).allElementsBoundByIndex.first { $0.exists && $0.isHittable }
+            ?? app.buttons[label].firstMatch
+    }
+
     /// The board's canvas: the biggest scroll view on screen.
     func board() -> XCUIElement {
         let all = app.scrollViews.allElementsBoundByIndex.filter { $0.exists && $0.isHittable }
@@ -57,14 +63,16 @@ final class PenOptionsTests: XCTestCase {
     /// One line at each width, each in the next colour of the row, down the board.
     func writeLines(_ count: Int) {
         for (i, w) in Self.widths.enumerated() {
-            let wb = app.buttons[w].firstMatch
+            let wb = button(w)
             XCTAssertTrue(wb.waitForExistence(timeout: 5), "no \(w) width")
             if wb.isHittable { wb.tap() }
             let c = colours().element(boundBy: i % count)
             if c.isHittable { c.tap() }
             let y = 0.18 + 0.1 * CGFloat(i)
             let from = board().coordinate(withNormalizedOffset: CGVector(dx: 0.4, dy: y))
-            from.press(forDuration: 0.05, thenDragTo: board().coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: y + 0.03)))
+            // slowly, as a hand writes: the pen's ink thins when it moves fast
+            from.press(forDuration: 0.1, thenDragTo: board().coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: y + 0.03)),
+                       withVelocity: XCUIGestureVelocity(250), thenHoldForDuration: 0)
             usleep(300_000)
         }
     }
@@ -80,7 +88,7 @@ final class PenOptionsTests: XCTestCase {
         writeLines(10)
         shot("pens-pen-light")
 
-        let hl = app.buttons["Highlighter"].firstMatch
+        let hl = button("Highlighter")
         XCTAssertTrue(hl.waitForExistence(timeout: 5), "no Highlighter tool")
         hideSidebar()
         hl.tap()
