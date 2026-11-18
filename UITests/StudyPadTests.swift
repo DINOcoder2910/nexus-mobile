@@ -2,7 +2,7 @@ import XCTest
 
 /// Study on the iPad (Nov 16 2026): a chemistry workstream's Study page (units, Memorize, tools, the practice sheets beside them), a
 /// theme's units and a unit, Practice classifying, the VSEPR chart, Enthalpies and Molecules on their own screens, and Upload a sheet
-/// with the demo's canned Claude answer (-NexusStudyUploadDemo). The screenshots ("pad-study-…") are printed in the phone-check log.
+/// with the demo's canned Claude answer (-NexusStudyUploadDemo). The screenshots ("pad-study-…") are printed in the ui-check log.
 /// Skips itself on the iPhone.
 final class StudyPadTests: XCTestCase {
     let app = XCUIApplication()

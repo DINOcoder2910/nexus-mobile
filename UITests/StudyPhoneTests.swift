@@ -2,7 +2,7 @@ import XCTest
 
 /// Study on the iPhone (Nov 16 2026): the same features as the iPad, laid out for the phone: the Study page as one list (the practice
 /// sheets on their own screen, with a Filter menu), units, Practice classifying, the chemistry tools and Upload a sheet (the demo's
-/// canned Claude answer, -NexusStudyUploadDemo). Screenshots ("phone-study-…") are printed in the phone-check log. Skips on the iPad.
+/// canned Claude answer, -NexusStudyUploadDemo). Screenshots ("phone-study-…") are printed in the ui-check log. Skips on the iPad.
 final class StudyPhoneTests: XCTestCase {
     let app = XCUIApplication()
 
