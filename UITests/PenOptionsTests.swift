@@ -30,9 +30,19 @@ final class PenOptionsTests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["Insert"].firstMatch.waitForExistence(timeout: 30), "the board didn't open")
         sleep(3)
-        if app.staticTexts["Planner"].firstMatch.isHittable {
-            let side = app.buttons["Sidebar"].firstMatch
-            if side.exists { side.tap(); sleep(2) }
+        hideSidebar()
+    }
+
+    /// The sidebar floats over the board in landscape: put it away with the board bar's Sidebar button (the rightmost of the two).
+    func hideSidebar() {
+        let width = app.windows.firstMatch.frame.width
+        for _ in 0..<3 {
+            let planner = app.staticTexts["Planner"].firstMatch
+            guard planner.exists, planner.frame.maxX > 0, planner.frame.minX < width * 0.3 else { return }
+            let sides = app.buttons.matching(identifier: "Sidebar").allElementsBoundByIndex.filter { $0.exists }
+            guard let side = sides.max(by: { $0.frame.minX < $1.frame.minX }) else { return }
+            side.tap()
+            sleep(2)
         }
     }
 
@@ -53,8 +63,8 @@ final class PenOptionsTests: XCTestCase {
             let c = colours().element(boundBy: i % count)
             if c.isHittable { c.tap() }
             let y = 0.18 + 0.1 * CGFloat(i)
-            let from = board().coordinate(withNormalizedOffset: CGVector(dx: 0.22, dy: y))
-            from.press(forDuration: 0.05, thenDragTo: board().coordinate(withNormalizedOffset: CGVector(dx: 0.62, dy: y + 0.03)))
+            let from = board().coordinate(withNormalizedOffset: CGVector(dx: 0.4, dy: y))
+            from.press(forDuration: 0.05, thenDragTo: board().coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: y + 0.03)))
             usleep(300_000)
         }
     }
@@ -72,6 +82,7 @@ final class PenOptionsTests: XCTestCase {
 
         let hl = app.buttons["Highlighter"].firstMatch
         XCTAssertTrue(hl.waitForExistence(timeout: 5), "no Highlighter tool")
+        hideSidebar()
         hl.tap()
         // the bar is rebuilt for the new tool: wait for its row to change
         var tries = 0
