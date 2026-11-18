@@ -97,7 +97,9 @@ final class StudyPhoneTests: XCTestCase {
 
         for (tool, name) in [("vsepr", "phone-study-vsepr"), ("molecules", "phone-study-molecules")] {
             tap("study-tool-" + tool, "no \(tool) row")
-            sleep(5)
+            // the tool is a web page: wait for its words, not a fixed time (the first page of a run loads slowest)
+            XCTAssertTrue(app.webViews.firstMatch.staticTexts.firstMatch.waitForExistence(timeout: 30), "the \(tool) page stayed blank")
+            sleep(2)
             shot(name)
             back()
         }

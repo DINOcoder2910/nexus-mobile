@@ -247,12 +247,22 @@ struct SheetRow: View {
             if files.count > 1 {
                 FlowRow(spacing: 6) {
                     ForEach(files, id: \.file.path) { f in
+                        // drawn like the chips: a system bordered button in this layout came out as a tall pill without its words
                         Button { open(root.appendingPathComponent(f.file.path)) } label: {
-                            Label(f.label, systemImage: f.file.role == "ms" ? "checkmark.seal" : f.file.role == "marked" ? "pencil" : "doc")
-                                .font(.caption)
+                            HStack(spacing: 4) {
+                                Image(systemName: f.file.role == "ms" ? "checkmark.seal" : f.file.role == "marked" ? "pencil" : "doc").imageScale(.small)
+                                Text(f.label)
+                            }
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(Theme.accent)
+                            .lineLimit(1)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 5)
+                            .background(Theme.accent.opacity(0.12), in: Capsule())
+                            .fixedSize()
                         }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel("Open " + f.label)
                     }
                 }
             }

@@ -88,7 +88,9 @@ final class StudyPadTests: XCTestCase {
 
         for (tool, name) in [("vsepr", "pad-study-vsepr"), ("enthalpies", "pad-study-enthalpies"), ("molecules", "pad-study-molecules")] {
             tap("study-tool-" + tool, "no \(tool) row", in: app.collectionViews.firstMatch)
-            sleep(5)
+            // the tool is a web page: wait for its words, not a fixed time (the first page of a run loads slowest)
+            XCTAssertTrue(app.webViews.firstMatch.staticTexts.firstMatch.waitForExistence(timeout: 30), "the \(tool) page stayed blank")
+            sleep(2)
             shot(name)
             back()
         }
