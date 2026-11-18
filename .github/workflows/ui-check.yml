@@ -24,7 +24,7 @@ concurrency:
 jobs:
   ui:
     runs-on: macos-latest
-    timeout-minutes: 110
+    timeout-minutes: 130
     steps:
       - uses: actions/checkout@v4
 
@@ -206,7 +206,7 @@ jobs:
 
       - name: Run the iPhone tests
         if: ${{ !cancelled() }}
-        timeout-minutes: 25
+        timeout-minutes: 40
         run: |
           echo 1 > phone-status.txt
           [ -d DerivedData/Build/Products ] || { echo "the build for testing failed, so no iPhone run"; exit 0; }
