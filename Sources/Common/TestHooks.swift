@@ -108,6 +108,9 @@ enum TestHooks {
     /// `-NexusTestSpaceDrag` (with the big board): Insert space is dragged on it, slowly, held for pictures and timed
     /// (BoardController+Bench.swift, UITests/SpaceLiveTests), instead of the save bench.
     static var isSpaceDragRun: Bool { ProcessInfo.processInfo.arguments.contains("-NexusTestSpaceDrag") }
+    /// `-NexusTestPenProbe`: each stroke drawn shows its ink and width in a label (BoardController+Bench.swift penProbe,
+    /// UITests/PenOptionsTests), so the check reads the width written instead of guessing it from a picture.
+    static var isPenProbeRun: Bool { ProcessInfo.processInfo.arguments.contains("-NexusTestPenProbe") }
 
     static func bigBoard(_ store: NexusStore) {
         if !store.snapshot.isDataFolder { store.makeSample() }

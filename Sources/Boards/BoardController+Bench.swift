@@ -63,4 +63,25 @@ extension BoardController {
         }
         start()
     }
+
+    /// The last stroke's ink and width, and the tool's, for UITests/PenOptionsTests (`-NexusTestPenProbe`).
+    func penProbe() {
+        let label: UILabel
+        if let l = view.viewWithTag(9_193) as? UILabel { label = l } else {
+            label = UILabel()
+            label.tag = 9_193
+            label.accessibilityIdentifier = "pen-probe"
+            label.font = .monospacedSystemFont(ofSize: 11, weight: .medium)
+            label.textColor = .white
+            label.backgroundColor = UIColor(white: 0.1, alpha: 0.7)
+            view.addSubview(label)
+            label.frame = CGRect(x: view.bounds.width - 330, y: view.bounds.height - 30, width: 320, height: 22)
+            label.autoresizingMask = [.flexibleTopMargin, .flexibleLeftMargin]
+        }
+        guard let k = canvas.drawing.strokes.last else { return }
+        let sizes = k.path.map { $0.size.width }.sorted()
+        let mid = sizes.isEmpty ? 0 : sizes[sizes.count / 2]
+        let tool = (canvas.tool as? PKInkingTool).map { String(format: "%.2f", $0.width) } ?? "-"
+        label.text = String(format: "probe %@ stroke %.2f tool %@", k.ink.inkType.rawValue, mid, tool)
+    }
 }

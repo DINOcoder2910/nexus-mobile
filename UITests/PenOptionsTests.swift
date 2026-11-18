@@ -22,11 +22,11 @@ final class PenOptionsTests: XCTestCase {
         print("UISTEP \(Date().timeIntervalSince1970) \(name)")
     }
 
-    func launch(dark: Bool) {
+    func launch(dark: Bool, tool: String = "pen") {
         app = XCUIApplication()
-        // fingers draw (the simulator has no Pencil); a fresh set of tools
-        app.launchArguments = ["-NexusTestPdfBoard", "-board.fingersDraw", "YES", "-board.dark", dark ? "always" : "never",
-                               "-board.tool", "pen", "-board.penKind", "pen"]
+        // fingers draw (the simulator has no Pencil); a fresh set of tools; each stroke's width shown in the probe label
+        app.launchArguments = ["-NexusTestPdfBoard", "-NexusTestPenProbe", "-board.fingersDraw", "YES", "-board.dark", dark ? "always" : "never",
+                               "-board.tool", tool, "-board.penKind", "pen"]
         app.launch()
         XCTAssertTrue(app.buttons["Insert"].firstMatch.waitForExistence(timeout: 30), "the board didn't open")
         sleep(3)
@@ -60,8 +60,19 @@ final class PenOptionsTests: XCTestCase {
         return all.max(by: { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }) ?? app.windows.firstMatch
     }
 
-    /// One line at each width, each in the next colour of the row, down the board.
-    func writeLines(_ count: Int) {
+    /// The probe's "probe <ink> stroke <width> tool <width>" for the last stroke drawn.
+    func probe() -> (ink: String, stroke: Double, tool: Double)? {
+        let p = app.staticTexts["pen-probe"].firstMatch
+        guard p.waitForExistence(timeout: 3) else { return nil }
+        let f = p.label.split(separator: " ").map(String.init)
+        guard f.count >= 6, let s = Double(f[3]), let t = Double(f[5]) else { return nil }
+        return (f[1], s, t)
+    }
+
+    /// One line at each width, each in the next colour of the row, down the board; the widths written must grow.
+    @discardableResult
+    func writeLines(_ count: Int, ink: String) -> [Double] {
+        var written: [Double] = []
         for (i, w) in Self.widths.enumerated() {
             let wb = button(w)
             XCTAssertTrue(wb.waitForExistence(timeout: 5), "no \(w) width")
@@ -74,7 +85,13 @@ final class PenOptionsTests: XCTestCase {
             from.press(forDuration: 0.1, thenDragTo: board().coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: y + 0.03)),
                        withVelocity: XCUIGestureVelocity(250), thenHoldForDuration: 0)
             usleep(300_000)
+            let p = probe()
+            print("UISTEP probe \(w): \(p.map { "\($0.ink) stroke \($0.stroke) tool \($0.tool)" } ?? "none")")
+            XCTAssertTrue(p?.ink.hasSuffix(ink) ?? false, "\(w) wrote with \(p?.ink ?? "nothing"), not \(ink)")
+            written.append(p?.tool ?? 0)
         }
+        for i in written.indices.dropFirst() { XCTAssertGreaterThan(written[i], written[i - 1], "\(Self.widths[i]) isn't wider than \(Self.widths[i - 1]): \(written)") }
+        return written
     }
 
     func testPenColoursAndWidths() {
@@ -85,19 +102,28 @@ final class PenOptionsTests: XCTestCase {
         launch(dark: false)
         XCTAssertEqual(colours().count, 10, "the pen should have ten colours")
         for w in Self.widths { XCTAssertTrue(app.buttons[w].firstMatch.exists, "no \(w) width") }
-        writeLines(10)
+        writeLines(10, ink: "pen")
         shot("pens-pen-light")
 
+        // the Highlighter, tapped where it shows in the bar
         let hl = button("Highlighter")
         XCTAssertTrue(hl.waitForExistence(timeout: 5), "no Highlighter tool")
-        hideSidebar()
-        hl.tap()
+        for b in app.buttons.matching(NSPredicate(format: "label == 'Highlighter'")).allElementsBoundByIndex {
+            print("UISTEP highlighter button \(b.frame) hittable \(b.isHittable)")
+        }
+        app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: hl.frame.midX, dy: hl.frame.midY)).tap()
         // the bar is rebuilt for the new tool: wait for its row to change
         var tries = 0
         while colours().count != 8 && tries < 10 { usleep(500_000); tries += 1 }
-        if colours().count != 8 { shot("pens-highlighter-picked") }
-        XCTAssertEqual(colours().count, 8, "the highlighter should have eight colours")
-        writeLines(8)
+        XCTAssertEqual(colours().count, 8, "tapping Highlighter should show its eight colours")
+        if colours().count != 8 {
+            // the tap didn't take: start on the highlighter instead, to see its row and widths all the same
+            shot("pens-highlighter-picked")
+            app.terminate()
+            launch(dark: false, tool: "highlighter")
+            XCTAssertEqual(colours().count, 8, "the highlighter should have eight colours")
+        }
+        writeLines(8, ink: "marker")
         shot("pens-highlighter-light")
         app.terminate()
     }
@@ -105,7 +131,7 @@ final class PenOptionsTests: XCTestCase {
     func testPenColoursAndWidthsDark() {
         launch(dark: true)
         XCTAssertEqual(colours().count, 10)
-        writeLines(10)
+        writeLines(10, ink: "pen")
         shot("pens-pen-dark")
         app.terminate()
     }
