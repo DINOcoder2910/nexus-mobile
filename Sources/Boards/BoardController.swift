@@ -477,6 +477,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         if n == strokeCount + 1 {
             strokeLanded()
             if !tutorIsBusy, let k = canvas.drawing.strokes.last { lastStroke = (k.renderBounds.offsetBy(dx: -offset.x, dy: -offset.y), Date(), false) }
+            if TestHooks.isPenProbeRun { penProbe() }
         }
         strokeCount = canvas.drawing.strokes.count
         recordingDrawingChanged()
