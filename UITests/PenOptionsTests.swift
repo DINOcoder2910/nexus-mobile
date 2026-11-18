@@ -36,17 +36,19 @@ final class PenOptionsTests: XCTestCase {
         XCTAssertTrue(button("Pen").isSelected, "the Pen should be picked")
     }
 
-    /// The sidebar floats over the board in landscape: put it away with the board bar's Sidebar button (the rightmost of the two).
+    /// The sidebar floats over the board in landscape and pushes the bar right: put it away with the board bar's Sidebar button
+    /// (the rightmost of the two) while the bar's Close button sits right of the screen's edge.
     func hideSidebar() {
         let width = app.windows.firstMatch.frame.width
-        for _ in 0..<3 {
-            let planner = app.staticTexts["Planner"].firstMatch
-            guard planner.exists, planner.frame.maxX > 0, planner.frame.minX < width * 0.3 else { return }
+        for _ in 0..<4 {
+            let close = app.buttons.matching(NSPredicate(format: "label == 'Close the board'")).allElementsBoundByIndex.first { $0.exists && $0.frame.width > 0 }
+            guard let close, close.frame.minX > width * 0.1 else { return }
             let sides = app.buttons.matching(identifier: "Sidebar").allElementsBoundByIndex.filter { $0.exists }
             guard let side = sides.max(by: { $0.frame.minX < $1.frame.minX }) else { return }
             side.tap()
             sleep(2)
         }
+        XCTFail("the sidebar stayed over the board")
     }
 
     func colours() -> XCUIElementQuery { app.buttons.matching(NSPredicate(format: "label == 'Colour'")) }
