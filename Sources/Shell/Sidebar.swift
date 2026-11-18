@@ -84,8 +84,11 @@ struct Sidebar: View {
                 if s.isDataFolder && s.workstreams.values.contains(where: { $0.kind == "school" }) {
                     row(.applications, "Applications", "graduationcap", count: nil)
                 }
-                if s.isDataFolder && StudyLibrary.shared.hasDecks {
+                if s.isDataFolder && StudyLibrary.shared.hasStudy {
                     row(.study, "Study", "rectangle.on.rectangle.angled", count: StudyLibrary.shared.dueTotal)
+                }
+                if s.isDataFolder && StudyTools.shown(store) {
+                    row(.studyTools, "Study tools", "atom", count: nil)
                 }
                 if s.isDataFolder { SpanishSidebarRows(row: { row($0, $1, $2, count: nil) }) }
                 row(.ideas, "Ideas", "lightbulb", count: nil)
@@ -155,6 +158,7 @@ struct Sidebar: View {
             Label(title, systemImage: icon)
                 .badge(count ?? 0)
         }
+        .accessibilityIdentifier("sidebar-" + title)
     }
 
     /// A row that goes to a screen: on the iPad it selects it (the split view shows it), on the iPhone it pushes it.
