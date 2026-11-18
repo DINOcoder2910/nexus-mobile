@@ -9,9 +9,13 @@ public struct Change {
     public var message: String
     /// After a tick: the parent whose last open subtask this was, so the screen can offer to tick it too.
     public var offerParent: String?
+    /// More files the same step wrote (Applications: a school's workstream.yaml and its tasks.yaml, a system's campuses), undone with it.
+    public var also: [Change] = []
+    /// The step made the file (Undo takes it away instead of leaving it empty).
+    public var created = false
 
-    public init(file: String, before: String, after: String, message: String, offerParent: String? = nil) {
-        self.file = file; self.before = before; self.after = after; self.message = message; self.offerParent = offerParent
+    public init(file: String, before: String, after: String, message: String, offerParent: String? = nil, also: [Change] = []) {
+        self.file = file; self.before = before; self.after = after; self.message = message; self.offerParent = offerParent; self.also = also
     }
 }
 
@@ -137,10 +141,17 @@ public struct TaskEditor {
     }
 
     /// Puts a file back as it was before `c`, if it still holds what `c` wrote.
+    /// Every file it wrote (`also` too) must still hold what it wrote; they are put back last first.
     public func undo(_ c: Change) throws {
-        let url = root.appendingPathComponent(c.file)
-        guard (try? read(url)) == c.after else { throw Failure.changedOnDisk }
-        try write(url, c.before)
+        var head = c; head.also = []
+        let all = [head] + c.also.flatMap { x -> [Change] in var y = x; y.also = []; return [y] + x.also }
+        for x in all where x.before != x.after {
+            guard (try? read(root.appendingPathComponent(x.file))) == x.after else { throw Failure.changedOnDisk }
+        }
+        for x in all.reversed() where x.before != x.after {
+            let url = root.appendingPathComponent(x.file)
+            if x.before.isEmpty, x.created { try? FileManager.default.removeItem(at: url) } else { try write(url, x.before) }
+        }
     }
 
     // MARK: plumbing

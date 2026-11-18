@@ -307,7 +307,7 @@ struct WorkstreamView: View {
 }
 
 /// notes.md as plain markdown text, saved whole when Save is pressed (Undo on the bar).
-private struct NotesEditor: View {
+struct NotesEditor: View {
     let title: String
     @State var text: String
     let save: (String) -> Void
@@ -336,7 +336,7 @@ private struct NotesEditor: View {
 }
 
 /// notes.md, shown: headings bold, bullets and checkboxes as marks, code fences in mono, inline markdown kept.
-private struct NoteText: View {
+struct NoteText: View {
     let text: String
     @State private var full = false
     private let cap = 120
