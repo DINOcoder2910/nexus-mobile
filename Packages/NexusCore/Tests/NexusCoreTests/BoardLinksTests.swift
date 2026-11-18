@@ -130,6 +130,31 @@ final class BoardLinksTests: XCTestCase {
         XCTAssertEqual([s.0, s.1], [200, 150])
     }
 
+    func testBridge() {
+        // side by side: the facing sides are the right of a and the left of b, as wide as each box is tall (capped)
+        let f = BoardLinks.facingSides([0, 0, 100, 50], [300, 100, 400, 400])
+        XCTAssertEqual([f.a.p.0, f.a.p.1, f.a.n.0, f.a.w], [100, 25, 1, 45])
+        XCTAssertEqual([f.b.p.0, f.b.p.1, f.b.n.0, f.b.w], [300, 250, -1, 120])
+        // one above the other: bottom of a, top of b
+        let v = BoardLinks.facingSides([0, 0, 100, 50], [0, 300, 60, 340])
+        XCTAssertEqual([v.a.p.0, v.a.p.1, v.a.n.1, v.b.p.1, v.b.n.1, v.b.w], [50, 50, 1, 300, -1, 54])
+        // the curve leaves each end straight out of its side
+        let c = BoardLinks.bridgeCurve(f.a.p, f.a.n, f.b.p, f.b.n)
+        XCTAssertEqual(c.c1.1, 25); XCTAssertGreaterThan(c.c1.0, 100)
+        XCTAssertEqual(c.c2.1, 250); XCTAssertLessThan(c.c2.0, 300)
+        // as wide as each side at its ends, narrow in the middle
+        let band = BoardLinks.band(f.a.p, f.b.p, c, wa: 45, wb: 120, wm: 5, n: 32)
+        XCTAssertEqual(band.count, 66)
+        func width(_ i: Int) -> Double { hypot(band[i].0 - band[65 - i].0, band[i].1 - band[65 - i].1) }
+        XCTAssertEqual(width(0), 45, accuracy: 0.01)
+        XCTAssertEqual(width(32), 120, accuracy: 0.01)
+        XCTAssertEqual(width(16), 5, accuracy: 0.5)
+        // part of it (growing out of a): ends where t1 says
+        let half = BoardLinks.band(f.a.p, f.b.p, c, wa: 45, wb: 120, wm: 5, t0: 0, t1: 0.5, n: 32)
+        let mid = BoardLinks.bez(f.a.p, c.c1, c.c2, f.b.p, 0.5)
+        XCTAssertEqual((half[32].0 + half[33].0) / 2, mid.0, accuracy: 0.01)
+    }
+
     func testLabels() {
         typealias C = BoardLinks.LabelContext
         XCTAssertEqual(BoardLinks.label(j(#"{"on":"t","at":{"q":"the **anode**"}}"#)), "“the anode”")
