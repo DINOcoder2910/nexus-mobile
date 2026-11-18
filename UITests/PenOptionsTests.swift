@@ -60,6 +60,16 @@ final class PenOptionsTests: XCTestCase {
         return all.max(by: { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }) ?? app.windows.firstMatch
     }
 
+    /// Taps the element until `done` holds (three tries, two seconds each).
+    func tap(until done: @escaping () -> Bool, _ element: @escaping () -> XCUIElement) {
+        for attempt in 0..<3 {
+            let e = element()
+            if e.isHittable { e.tap() } else { print("UISTEP tap \(attempt): \(e.label) not hittable") }
+            for _ in 0..<8 { if done() { return }; usleep(250_000) }
+            print("UISTEP tap \(attempt) on \(e.label) didn't take")
+        }
+    }
+
     /// The probe's "probe <ink> stroke <width> tool <width>" for the last stroke drawn.
     func probe() -> (ink: String, stroke: Double, tool: Double)? {
         let p = app.staticTexts["pen-probe"].firstMatch
@@ -72,11 +82,12 @@ final class PenOptionsTests: XCTestCase {
     /// One line at each width, each in the next colour of the row, down the board; the widths written must grow.
     @discardableResult
     func writeLines(_ count: Int, ink: String) -> [Double] {
-        var written: [Double] = []
+        var written: [Double] = [], strokes: [Double] = []
         for (i, w) in Self.widths.enumerated() {
             let wb = button(w)
             XCTAssertTrue(wb.waitForExistence(timeout: 5), "no \(w) width")
-            if wb.isHittable { wb.tap() }
+            // the bar is rebuilt now and then (a stroke landing, the zoom): a tap that lands as it is rebuilt is lost, so tap again
+            tap(until: { (self.button(w).value as? String ?? "").contains("Picked") }) { self.button(w) }
             let c = colours().element(boundBy: i % count)
             if c.isHittable { c.tap() }
             let y = 0.18 + 0.1 * CGFloat(i)
@@ -89,8 +100,14 @@ final class PenOptionsTests: XCTestCase {
             print("UISTEP probe \(w): \(p.map { "\($0.ink) stroke \($0.stroke) tool \($0.tool)" } ?? "none")")
             XCTAssertTrue(p?.ink.hasSuffix(ink) ?? false, "\(w) wrote with \(p?.ink ?? "nothing"), not \(ink)")
             written.append(p?.tool ?? 0)
+            strokes.append(p?.stroke ?? 0)
         }
         for i in written.indices.dropFirst() { XCTAssertGreaterThan(written[i], written[i - 1], "\(Self.widths[i]) isn't wider than \(Self.widths[i - 1]): \(written)") }
+        // the strokes themselves: the highlighter's follow the width; the pen's, written with a simulated finger, come out about
+        // the same at every width on the simulator (PencilKit's pen sets a finger's width itself), so they are only logged
+        if ink == "marker" {
+            for i in strokes.indices.dropFirst() { XCTAssertGreaterThan(strokes[i], strokes[i - 1], "the \(Self.widths[i]) stroke isn't wider: \(strokes)") }
+        }
         return written
     }
 
@@ -108,13 +125,7 @@ final class PenOptionsTests: XCTestCase {
         // the Highlighter, tapped where it shows in the bar
         let hl = button("Highlighter")
         XCTAssertTrue(hl.waitForExistence(timeout: 5), "no Highlighter tool")
-        for b in app.buttons.matching(NSPredicate(format: "label == 'Highlighter'")).allElementsBoundByIndex {
-            print("UISTEP highlighter button \(b.frame) hittable \(b.isHittable)")
-        }
-        app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: hl.frame.midX, dy: hl.frame.midY)).tap()
-        // the bar is rebuilt for the new tool: wait for its row to change
-        var tries = 0
-        while colours().count != 8 && tries < 10 { usleep(500_000); tries += 1 }
+        tap(until: { self.colours().count == 8 }) { self.button("Highlighter") }
         XCTAssertEqual(colours().count, 8, "tapping Highlighter should show its eight colours")
         if colours().count != 8 {
             // the tap didn't take: start on the highlighter instead, to see its row and widths all the same
