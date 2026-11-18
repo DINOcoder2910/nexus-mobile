@@ -64,4 +64,25 @@ final class InsertSpaceTests: XCTestCase {
         XCTAssertFalse(InsertSpace.moves(other, line: 200, sideways: true, band: band))
         XCTAssertFalse(InsertSpace.moves(mine, line: 200, sideways: true, band: band))
     }
+
+    func testWhatADragDoesLiveAndOnLettingGo() {
+        XCTAssertEqual(InsertSpace.applied(48, limit: .infinity), 48)
+        XCTAssertEqual(InsertSpace.applied(3, limit: .infinity), 0, "a tiny drag does nothing, live or on letting go")
+        XCTAssertEqual(InsertSpace.applied(-3, limit: 100), 0)
+        XCTAssertEqual(InsertSpace.applied(-48, limit: 100), -48)
+        XCTAssertEqual(InsertSpace.applied(-48, limit: 30.7), -30, "taking away stops at what is there, in whole units")
+        XCTAssertEqual(InsertSpace.applied(-48, limit: 0.5), 0, "no room to take")
+        XCTAssertEqual(InsertSpace.applied(-48, limit: -10), 0)
+    }
+
+    func testTheRegionHiddenWhileDragging() {
+        let all = InsertSpace.hidden(line: 300, band: nil, moving: [box(0, 310, 50, 10)])
+        XCTAssertEqual(all.from, 288)
+        XCTAssertNil(all.across, "everything past the line: the whole width")
+        let col = InsertSpace.hidden(line: 300, band: 100...200, moving: [box(90, 310, 20, 10), box(150, 320, 80, 10)])
+        XCTAssertEqual(col.across, 78...242, "the column, widened to the moving ink that reaches out of it")
+        let row = InsertSpace.hidden(line: 300, band: 100...200, moving: [box(310, 60, 20, 50)], sideways: true)
+        XCTAssertEqual(row.from, 288)
+        XCTAssertEqual(row.across, 48...212)
+    }
 }

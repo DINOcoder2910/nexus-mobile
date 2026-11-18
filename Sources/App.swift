@@ -147,7 +147,7 @@ struct WindowRoot: View {
 
 /// Where the sidebar can take you.
 enum Screen: Hashable {
-    case today, planner, calendar, tasks, someday, inbox, workstream(String), boards, boardSearch, settings, study, ideas
+    case today, planner, calendar, tasks, someday, inbox, workstream(String), boards, boardSearch, settings, study, ideas, time
     /// The VSEPR chart, Enthalpies and Molecules, each on its own screen.
     case studyTools
     /// A workstream's Spanish study (its id).
@@ -318,6 +318,7 @@ struct RootView: View {
         case .studyTools: return "Study tools (the VSEPR chart, Enthalpies, Molecules)"
         case .spanish(let id): return "Spanish study" + (store.workstream(id).map { " (\($0.name))" } ?? "")
         case .ideas: return "Ideas"
+        case .time: return "Time (tracked time)"
         case .claude: return "Claude"
         case .home: return "Home"
         case .guide: return "How Nexus works"
@@ -408,6 +409,7 @@ struct RootView: View {
             case .studyTools: StudyToolsHome()
             case .spanish(let id): SpanishHome(workstreamId: id)
             case .ideas: IdeasView()
+            case .time: TimeView()
             case .claude: ClaudeChatView()
             }
         }
@@ -477,6 +479,17 @@ struct RootView: View {
                 .padding(.trailing, 18)
                 .padding(.bottom, store.toast == nil ? 18 : 84)
                 .animation(.snappy, value: store.toast == nil)
+            }
+        }
+        // the running timer, over every tab (its task opens on a tap; Stop)
+        .overlay(alignment: .bottomLeading) {
+            if store.snapshot.isDataFolder && TimeTracker.shared.current != nil && path.wrappedValue.last != .claude {
+                RunningTimerPill()
+                    .padding(.leading, 16)
+                    .padding(.trailing, 92)
+                    .padding(.bottom, (store.toast == nil ? 22 : 88) + (which == .calendar ? 56 : 0))
+                    .animation(.snappy, value: store.toast == nil)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .overlay(alignment: .bottom) { UndoBar().animation(.snappy, value: store.toast) }
