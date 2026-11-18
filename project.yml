@@ -34,6 +34,8 @@ targets:
       # the laptop's study tools (tools/study-tools/copy.mjs): the VSEPR chart, Enthalpies, Molecules, until the laptop sends its own
       - path: Resources/Tools
         type: folder
+      # the laptop's universities database (renderer/data/universities.json) for Applications > Research
+      - path: Resources/Data/universities.json
     dependencies:
       - package: NexusCore
     info:

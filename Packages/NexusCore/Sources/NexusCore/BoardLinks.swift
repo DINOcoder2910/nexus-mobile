@@ -316,6 +316,49 @@ public enum BoardLinks {
         return left + right.reversed()
     }
 
+    // MARK: the bridge (the laptop's links.js facingSides / bridgeCurve / bandPath): a band that holds each end's whole facing side
+
+    public struct Side { public var p: (Double, Double); public var n: (Double, Double); public var w: Double }
+
+    /// The sides of two boxes that face each other: the middle of each, its outward normal and its length (the bridge's width there).
+    public static func facingSides(_ a: [Double], _ b: [Double], cap: Double = 120, min lo: Double = 10) -> (a: Side, b: Side) {
+        let ca = ((a[0] + a[2]) / 2, (a[1] + a[3]) / 2), cb = ((b[0] + b[2]) / 2, (b[1] + b[3]) / 2)
+        let gapX = max(b[0] - a[2], a[0] - b[2]), gapY = max(b[1] - a[3], a[1] - b[3])
+        let horiz = gapX >= gapY
+        func side(_ box: [Double], _ c: (Double, Double), _ toward: (Double, Double)) -> Side {
+            if horiz {
+                let r = toward.0 >= c.0
+                return Side(p: (r ? box[2] : box[0], c.1), n: (r ? 1 : -1, 0), w: max(lo, min(cap, (box[3] - box[1]) * 0.9)))
+            }
+            let d = toward.1 >= c.1
+            return Side(p: (c.0, d ? box[3] : box[1]), n: (0, d ? 1 : -1), w: max(lo, min(cap, (box[2] - box[0]) * 0.9)))
+        }
+        return (side(a, ca, cb), side(b, cb, ca))
+    }
+
+    /// A curve that leaves each end straight out of its side.
+    public static func bridgeCurve(_ p: (Double, Double), _ na: (Double, Double), _ q: (Double, Double), _ nb: (Double, Double)) -> Curve {
+        let d = max(30, min(260, hypot(q.0 - p.0, q.1 - p.1) * 0.42))
+        return Curve(c1: (p.0 + na.0 * d, p.1 + na.1 * d), c2: (q.0 + nb.0 * d, q.1 + nb.1 * d), side: 0, hits: 0)
+    }
+
+    /// A band `wa` wide at p, `wb` at q and `wm` in the middle, from t0 to t1 along the curve: one side there, the other back.
+    public static func band(_ p: (Double, Double), _ q: (Double, Double), _ c: Curve, wa: Double, wb: Double, wm: Double,
+                            t0: Double = 0, t1: Double = 1, n: Int = 32) -> [(Double, Double)] {
+        let ts = (0...n).map { t0 + (t1 - t0) * Double($0) / Double(n) }
+        let pts = ts.map { bez(p, c.c1, c.c2, q, $0) }
+        func ease(_ x: Double) -> Double { x * x * (3 - 2 * x) }
+        var left: [(Double, Double)] = [], right: [(Double, Double)] = []
+        for i in 0...n {
+            let a = pts[max(0, i - 1)], b = pts[min(n, i + 1)], tx = b.0 - a.0, ty = b.1 - a.1
+            let tl = hypot(tx, ty) == 0 ? 1 : hypot(tx, ty), t = ts[i]
+            let w = (t < 0.5 ? wm + (wa - wm) * ease(1 - t * 2) : wm + (wb - wm) * ease(t * 2 - 1)) / 2
+            left.append((pts[i].0 - ty / tl * w, pts[i].1 + tx / tl * w))
+            right.append((pts[i].0 + ty / tl * w, pts[i].1 - tx / tl * w))
+        }
+        return left + right.reversed()
+    }
+
     /// Where a ribbon meets a box: the point on its edge toward `toward`.
     public static func edgePoint(_ box: [Double], toward: (Double, Double)) -> (Double, Double) {
         let cx = (box[0] + box[2]) / 2, cy = (box[1] + box[3]) / 2, dx = toward.0 - cx, dy = toward.1 - cy

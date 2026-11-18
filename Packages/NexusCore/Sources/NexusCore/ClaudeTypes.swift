@@ -45,9 +45,13 @@ public struct ClaudeRequest: Sendable {
     public var cacheSystem: Bool
     /// Plan mode: the relay's session to resume (it then sends only the last user message). API mode ignores it.
     public var sessionId: String?
-    public init(model: String, system: String, messages: [ClaudeMessage], maxTokens: Int = 2048, effort: String? = nil, cacheSystem: Bool = true, sessionId: String? = nil) {
+    /// May search and read the web (Applications' school research): API mode adds the server-side web search and fetch tools; plan mode asks
+    /// the relay for its web tools.
+    public var web = false
+    public init(model: String, system: String, messages: [ClaudeMessage], maxTokens: Int = 2048, effort: String? = nil, cacheSystem: Bool = true, sessionId: String? = nil,
+                web: Bool = false) {
         self.model = model; self.system = system; self.messages = messages; self.maxTokens = maxTokens
-        self.effort = effort; self.cacheSystem = cacheSystem; self.sessionId = sessionId
+        self.effort = effort; self.cacheSystem = cacheSystem; self.sessionId = sessionId; self.web = web
     }
 }
 
@@ -201,6 +205,12 @@ public enum ClaudeWire {
         if !r.system.isEmpty { o.append(("system", .array([.object(sys)]))) }
         o.append(("messages", messagesJSON(r.messages)))
         if let e = r.effort, !e.isEmpty { o.append(("output_config", .object([("effort", .string(e))]))) }
+        if r.web {
+            o.append(("tools", .array([
+                .object([("type", .string("web_search_20260209")), ("name", .string("web_search")), ("max_uses", .number(12))]),
+                .object([("type", .string("web_fetch_20260209")), ("name", .string("web_fetch")), ("max_uses", .number(12))]),
+            ])))
+        }
         o.append(("fallbacks", .string("default")))
         return .object(o)
     }
@@ -251,6 +261,7 @@ public enum ClaudeWire {
         ]
         if let e = r.effort { o.append(("effort", .string(e))) }
         if let s = r.sessionId { o.append(("sessionId", .string(s))) }
+        if r.web { o.append(("web", .bool(true))) }
         return .object(o)
     }
     public enum RelayEvent: Equatable {
