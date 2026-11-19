@@ -87,10 +87,6 @@ struct Sidebar: View {
                 if s.isDataFolder && StudyLibrary.shared.hasStudy {
                     row(.study, "Study", "rectangle.on.rectangle.angled", count: StudyLibrary.shared.dueTotal)
                 }
-                if s.isDataFolder && StudyTools.shown(store) {
-                    row(.studyTools, "Study tools", "atom", count: nil)
-                }
-                if s.isDataFolder { SpanishSidebarRows(row: { row($0, $1, $2, count: nil) }) }
                 row(.ideas, "Ideas", "lightbulb", count: nil)
                 if s.isDataFolder {
                     row(.claude, "Claude", "sparkles", count: ClaudeChatSession.shared.conversation("main").pendingCount)

@@ -49,9 +49,18 @@ final class SpanishPadTests: XCTestCase {
         app.launch()
         let sample = app.buttons["Try with sample data"]
         if sample.waitForExistence(timeout: 10) { sample.tap() }
-        let row = app.staticTexts["Spanish"].firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 20), "no Spanish row in the sidebar")
-        row.tap()
+        // Spanish opens from its class's Study page (the sidebar has no Spanish row of its own)
+        let study = el("sidebar-Study")
+        XCTAssertTrue(study.waitForExistence(timeout: 20), "no Study row in the sidebar")
+        study.tap()
+        let page = el("study-page-spanish-ab")
+        var down = 0
+        while !page.waitForExistence(timeout: 3) && down < 6 { app.swipeUp(); down += 1 }
+        XCTAssertTrue(page.waitForExistence(timeout: 10), "Study has no Spanish ab initio")
+        page.tap()
+        let link = el("study-spanish")
+        XCTAssertTrue(link.waitForExistence(timeout: 10), "the Study page has no Spanish link")
+        link.tap()
         XCTAssertTrue(el("spanish-sentence").waitForExistence(timeout: 10), "the Spanish screen didn't open")
         sleep(1)
     }
@@ -157,7 +166,7 @@ final class SpanishPadTests: XCTestCase {
         XCTAssertTrue(setup.waitForExistence(timeout: 5), "no Set up Spanish study")
         shot("pad-spanish-setup-menu")
         setup.tap()
-        XCTAssertTrue(app.staticTexts["Spanish · Physics HL"].firstMatch.waitForExistence(timeout: 15), "the sidebar didn't get a second Spanish row")
+        XCTAssertTrue(el("workstream-spanish").waitForExistence(timeout: 15), "the workstream page didn't get its Spanish link")
         shot("pad-spanish-setup-done")
     }
 }

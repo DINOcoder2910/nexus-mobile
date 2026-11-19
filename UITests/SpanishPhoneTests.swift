@@ -43,9 +43,20 @@ final class SpanishPhoneTests: XCTestCase {
         let more = app.tabBars.buttons["More"]
         XCTAssertTrue(more.waitForExistence(timeout: 15), "no More tab")
         more.tap()
-        let row = app.buttons["Spanish"].firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 20), "no Spanish row in More")
-        row.tap()
+        // Spanish opens from its class's Study page (More has no Spanish row of its own)
+        let study = el("sidebar-Study")
+        var tries = 0
+        while !study.waitForExistence(timeout: 2) && tries < 8 { app.swipeUp(); tries += 1 }
+        XCTAssertTrue(study.waitForExistence(timeout: 10), "no Study row in More")
+        study.tap()
+        let page = el("study-page-spanish-ab")
+        var down = 0
+        while !page.waitForExistence(timeout: 3) && down < 6 { app.swipeUp(); down += 1 }
+        XCTAssertTrue(page.waitForExistence(timeout: 10), "Study has no Spanish ab initio")
+        page.tap()
+        let link = el("study-spanish")
+        XCTAssertTrue(link.waitForExistence(timeout: 10), "the Study page has no Spanish link")
+        link.tap()
         XCTAssertTrue(el("spanish-sentence").waitForExistence(timeout: 10), "the Spanish screen didn't open")
         sleep(1)
     }
