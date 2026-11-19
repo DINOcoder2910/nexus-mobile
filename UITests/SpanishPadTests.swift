@@ -166,7 +166,11 @@ final class SpanishPadTests: XCTestCase {
         XCTAssertTrue(setup.waitForExistence(timeout: 5), "no Set up Spanish study")
         shot("pad-spanish-setup-menu")
         setup.tap()
-        XCTAssertTrue(el("workstream-spanish").waitForExistence(timeout: 15), "the workstream page didn't get its Spanish link")
+        // the link sits under the new Spanish decks, below the fold of a list that only makes the rows on screen
+        let link = el("workstream-spanish")
+        var down = 0
+        while !link.waitForExistence(timeout: 3) && down < 8 { app.swipeUp(); down += 1 }
+        XCTAssertTrue(link.waitForExistence(timeout: 10), "the workstream page didn't get its Spanish link")
         shot("pad-spanish-setup-done")
     }
 }
