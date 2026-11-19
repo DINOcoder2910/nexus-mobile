@@ -76,6 +76,8 @@ There is no Mac in the loop: every push builds on a GitHub-hosted Mac (`.github/
 - Push in batches rather than commit by commit: each push to a branch cancels that branch's older runs, but they've often already held a Mac.
 - Don't add `pull_request` triggers: the builds run on pushes, and the repo is public.
 
+Every CI or build failure on the iPad or iPhone gets its cause and fix written in [docs/ci-lessons.md](docs/ci-lessons.md); read it before pushing.
+
 ## Installing
 
 Install `NexusMobile.ipa` on the iPad with [Sideloadly](https://sideloadly.io) on Windows, signed with a free Apple ID (a spare one is best). Free signing lasts 7 days; Sideloadly renews it automatically when the iPad is awake on the same Wi-Fi as the PC running it. Installing a new build over the old one keeps the app's files.
