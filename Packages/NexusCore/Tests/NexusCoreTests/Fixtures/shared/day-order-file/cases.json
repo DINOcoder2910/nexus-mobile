@@ -1,0 +1,40 @@
+{
+  "rule": "day-order-file",
+  "about": "nexus-day-order.yaml: reading it (a day and a list of ids per line; comments, other lines, bad ids and repeats left out; the last line for a day wins; CRLF fine), writing it (the header, days in order, a day older than two weeks or with no ids dropped), setting one day, and a time read for the order (minutes from midnight; before the day-start hour it is that night's).",
+  "read": [
+    {
+      "about": "every kind of line",
+      "text": "# c\r\n2026-11-20: [ze04, ch01, \"q1\", ze04, bad id, x#y]\r\n2026-11-21:   [ a , b ]   # note\nnot a line\n2026-11-22:\n  - x\n2026-11-23: []\n2026-11-24: [p]\n2026-11-24: [q, r]\n  2026-11-25: [s]\n",
+      "expect": { "2026-11-20": ["ze04", "ch01", "q1"], "2026-11-21": ["a", "b"], "2026-11-24": ["q", "r"], "2026-11-25": ["s"] }
+    },
+    { "about": "no file", "text": null, "expect": {} },
+    { "about": "an empty file", "text": "", "expect": {} }
+  ],
+  "write": [
+    {
+      "about": "old and empty days dropped, bad ids left out",
+      "today": "2026-11-20",
+      "days": { "2026-11-01": ["old"], "2026-11-06": ["a"], "2026-11-20": ["z", "y", "bad id"], "2026-11-21": [], "2026-11-05": ["b"] },
+      "expect": "# Your own order of each day's tasks with no time, as you dragged them in Today: the task ids, one line a day.\n# Nexus writes this file on every device and drops a day older than two weeks.\n2026-11-06: [a]\n2026-11-20: [z, y]\n"
+    },
+    {
+      "about": "nothing to keep: the header alone",
+      "today": "2026-11-20",
+      "days": {},
+      "expect": "# Your own order of each day's tasks with no time, as you dragged them in Today: the task ids, one line a day.\n# Nexus writes this file on every device and drops a day older than two weeks.\n"
+    }
+  ],
+  "set": [
+    { "about": "a new day, repeats and bad ids left out", "days": { "2026-11-20": ["a"] }, "day": "2026-11-21", "keys": ["k", "k", "bad id", "j"], "expect": { "2026-11-20": ["a"], "2026-11-21": ["k", "j"] } },
+    { "about": "an empty list removes the day", "days": { "2026-11-20": ["a"] }, "day": "2026-11-20", "keys": [], "expect": {} }
+  ],
+  "time": [
+    { "time": "01:30", "dayStart": 4, "expect": 1530 },
+    { "time": "04:00", "dayStart": 4, "expect": 240 },
+    { "time": "9:05", "dayStart": 0, "expect": 545 },
+    { "time": "23:59", "dayStart": 4, "expect": 1439 },
+    { "time": "24:00", "dayStart": 0, "expect": null },
+    { "time": "9.30", "dayStart": 0, "expect": null },
+    { "time": null, "dayStart": 4, "expect": null }
+  ]
+}
