@@ -124,7 +124,7 @@ final class SidebarTreeTests: XCTestCase {
     func testNestedNotebooksDark() { run(dark: true) }
 }
 
-/// The same tree on the iPhone: the Notebooks tab. Runs only on an iPhone simulator (ui-check.yml's iPhone step runs every
+/// The same tree on the iPhone: the Subjects tab (the new look; it was the Notebooks tab). Runs only on an iPhone simulator (ui-check.yml's iPhone step runs every
 /// "…PhoneTests" class there and prints its shots whose name has "phone").
 final class SidebarPhoneTests: XCTestCase {
     let app = XCUIApplication()
@@ -135,8 +135,8 @@ final class SidebarPhoneTests: XCTestCase {
         XCUIDevice.shared.orientation = .portrait
         app.launchArguments = ["-NexusTestNestedNotebooks"]
         app.launch()
-        let tab = app.tabBars.buttons["Notebooks"].firstMatch
-        XCTAssertTrue(tab.waitForExistence(timeout: 20), "no Notebooks tab")
+        let tab = app.tabBars.buttons["Subjects"].firstMatch
+        XCTAssertTrue(tab.waitForExistence(timeout: 20), "no Subjects tab")
         tab.tap()
         for name in ["School", "Chemistry", "R3 Energetics"] {
             let arrow = app.buttons["Expand " + name].firstMatch

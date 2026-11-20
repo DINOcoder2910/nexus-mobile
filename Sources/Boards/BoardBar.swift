@@ -12,7 +12,8 @@ final class BoardBar: UIView {
     /// This bar's height under the safe area: a third row (the tools) when it is narrow; one row less when it is folded.
     var height: CGFloat { BoardBar.topHeight + (compact ? BoardBar.rowHeight : 0) + (folded ? 0 : BoardBar.rowHeight) }
     /// The row under the top one is shown (the new look's A) or tucked into the top bar (B). Remembered (BoardBar+Modes.swift).
-    var folded: Bool { UserDefaults.standard.bool(forKey: BoardBar.foldedKey) }
+    /// Folded only when wide: a narrow bar (an iPhone, a narrow pane) always shows its rows.
+    var folded: Bool { !compact && UserDefaults.standard.bool(forKey: BoardBar.foldedKey) }
     /// What the row under the top one holds: Draw (the tools, colours and sizes), Insert or View. Each board opens on Draw.
     var mode = BarMode.draw
     /// The Draw | Insert | View switch in the top row.
@@ -23,6 +24,7 @@ final class BoardBar: UIView {
         didSet {
             guard compact != oldValue else { return }
             middleHeight.constant = compact ? BoardBar.rowHeight : 0
+            toolRowHeight.constant = folded ? 0 : BoardBar.rowHeight
             refresh()
         }
     }

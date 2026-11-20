@@ -89,7 +89,6 @@ final class QuickRing: UIView {
         backgroundColor = .clear
         accessibilityIdentifier = "quick-ring-layer"
 
-        fan.isUserInteractionEnabled = false
         fan.isHidden = true
         addSubview(fan)
 
@@ -100,7 +99,6 @@ final class QuickRing: UIView {
         bubble.layer.shadowOpacity = 0.28
         bubble.layer.shadowRadius = 10
         bubble.layer.shadowOffset = CGSize(width: 0, height: 4)
-        bubble.isUserInteractionEnabled = false
         bubble.isAccessibilityElement = true
         bubble.accessibilityIdentifier = "quick-ring"
         bubble.accessibilityTraits = .button
@@ -143,7 +141,6 @@ final class QuickRing: UIView {
         tab.layer.shadowOpacity = 0.22
         tab.layer.shadowRadius = 6
         tab.isHidden = true
-        tab.isUserInteractionEnabled = false
         tab.isAccessibilityElement = true
         tab.accessibilityIdentifier = "quick-ring-tab"
         tab.accessibilityLabel = "Bring back the quick ring"
@@ -221,7 +218,15 @@ final class QuickRing: UIView {
         return bubble.frame.insetBy(dx: -6, dy: -6).contains(point)
     }
 
-    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? { self.point(inside: point, with: event) ? self : nil }
+    /// The part under the finger (so VoiceOver and UI tests find the button, the tab or a choice there); each passes its touches up
+    /// to the ring (UIView's default), which handles them all.
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard self.point(inside: point, with: event) else { return nil }
+        if !tab.isHidden, tab.frame.insetBy(dx: -14, dy: -10).contains(point) { return tab }
+        if !bubble.isHidden, bubble.frame.insetBy(dx: -6, dy: -6).contains(point) { return bubble }
+        for v in items where v.chip.frame.insetBy(dx: -8, dy: -8).contains(convert(point, to: v)) { return v }
+        return self
+    }
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let p = touches.first?.location(in: self) else { return }
@@ -355,7 +360,7 @@ final class QuickRing: UIView {
         let size = (Self.outerRadius + 80) * 2
         fan.frame = CGRect(x: centre.x - size / 2, y: centre.y - size / 2, width: size, height: size)
         fan.subviews.forEach { $0.removeFromSuperview() }
-        items = list.enumerated().map { i, c in
+        items = list.enumerated().map { (i, c) -> RingItemView in
             let v = RingItemView(frame: fan.bounds, choice: c, angle: a[i], span: step, current: isCurrent(c))
             v.accessibilityIdentifier = "ring-item-\(i)"
             fan.addSubview(v)
@@ -712,7 +717,6 @@ final class RingItemView: UIView {
         case .size(let i): title = BoardTools.widthNames[min(i, BoardTools.widthNames.count - 1)]
         }
         super.init(frame: frame)
-        isUserInteractionEnabled = false
         let m = CGPoint(x: bounds.midX, y: bounds.midY)
         let gap: CGFloat = 0.012
         let path = UIBezierPath()

@@ -14,6 +14,7 @@ extension BoardBar {
         let readOnly = b.readOnly
         HoldTarget.shared.actions.removeAll()
         middleRow.isHidden = false
+        toolRow.isHidden = false
 
         // top row: back, name, undo, redo, ⋯
         clear(topRow)
