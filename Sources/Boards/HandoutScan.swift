@@ -100,42 +100,82 @@ enum ScanPDF {
     }
 }
 
-/// The document camera from UIKit: scanned pages, or none when cancelled or it failed.
+/// The document camera from UIKit: scanned pages, or none when cancelled or it failed. Every scan in the app opens it here (a board's
+/// Insert › Scan a handout…, a notebook's New › From a scan…, Study's Upload › Scan pages).
 final class ScanCamera: NSObject, VNDocumentCameraViewControllerDelegate {
     private let done: ([UIImage]) -> Void
     private static var open: ScanCamera?
 
     private init(done: @escaping ([UIImage]) -> Void) { self.done = done }
 
-    static var isSupported: Bool { VNDocumentCameraViewController.isSupported }
+    /// `-NexusTestFakeScanner` (UITests/ScanTests): a stand-in camera that hands back one made-up page, as the simulator has none.
+    static let fake = ProcessInfo.processInfo.arguments.contains("-NexusTestFakeScanner")
 
-    /// Shows the scanner over `from`; `done` gets the pages once it is dismissed.
-    static func present(from: UIViewController, tries: Int = 0, done: @escaping ([UIImage]) -> Void) {
+    static var isSupported: Bool { fake || VNDocumentCameraViewController.isSupported }
+
+    /// The topmost screen of the key window, for a SwiftUI screen that has no controller of its own.
+    static func topOfKeyWindow() -> UIViewController? {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        let window = scenes.first { $0.activationState == .foregroundActive }?.keyWindow ?? scenes.compactMap(\.keyWindow).first
+        return window?.rootViewController
+    }
+
+    /// Shows the scanner over what is showing at `from` (nil: the key window); `done` gets the pages once it is dismissed.
+    /// UIKit refuses to present without a word over a controller that is still opening or closing something (the last scan's camera
+    /// on its way out), over a popover, or from a controller no longer on screen: then the camera simply never came (the second scan
+    /// that wouldn't start). So it waits for what is moving, closes a popover or alert first, presents over a sheet or the Writing
+    /// view instead of closing it, and checks the camera really came up: once more from the window's top, then it says so.
+    static func present(from: UIViewController?, tries: Int = 0, last: Bool = false, done: @escaping ([UIImage]) -> Void) {
         guard isSupported else { return }
-        HangWatch.note("scan: camera asked")
-        // UIKit quietly refuses to show the camera over a controller that is still showing (or still closing) something: the last
-        // scan's camera on its way out, a menu's popover. That was the second scan that never started. Wait for it, or close it first.
-        if let shown = from.presentedViewController, tries < 8 {
-            if shown.isBeingDismissed {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { present(from: from, tries: tries + 1, done: done) }
-            } else {
-                from.dismiss(animated: false) { present(from: from, tries: tries + 1, done: done) }
+        HangWatch.note("scan: camera asked" + (tries > 0 ? " (try \(tries + 1))" : ""))
+        let again = { (from: UIViewController?, last: Bool) in present(from: from, tries: tries + 1, last: last, done: done) }
+        guard var top = (from?.viewIfLoaded?.window != nil ? from : nil) ?? topOfKeyWindow() else { didNotOpen(done); return }
+        while let shown = top.presentedViewController {
+            if shown.isBeingDismissed || shown.isBeingPresented {
+                if tries < 12 { DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { again(from, last) }; return }
+                break
             }
-            return
+            if (shown.modalPresentationStyle == .popover || shown is UIAlertController), tries < 12 {
+                top.dismiss(animated: false) { again(from, last) }
+                return
+            }
+            top = shown
         }
         let me = ScanCamera(done: done)
         open = me // the camera holds its delegate weakly
-        let vc = VNDocumentCameraViewController()
-        vc.delegate = me
+        let vc: UIViewController
+        if fake {
+            vc = FakeScanner(camera: me)
+        } else {
+            let cam = VNDocumentCameraViewController()
+            cam.delegate = me
+            vc = cam
+        }
         vc.modalPresentationStyle = .fullScreen
-        from.present(vc, animated: true)
+        top.present(vc, animated: true) { HangWatch.note("scan: camera up") }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            guard ScanCamera.open === me, vc.presentingViewController == nil else { return }
+            ScanCamera.open = nil
+            HangWatch.note("scan: the camera didn't open over \(type(of: top))")
+            if last { didNotOpen(done) } else { present(from: nil, tries: 0, last: true, done: done) }
+        }
     }
 
-    private func finish(_ controller: VNDocumentCameraViewController, _ pages: [UIImage]) {
+    private static func didNotOpen(_ done: @escaping ([UIImage]) -> Void) {
+        HangWatch.note("scan: gave up")
+        done([])
+        guard var top = topOfKeyWindow() else { return }
+        while let p = top.presentedViewController, !p.isBeingDismissed { top = p }
+        let a = UIAlertController(title: "The camera didn't open", message: "Try scanning again in a moment.", preferredStyle: .alert)
+        a.addAction(UIAlertAction(title: "OK", style: .default))
+        top.present(a, animated: true)
+    }
+
+    fileprivate func finish(_ controller: UIViewController, _ pages: [UIImage]) {
         HangWatch.note("scan: camera closed, \(pages.count) pages")
         let done = self.done
-        controller.dismiss(animated: true) { done(pages) }
         ScanCamera.open = nil
+        controller.dismiss(animated: true) { done(pages) }
     }
 
     func documentCameraViewController(_ controller: VNDocumentCameraViewController, didFinishWith scan: VNDocumentCameraScan) {
@@ -145,6 +185,46 @@ final class ScanCamera: NSObject, VNDocumentCameraViewControllerDelegate {
     func documentCameraViewControllerDidCancel(_ controller: VNDocumentCameraViewController) { finish(controller, []) }
 
     func documentCameraViewController(_ controller: VNDocumentCameraViewController, didFailWithError error: Error) { finish(controller, []) }
+}
+
+/// The UI check's camera (`-NexusTestFakeScanner`): "Finish fake scan" hands back one page with a title printed on it.
+private final class FakeScanner: UIViewController {
+    private let camera: ScanCamera
+    init(camera: ScanCamera) { self.camera = camera; super.init(nibName: nil, bundle: nil) }
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .black
+        let finish = UIButton(configuration: .filled(), primaryAction: UIAction(title: "Finish fake scan") { [weak self] _ in
+            guard let self else { return }
+            self.camera.finish(self, [Self.page()])
+        })
+        let cancel = UIButton(configuration: .gray(), primaryAction: UIAction(title: "Cancel fake scan") { [weak self] _ in
+            guard let self else { return }
+            self.camera.finish(self, [])
+        })
+        let stack = UIStackView(arrangedSubviews: [finish, cancel])
+        stack.axis = .vertical
+        stack.spacing = 20
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(stack)
+        NSLayoutConstraint.activate([stack.centerXAnchor.constraint(equalTo: view.centerXAnchor), stack.centerYAnchor.constraint(equalTo: view.centerYAnchor)])
+    }
+
+    static func page() -> UIImage {
+        let size = CGSize(width: 1240, height: 1754)
+        let f = UIGraphicsImageRendererFormat()
+        f.scale = 1
+        return UIGraphicsImageRenderer(size: size, format: f).image { ctx in
+            UIColor.white.setFill()
+            ctx.fill(CGRect(origin: .zero, size: size))
+            let title = NSAttributedString(string: "Redox worksheet", attributes: [.font: UIFont.boldSystemFont(ofSize: 72), .foregroundColor: UIColor.black])
+            title.draw(at: CGPoint(x: 120, y: 160))
+            let body = NSAttributedString(string: "Balance each half equation.", attributes: [.font: UIFont.systemFont(ofSize: 44), .foregroundColor: UIColor.black])
+            body.draw(at: CGPoint(x: 120, y: 320))
+        }
+    }
 }
 
 extension BoardController {

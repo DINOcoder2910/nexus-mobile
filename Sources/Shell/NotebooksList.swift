@@ -317,6 +317,7 @@ final class NotebookActions {
             ("src", .string("../" + pdf)), ("w", .number(BoardFormat.pdfWidth)), ("gap", .number(BoardFormat.pdfGap)),
         ])
         let rel = try makeBoard(name, in: dir, store, items: [it])
+        HangWatch.note("notebook: board made from a PDF, opening it")
         store.openBoard = .init(path: rel, focus: nil)
     }
 
@@ -324,7 +325,8 @@ final class NotebookActions {
     /// the board and the PDF named after the handout's title.
     func newBoard(fromScan pages: [UIImage], in dir: String, _ store: NexusStore) {
         ScanPDF.make(pages) { [self] r in
-            guard let r else { problem = "Couldn't make a PDF of the scan."; return }
+            guard let r else { HangWatch.note("scan: no PDF"); problem = "Couldn't make a PDF of the scan."; return }
+            HangWatch.note("scan: PDF made, words on \(r.readPages) of \(pages.count) pages")
             do { try newBoard(pdfData: r.data, named: r.name, in: dir, store) }
             catch { problem = "Couldn't make the board: \(error.localizedDescription)" }
         }
