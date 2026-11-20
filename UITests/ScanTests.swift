@@ -79,8 +79,11 @@ final class ScanTests: XCTestCase {
             item.tap()
             camera("\(i) on the board", finish: finish)
             if finish {
-                let reading = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Reading the handout'")).firstMatch
-                XCTAssertTrue(reading.waitForExistence(timeout: 30), "scan \(i): the board never started reading it")
+                // the scan comes onto the board as a second printout: the page pill then names which one ("Redox worksheet 2 ·
+                // p. 1 of 1"). The "Reading the handout…" toast shows for under 2 s, too short to catch on a slow runner.
+                let added = NSPredicate(format: "label CONTAINS 'Reading the handout' OR label CONTAINS ' · p. '")
+                let shown = app.descendants(matching: .any).matching(added).firstMatch
+                XCTAssertTrue(shown.waitForExistence(timeout: 60), "scan \(i): the scan never came onto the board")
                 sleep(3)
                 step("scan-\(i) added")
             }
