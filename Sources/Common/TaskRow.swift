@@ -18,7 +18,7 @@ struct TaskRow: View {
             TickRing(task: task)
             VStack(alignment: .leading, spacing: 3) {
                 if showCrumb, let crumb = p.crumb(task) {
-                    Text(crumb).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    Text(crumb).font(.nx(.caption)).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Text(task.text)
                     .font(compact ? .subheadline : .body)

@@ -64,19 +64,19 @@ struct TaskDetailView: View {
                     Label(t.hasId ? (store.snapshot.readOnlyReason ?? "\(t.file) does not parse, so it is read-only here.")
                                   : "This task has no id yet. Open the folder in Nexus on the laptop once and it gets one; then it can be edited here.",
                           systemImage: "lock")
-                        .font(.callout).foregroundStyle(.secondary)
+                        .font(.nx(.callout)).foregroundStyle(.secondary)
                 }
             }
             Section {
                 if let crumb = p.crumb(t), let parent = t.parent.flatMap({ store.task($0) }) {
                     Button { store.open(parent) } label: {
-                        Label(crumb, systemImage: "arrow.turn.left.up").font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                        Label(crumb, systemImage: "arrow.turn.left.up").font(.nx(.callout)).foregroundStyle(.secondary).lineLimit(1)
                     }
                 }
                 HStack(alignment: .top, spacing: 12) {
                     TickRing(task: t)
                     TextField("Title", text: $title, axis: .vertical)
-                        .font(.title3.weight(.semibold))
+                        .font(.nx(.title3, .semibold))
                         .focused($titleFocused)
                         .submitLabel(.done)
                         .onSubmit { commitTitle(t) }
@@ -95,7 +95,7 @@ struct TaskDetailView: View {
                     .disabled(!editable)
                     if editable { Button("Remove the deadline", role: .destructive) { store.setDue(t, nil) } }
                 } else {
-                    if let above = p.deadline(t) { Text("The task above is due \(Days.label(above))").font(.callout).foregroundStyle(.secondary) }
+                    if let above = p.deadline(t) { Text("The task above is due \(Days.label(above))").font(.nx(.callout)).foregroundStyle(.secondary) }
                     if editable {
                         HStack {
                             Button("Today") { store.setDue(t, store.today) }
@@ -112,7 +112,7 @@ struct TaskDetailView: View {
                     HStack {
                         Label(Days.label(e.day) + (e.time.map { " · \($0)" } ?? ""), systemImage: e.day < store.today ? "calendar.badge.exclamationmark" : "calendar")
                             .foregroundStyle(e.day < store.today ? .secondary : .primary)
-                        if e.day == store.today { Text("Today").font(.caption).foregroundStyle(Theme.planned) }
+                        if e.day == store.today { Text("Today").font(.nx(.caption)).foregroundStyle(Theme.planned) }
                         Spacer()
                         if editable {
                             Button { store.unplan(t, from: e.day) } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary) }

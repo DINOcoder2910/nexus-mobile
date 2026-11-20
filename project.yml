@@ -36,6 +36,9 @@ targets:
         type: folder
       # the laptop's universities database (renderer/data/universities.json) for Applications > Research
       - path: Resources/Data/universities.json
+      # the kit's type (Sources/Kit/KitFonts.swift): static cuts of Onest and Gabarito (OFL), registered at launch
+      - path: Resources/Fonts
+        type: folder
     dependencies:
       - package: NexusCore
     info:

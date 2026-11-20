@@ -124,10 +124,10 @@ struct SchoolPage: View {
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 8) {
                             Circle().fill(store.schoolColor(s.id)).frame(width: 10, height: 10)
-                            Text(s.name).font(.title3.weight(.semibold))
+                            Text(s.name).font(.nx(.title3, .semibold))
                         }
-                        Text(statusLine(s)).font(.subheadline).foregroundStyle(.secondary)
-                        if let u = r?.u { Text([u.city, u.st].compactMap { $0 }.joined(separator: ", ")).font(.caption).foregroundStyle(.secondary) }
+                        Text(statusLine(s)).font(.nx(.subheadline)).foregroundStyle(.secondary)
+                        if let u = r?.u { Text([u.city, u.st].compactMap { $0 }.joined(separator: ", ")).font(.nx(.caption)).foregroundStyle(.secondary) }
                     }
                     Spacer()
                     if let r { TierChip(row: r) }
@@ -145,7 +145,7 @@ struct SchoolPage: View {
                             }
                         } label: { Label("Start applying", systemImage: "flag.checkered").frame(maxWidth: size == .regular ? nil : .infinity) }
                         .buttonStyle(.borderedProminent).tint(Theme.accent)
-                        if m.cap.n + 1 > Apps.maxApplying { Text("That would be over the cap of \(Apps.maxApplying).").font(.caption).foregroundStyle(Theme.soon) }
+                        if m.cap.n + 1 > Apps.maxApplying { Text("That would be over the cap of \(Apps.maxApplying).").font(.nx(.caption)).foregroundStyle(Theme.soon) }
                     }
                 } else {
                     HStack(spacing: 10) {
@@ -153,7 +153,7 @@ struct SchoolPage: View {
                             Button { AppsData.shared.edit(store) { e, m in try e.setApplied(s, true, model: m, today: store.today) } } label: { Label("Mark as applied", systemImage: "paperplane") }
                                 .buttonStyle(.borderedProminent).tint(Theme.accent)
                         } else {
-                            Label("Applied \(SiteFacts.fmtDate(s.applied!))", systemImage: "paperplane.fill").foregroundStyle(Theme.planned).font(.subheadline.weight(.semibold))
+                            Label("Applied \(SiteFacts.fmtDate(s.applied!))", systemImage: "paperplane.fill").foregroundStyle(Theme.planned).font(.nx(.subheadline, .semibold))
                         }
                         if let d = s.deadline {
                             let days = Days.between(store.today, d)
@@ -233,9 +233,9 @@ struct SchoolPage: View {
         let snap = store.snapshot
         let tasks = snap.order.compactMap { snap.tasks[$0] }.filter { $0.workstream == s.id && !$0.done && !$0.someday }
         AppsCard(title: "Tasks", count: tasks.count, action: ("Add", { store.capture = .init(workstream: s.id, parent: nil, plan: nil) })) {
-            if tasks.isEmpty { Text("Nothing open.").font(.subheadline).foregroundStyle(.secondary) }
+            if tasks.isEmpty { Text("Nothing open.").font(.nx(.subheadline)).foregroundStyle(.secondary) }
             ForEach(tasks.prefix(12)) { t in TaskRow(task: t, showWorkstream: false, showCrumb: false, compact: true) }
-            if tasks.count > 12 { Button("All \(tasks.count) tasks") { go(.workstream(s.id)) }.font(.subheadline) }
+            if tasks.count > 12 { Button("All \(tasks.count) tasks") { go(.workstream(s.id)) }.font(.nx(.subheadline)) }
         }
 
         if s.applying || !s.requirements.isEmpty {
@@ -250,10 +250,10 @@ struct SchoolPage: View {
                         .buttonStyle(.plain)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(q.t).strikethrough(q.na).foregroundStyle(q.na ? .secondary : .primary)
-                            if !q.note.isEmpty { Text(q.note).font(.caption).foregroundStyle(.secondary) }
+                            if !q.note.isEmpty { Text(q.note).font(.nx(.caption)).foregroundStyle(.secondary) }
                         }
                         Spacer(minLength: 0)
-                        if !q.src.isEmpty, let u = URL(string: q.src) { Button { openURL(u) } label: { Image(systemName: "link").font(.caption) }.buttonStyle(.plain).foregroundStyle(.secondary) }
+                        if !q.src.isEmpty, let u = URL(string: q.src) { Button { openURL(u) } label: { Image(systemName: "link").font(.nx(.caption)) }.buttonStyle(.plain).foregroundStyle(.secondary) }
                     }
                     .contextMenu {
                         Button { AppsData.shared.edit(store) { e, _ in try e.toggleRequirement(s, at: i, na: true) } } label: { Label(q.na ? "Needed after all" : "Not needed", systemImage: "minus.circle") }
@@ -266,7 +266,7 @@ struct SchoolPage: View {
         AppsCard(title: "Essays", count: s.essays.count, action: ("Add a prompt", { addingEssay = true })) {
             if s.essays.isEmpty {
                 Text(s.research.prompts.isEmpty ? "No prompts yet. Add the ones the school asks." : "\(s.research.prompts.count) prompt\(s.research.prompts.count == 1 ? "" : "s") in the research; they become essays when you start applying.")
-                    .font(.subheadline).foregroundStyle(.secondary)
+                    .font(.nx(.subheadline)).foregroundStyle(.secondary)
             }
             ForEach(s.essays) { e in
                 EssayLine(essay: { var x = e; x.path = s.path; return x }(), model: m, master: false, cut: "", go: go)
@@ -274,7 +274,7 @@ struct SchoolPage: View {
                         Button(role: .destructive) { AppsData.shared.edit(store) { ed, _ in try ed.removeEssay(e, of: s) } } label: { Label("Remove this prompt", systemImage: "trash") }
                     }
             }
-            if !s.essays.isEmpty && !s.applying { Text("Essays show on the board once you apply.").font(.caption).foregroundStyle(.secondary) }
+            if !s.essays.isEmpty && !s.applying { Text("Essays show on the board once you apply.").font(.nx(.caption)).foregroundStyle(.secondary) }
         }
 
         let advice = CounsellorAdvice.about(s, store: store)
@@ -282,8 +282,8 @@ struct SchoolPage: View {
             AppsCard(title: "Counsellor", count: nil) {
                 ForEach(advice, id: \.line) { a in
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(a.line).font(.subheadline)
-                        Text("\(a.who) · \(SiteFacts.fmtDate(a.date))").font(.caption).foregroundStyle(.secondary)
+                        Text(a.line).font(.nx(.subheadline))
+                        Text("\(a.who) · \(SiteFacts.fmtDate(a.date))").font(.nx(.caption)).foregroundStyle(.secondary)
                     }
                 }
             }
@@ -301,13 +301,13 @@ struct SchoolPage: View {
                 let info = Apps.roundInfo(s, r?.u, k)
                 Button { editingRound = k } label: {
                     HStack(alignment: .firstTextBaseline) {
-                        Text(s.roundLabel(k)).font(.subheadline.weight(.semibold)).frame(width: 44, alignment: .leading)
+                        Text(s.roundLabel(k)).font(.nx(.subheadline, .semibold)).frame(width: 44, alignment: .leading)
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(info?.dl.map { SiteFacts.fmtDate($0) } ?? "No deadline").font(.subheadline).foregroundStyle(info?.dl == nil ? .secondary : .primary)
-                            if let w = info?.whence, !w.isEmpty { Text(w).font(.caption2).foregroundStyle(.secondary).lineLimit(2) }
+                            Text(info?.dl.map { SiteFacts.fmtDate($0) } ?? "No deadline").font(.nx(.subheadline)).foregroundStyle(info?.dl == nil ? .secondary : .primary)
+                            if let w = info?.whence, !w.isEmpty { Text(w).font(.nx(.caption2)).foregroundStyle(.secondary).lineLimit(2) }
                         }
                         Spacer()
-                        Text(info?.rate.map(pct) ?? "–").font(.subheadline.monospacedDigit())
+                        Text(info?.rate.map(pct) ?? "–").font(.nx(.subheadline).monospacedDigit())
                     }
                     .contentShape(Rectangle())
                 }
@@ -317,29 +317,29 @@ struct SchoolPage: View {
             ForEach([("acc", "Admit rate"), ("usn", "US News"), ("usne", "US News Engineering"), ("qs", "QS World")], id: \.0) { f in
                 Button { editingOwn = f.0; ownText = own(s, f.0).map { JSONValue.format($0) } ?? "" } label: {
                     HStack {
-                        Text(f.1).font(.subheadline)
+                        Text(f.1).font(.nx(.subheadline))
                         Spacer()
-                        Text(figure(s, r, f.0)).font(.subheadline.monospacedDigit()).foregroundStyle(own(s, f.0) != nil ? .primary : .secondary)
+                        Text(figure(s, r, f.0)).font(.nx(.subheadline).monospacedDigit()).foregroundStyle(own(s, f.0) != nil ? .primary : .secondary)
                     }
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
-            if let c = s.research.checked { Text("Site checked \(SiteFacts.fmtDate(c))\(s.research.checkedLegacy ? " (old file)" : "")").font(.caption).foregroundStyle(.secondary) }
+            if let c = s.research.checked { Text("Site checked \(SiteFacts.fmtDate(c))\(s.research.checkedLegacy ? " (old file)" : "")").font(.nx(.caption)).foregroundStyle(.secondary) }
         }
 
         AppsCard(title: "Notes", count: nil, action: (notes == nil ? "Add" : "Edit", { editingNotes = notes ?? "" })) {
             if let n = notes, !n.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { NoteText(text: n) }
-            else { Text("Nothing yet: notes.md in \(s.folder).").font(.subheadline).foregroundStyle(.secondary) }
+            else { Text("Nothing yet: notes.md in \(s.folder).").font(.nx(.subheadline)).foregroundStyle(.secondary) }
         }
 
         AppsCard(title: "Sources", count: s.research.sources.count, action: ("Add", { addingSource = true })) {
-            if s.research.sources.isEmpty { Text("No links yet.").font(.subheadline).foregroundStyle(.secondary) }
+            if s.research.sources.isEmpty { Text("No links yet.").font(.nx(.subheadline)).foregroundStyle(.secondary) }
             ForEach(s.research.sources, id: \.0) { k, v in
                 HStack {
-                    Text(k).font(.subheadline)
+                    Text(k).font(.nx(.subheadline))
                     Spacer()
-                    if let u = URL(string: v) { Button(SiteFacts.hostOf(v).isEmpty ? v : SiteFacts.hostOf(v)) { openURL(u) }.font(.caption).lineLimit(1) }
+                    if let u = URL(string: v) { Button(SiteFacts.hostOf(v).isEmpty ? v : SiteFacts.hostOf(v)) { openURL(u) }.font(.nx(.caption)).lineLimit(1) }
                 }
                 .contextMenu { Button(role: .destructive) { AppsData.shared.edit(store) { e, _ in try e.removeSource(s, key: k) } } label: { Label("Remove", systemImage: "trash") } }
             }
@@ -382,9 +382,9 @@ struct AppsCard<Content: View>: View {
             if let title {
                 HStack {
                     SectionTitle(title: title, count: count == 0 ? nil : count)
-                    if let trailing { Text(trailing).font(.caption).foregroundStyle(.secondary) }
+                    if let trailing { Text(trailing).font(.nx(.caption)).foregroundStyle(.secondary) }
                     Spacer()
-                    if let a = action { Button(a.0, action: a.1).font(.subheadline) }
+                    if let a = action { Button(a.0, action: a.1).font(.nx(.subheadline)) }
                 }
             }
             content
@@ -408,23 +408,23 @@ struct AboutCard: View {
         let p = SchoolProfile(school.rawResearch["profile"])
         let busy = data.researching[school.id]
         AppsCard(title: "About", count: nil, action: busy == nil ? (p == nil ? "Research with Claude" : "Research again", { data.research(school, store: store) }) : nil) {
-            if let busy { HStack(spacing: 8) { ProgressView(); Text(busy).font(.subheadline).foregroundStyle(.secondary) } }
-            if let n = data.researchNote[school.id] { Text(n).font(.caption).foregroundStyle(.secondary) }
+            if let busy { HStack(spacing: 8) { ProgressView(); Text(busy).font(.nx(.subheadline)).foregroundStyle(.secondary) } }
+            if let n = data.researchNote[school.id] { Text(n).font(.nx(.caption)).foregroundStyle(.secondary) }
             if let p {
-                if !p.brief.isEmpty { Text(p.brief).font(.subheadline) }
+                if !p.brief.isEmpty { Text(p.brief).font(.nx(.subheadline)) }
                 if !p.city.isEmpty {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(p.city.name.isEmpty ? "The city" : p.city.name).font(.subheadline.weight(.semibold))
-                        if !p.city.about.isEmpty { Text(p.city.about).font(.subheadline) }
+                        Text(p.city.name.isEmpty ? "The city" : p.city.name).font(.nx(.subheadline, .semibold))
+                        if !p.city.about.isEmpty { Text(p.city.about).font(.nx(.subheadline)) }
                         let bits = [p.city.metro, p.city.population.isEmpty ? "" : "population \(p.city.population)", p.city.weather, p.city.cost.isEmpty ? "" : "cost of living \(p.city.cost)"].filter { !$0.isEmpty }
-                        if !bits.isEmpty { Text(bits.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary) }
+                        if !bits.isEmpty { Text(bits.joined(separator: " · ")).font(.nx(.caption)).foregroundStyle(.secondary) }
                     }
                 }
                 if !p.concerns.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Concerns").font(.subheadline.weight(.semibold)).foregroundStyle(Theme.soon)
+                        Text("Concerns").font(.nx(.subheadline, .semibold)).foregroundStyle(Theme.soon)
                         ForEach(p.concerns, id: \.l) { c in
-                            Text("**\(c.l)**\(c.v.isEmpty ? "" : ": \(c.v)")").font(.subheadline)
+                            Text("**\(c.l)**\(c.v.isEmpty ? "" : ": \(c.v)")").font(.nx(.subheadline))
                         }
                     }
                 }
@@ -434,24 +434,24 @@ struct AboutCard: View {
                     if let g = p.greek, let v = SchoolProfile.greekOf(g) {
                         let lv = SchoolProfile.greekLevel(v)
                         HStack {
-                            Text("Greek life").font(.subheadline.weight(.semibold))
+                            Text("Greek life").font(.nx(.subheadline, .semibold))
                             Spacer()
-                            Text(pct(v) + (g.of.isEmpty ? "" : " (\(g.of))")).font(.subheadline).foregroundStyle(lv < 0 ? Theme.soon : lv > 0 ? Theme.planned : .primary)
+                            Text(pct(v) + (g.of.isEmpty ? "" : " (\(g.of))")).font(.nx(.subheadline)).foregroundStyle(lv < 0 ? Theme.soon : lv > 0 ? Theme.planned : .primary)
                         }
                     }
                     ForEach(p.extras, id: \.l) { x in
-                        VStack(alignment: .leading, spacing: 1) { Text(x.l).font(.caption.weight(.semibold)).foregroundStyle(.secondary); Text(x.v).font(.subheadline) }
+                        VStack(alignment: .leading, spacing: 1) { Text(x.l).font(.nx(.caption, .semibold)).foregroundStyle(.secondary); Text(x.v).font(.nx(.subheadline)) }
                     }
                     if !p.sources.isEmpty {
-                        Text("From " + p.sources.map { SiteFacts.hostOf($0) }.filter { !$0.isEmpty }.prefix(6).joined(separator: ", ")).font(.caption).foregroundStyle(.secondary)
+                        Text("From " + p.sources.map { SiteFacts.hostOf($0) }.filter { !$0.isEmpty }.prefix(6).joined(separator: ", ")).font(.nx(.caption)).foregroundStyle(.secondary)
                     }
                 } else {
-                    Button("More about \(school.short)") { more = true }.font(.subheadline)
+                    Button("More about \(school.short)") { more = true }.font(.nx(.subheadline))
                 }
-                if let c = p.checked { Text("Researched \(SiteFacts.fmtDate(c))\(p.v < SchoolProfile.version ? ": research again for the concerns" : "")").font(.caption).foregroundStyle(.secondary) }
+                if let c = p.checked { Text("Researched \(SiteFacts.fmtDate(c))\(p.v < SchoolProfile.version ? ": research again for the concerns" : "")").font(.nx(.caption)).foregroundStyle(.secondary) }
             } else if busy == nil {
                 Text("Claude can look up what the school is like for an engineering student: each round's admit rate, the city, opportunities, Greek life and the concerns, every figure with its page.")
-                    .font(.subheadline).foregroundStyle(.secondary)
+                    .font(.nx(.subheadline)).foregroundStyle(.secondary)
             }
         }
     }
@@ -460,8 +460,8 @@ struct AboutCard: View {
     private func list(_ title: String, _ items: [String]) -> some View {
         if !items.isEmpty {
             VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.subheadline.weight(.semibold))
-                ForEach(items, id: \.self) { Text("• " + $0).font(.subheadline) }
+                Text(title).font(.nx(.subheadline, .semibold))
+                ForEach(items, id: \.self) { Text("• " + $0).font(.nx(.subheadline)) }
             }
         }
     }

@@ -68,14 +68,14 @@ struct TodayView: View {
                                 p.slipped.isEmpty ? nil : "\(p.slipped.count) slipped",
                                 tracked >= 60 ? "\(TimeLog.spent(tracked)) tracked" : nil]
         return VStack(alignment: .leading, spacing: 4) {
-            Text(longDate(store.today)).font(.largeTitle.weight(.bold))
+            Text(longDate(store.today)).font(.nx(.largeTitle, .bold))
             Text(words.compactMap { $0 }.joined(separator: " · "))
                 .foregroundStyle(.secondary)
             if cal.eventsOnPlan, let next = cal.next(today: store.today) {
                 Button { eventSheet = .show(next.event) } label: {
                     Label(next.start <= Date() ? "Now: \(next.title)" : "Next: \(next.title) at \(next.start.formatted(date: .omitted, time: .shortened))",
                           systemImage: "calendar")
-                        .font(.callout.weight(.medium))
+                        .font(.nx(.callout, .medium))
                         .foregroundStyle(next.color)
                         .lineLimit(1)
                 }
@@ -97,10 +97,10 @@ struct TodayView: View {
                     Button { store.open(t) } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(n < 0 ? "\(-n)d late" : n == 0 ? "Today" : n == 1 ? "Tomorrow" : "in \(n) days")
-                                .font(.caption.weight(.semibold))
+                                .font(.nx(.caption, .semibold))
                                 .foregroundStyle(n < 0 ? Theme.late : n <= 2 ? Theme.soon : .secondary)
-                            Text("★ " + t.text).font(.subheadline.weight(.semibold)).lineLimit(2).multilineTextAlignment(.leading)
-                            Text(store.workstreamName(t)).font(.caption).foregroundStyle(store.color(t))
+                            Text("★ " + t.text).font(.nx(.subheadline, .semibold)).lineLimit(2).multilineTextAlignment(.leading)
+                            Text(store.workstreamName(t)).font(.nx(.caption)).foregroundStyle(store.color(t))
                         }
                         .frame(width: 190, alignment: .leading)
                         .padding(12)
@@ -120,21 +120,21 @@ struct TodayView: View {
         return Card(title: "Plan", count: planned.count, icon: "sun.max") {
             if planned.isEmpty && repeats.isEmpty {
                 Text(doneToday.isEmpty ? "Nothing planned yet. Drag a task here from Slipped, or plan one from Tasks." : "All done for today.")
-                    .font(.callout).foregroundStyle(.secondary).padding(.vertical, 8)
+                    .font(.nx(.callout)).foregroundStyle(.secondary).padding(.vertical, 8)
             }
             ForEach(planned) { t in rowDivider(TaskRow(task: t, day: today)) }
             if !repeats.isEmpty {
-                Text("Repeats today").font(.caption.weight(.semibold)).foregroundStyle(.secondary).padding(.top, 6)
+                Text("Repeats today").font(.nx(.caption, .semibold)).foregroundStyle(.secondary).padding(.top, 6)
                 ForEach(repeats) { t in rowDivider(TaskRow(task: t)) }
             }
             if !doneToday.isEmpty {
                 DisclosureGroup("Done today · \(doneToday.count)") {
                     ForEach(doneToday) { t in TaskRow(task: t, day: today, compact: true) }
                 }
-                .font(.callout).foregroundStyle(.secondary).padding(.top, 6)
+                .font(.nx(.callout)).foregroundStyle(.secondary).padding(.top, 6)
             }
             Button { store.capture = .init(workstream: nil, parent: nil, plan: today) } label: {
-                Label("Add a task for today", systemImage: "plus").font(.callout)
+                Label("Add a task for today", systemImage: "plus").font(.nx(.callout))
             }
             .padding(.top, 6)
         }
@@ -174,7 +174,7 @@ struct TodayView: View {
                 }
                 if slipped.count > 1 {
                     Button("Move all to today") { for t in slipped where store.canEdit(t) { store.move(t, from: t.plannedDays.max(), to: today) } }
-                        .font(.callout)
+                        .font(.nx(.callout))
                 }
             }
         }
@@ -187,7 +187,7 @@ struct TodayView: View {
         if store.snapshot.problems.count > 0 {
             Card(title: "Things to check", count: store.snapshot.problems.count, icon: "exclamationmark.triangle") {
                 ForEach(store.snapshot.problems) { pr in
-                    Text("\(pr.file): \(pr.message)").font(.caption).foregroundStyle(.secondary)
+                    Text("\(pr.file): \(pr.message)").font(.nx(.caption)).foregroundStyle(.secondary)
                 }
             }
         }
@@ -201,7 +201,7 @@ struct TodayView: View {
             let events = cal.events(on: today)
             Card(title: "Calendar", count: events.count, icon: "calendar") {
                 if events.isEmpty {
-                    Text("No events today.").font(.callout).foregroundStyle(.secondary).padding(.vertical, 4)
+                    Text("No events today.").font(.nx(.callout)).foregroundStyle(.secondary).padding(.vertical, 4)
                 }
                 ForEach(events) { e in
                     Button { eventSheet = .show(e.event) } label: { EventLine(thing: CalThing(event: e, day: today)) }
@@ -211,8 +211,8 @@ struct TodayView: View {
             }
         } else if cal.notAsked {
             Card(title: "Calendar", icon: "calendar") {
-                Text("Show today's events from this \(Device.name)'s calendars here.").font(.callout).foregroundStyle(.secondary)
-                Button("Show my calendars") { Task { await cal.requestAccess() } }.font(.callout)
+                Text("Show today's events from this \(Device.name)'s calendars here.").font(.nx(.callout)).foregroundStyle(.secondary)
+                Button("Show my calendars") { Task { await cal.requestAccess() } }.font(.nx(.callout))
             }
         }
     }
@@ -240,8 +240,8 @@ struct Card<Content: View>: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 if let icon { Image(systemName: icon).foregroundStyle(.secondary) }
-                Text(title).font(.headline)
-                if let count, count > 0 { Text("\(count)").font(.subheadline).foregroundStyle(.secondary) }
+                Text(title).font(.nx(.headline))
+                if let count, count > 0 { Text("\(count)").font(.nx(.subheadline)).foregroundStyle(.secondary) }
                 Spacer()
             }
             .padding(.bottom, 4)

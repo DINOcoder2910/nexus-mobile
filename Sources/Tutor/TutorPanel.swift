@@ -141,7 +141,7 @@ struct TutorPanel: View {
         HStack(spacing: 10) {
             TutorAvatar(phase: tutor.phase, size: 36)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Tutor").font(.headline)
+                Text("Tutor").font(.nx(.headline))
                 TutorStatus(tutor: tutor)
             }
             Spacer(minLength: 4)
@@ -223,9 +223,9 @@ struct TutorPanel: View {
             HStack(spacing: 12) {
                 TutorAvatar(size: 46)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Ask me about this board").font(.title3.weight(.semibold))
+                    Text("Ask me about this board").font(.nx(.title3, .semibold))
                     Text("I see what's on your screen, talk you through it and draw as I go.")
-                        .font(.subheadline).foregroundStyle(.secondary)
+                        .font(.nx(.subheadline)).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -235,7 +235,7 @@ struct TutorPanel: View {
                 tip("lightbulb", "Hints only: I guide you without giving the answer away.")
                 tip("hand.raised", "Talk or type while I'm explaining to cut in.")
             }
-            Text("Start with").font(.caption.weight(.semibold)).foregroundStyle(.secondary).textCase(.uppercase)
+            Text("Start with").font(.nx(.caption, .semibold)).foregroundStyle(.secondary).textCase(.uppercase)
             VStack(spacing: 8) {
                 starter("Explain what's on my board", "text.magnifyingglass") { tutor.ask(BoardTutor.explainWords) }
                 starter("Check my work", "checkmark.circle") { tutor.checkWork() }
@@ -248,7 +248,7 @@ struct TutorPanel: View {
     private func tip(_ symbol: String, _ text: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             Image(systemName: symbol).frame(width: 20).foregroundStyle(TutorStyle.brand)
-            Text(text).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+            Text(text).font(.nx(.subheadline)).fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -256,9 +256,9 @@ struct TutorPanel: View {
         Button(action: action) {
             HStack(spacing: 10) {
                 Image(systemName: symbol).frame(width: 20).foregroundStyle(TutorStyle.brand)
-                Text(title).font(.subheadline.weight(.medium)).foregroundStyle(.primary)
+                Text(title).font(.nx(.subheadline, .medium)).foregroundStyle(.primary)
                 Spacer()
-                Image(systemName: "arrow.up.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
+                Image(systemName: "arrow.up.right").font(.nx(.caption, .semibold)).foregroundStyle(.tertiary)
             }
             .padding(.horizontal, 12).padding(.vertical, 11)
             .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -270,12 +270,12 @@ struct TutorPanel: View {
     private func yourTurnCard(_ ask: String) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
-                Image(systemName: "pencil.tip.crop.circle.fill").font(.title3).foregroundStyle(TutorStyle.turn)
-                Text("Your turn").font(.subheadline.weight(.bold)).foregroundStyle(TutorStyle.turn)
+                Image(systemName: "pencil.tip.crop.circle.fill").font(.nx(.title3)).foregroundStyle(TutorStyle.turn)
+                Text("Your turn").font(.nx(.subheadline, .bold)).foregroundStyle(TutorStyle.turn)
                 Spacer()
-                Text("Write it on the board").font(.caption).foregroundStyle(.secondary)
+                Text("Write it on the board").font(.nx(.caption)).foregroundStyle(.secondary)
             }
-            Text(BoardTutor.cleanTurn(ask)).font(.callout).fixedSize(horizontal: false, vertical: true)
+            Text(BoardTutor.cleanTurn(ask)).font(.nx(.callout)).fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
                 Button { tutor.checkWork() } label: { Label("Check my work", systemImage: "checkmark.circle.fill").lineLimit(1).fixedSize() }
                     .buttonStyle(.borderedProminent).tint(TutorStyle.turn)
@@ -295,7 +295,7 @@ struct TutorPanel: View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
             VStack(alignment: .leading, spacing: 8) {
-                Text(p).font(.callout).fixedSize(horizontal: false, vertical: true)
+                Text(p).font(.nx(.callout)).fixedSize(horizontal: false, vertical: true)
                 if tutor.lastRequest != nil, !tutor.busy, tutor.phase != .listening {
                     Button { tutor.retry() } label: { Label("Try again", systemImage: "arrow.clockwise") }
                         .buttonStyle(.bordered).controlSize(.small)
@@ -332,7 +332,7 @@ struct TutorPanel: View {
                 .foregroundStyle(TutorStyle.brand)
                 .frame(width: 22)
             Text(tutor.phase == .thinking ? "Thinking…" : tutor.paused ? "Paused" : "Talking")
-                .font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
+                .font(.nx(.subheadline, .medium)).foregroundStyle(.secondary)
             Spacer()
             RoundButton(symbol: "backward.fill", label: "Say that again") { tutor.back() }
                 .disabled(tutor.phase != .speaking)
@@ -373,9 +373,9 @@ struct TutorPanel: View {
                 HStack(spacing: 8) {
                     Image(systemName: "waveform").symbolEffect(.variableColor.iterative).foregroundStyle(.red)
                     Text(tutor.listenLocked ? "Listening… tap the mic to send" : "Listening… let go to send")
-                        .font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                        .font(.nx(.subheadline)).foregroundStyle(.secondary).lineLimit(1)
                     Spacer(minLength: 4)
-                    Button { tutor.cancelListening() } label: { Image(systemName: "xmark.circle.fill").font(.title3).foregroundStyle(.secondary) }
+                    Button { tutor.cancelListening() } label: { Image(systemName: "xmark.circle.fill").font(.nx(.title3)).foregroundStyle(.secondary) }
                         .buttonStyle(.plain)
                         .accessibilityLabel("Cancel")
                 }
@@ -606,7 +606,7 @@ struct TutorStatus: View {
     var body: some View {
         HStack(spacing: 5) {
             Circle().fill(tutor.phase == .idle && tutor.yourTurn != nil ? TutorStyle.turn : TutorStatus.colour(tutor.phase)).frame(width: 7, height: 7)
-            Text(text).font(.caption).foregroundStyle(.secondary)
+            Text(text).font(.nx(.caption)).foregroundStyle(.secondary)
         }
     }
 }
@@ -656,7 +656,7 @@ struct TutorChip: View {
         Button(action: action) {
             HStack(spacing: 6) {
                 Image(systemName: symbol).font(.system(size: 13, weight: .semibold))
-                Text(title).font(.subheadline.weight(.medium))
+                Text(title).font(.nx(.subheadline, .medium))
             }
             .foregroundStyle(on ? Color.white : Color.primary)
             .padding(.horizontal, 12).frame(height: 32)
@@ -679,7 +679,7 @@ struct QuestionBubble: View {
             Spacer(minLength: 48)
             if kind != .normal && !listening {
                 Label(tag.0, systemImage: tag.1)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.nx(.subheadline, .semibold))
                     .foregroundStyle(TutorStyle.brand)
                     .padding(.horizontal, 12).padding(.vertical, 7)
                     .background(TutorStyle.brand.opacity(0.12), in: Capsule())
@@ -688,7 +688,7 @@ struct QuestionBubble: View {
                     if listening { Image(systemName: "waveform").symbolEffect(.variableColor.iterative) }
                     Text(words).fixedSize(horizontal: false, vertical: true)
                 }
-                .font(.body)
+                .font(.nx(.body))
                 .foregroundStyle(.white)
                 .padding(.horizontal, 13).padding(.vertical, 9)
                 .background(TutorStyle.brand.opacity(listening ? 0.7 : 1),
@@ -727,12 +727,12 @@ struct AnswerBubble: View {
             TutorAvatar(size: 24)
             VStack(alignment: .leading, spacing: 6) {
                 VStack(alignment: .leading, spacing: 8) {
-                    text.font(.body).fixedSize(horizontal: false, vertical: true)
+                    text.font(.nx(.body)).fixedSize(horizontal: false, vertical: true)
                     if let yourTurn {
                         Label { Text("Your turn: " + BoardTutor.cleanTurn(yourTurn)) } icon: { Image(systemName: "pencil.tip") }
-                            .font(.footnote.weight(.medium)).foregroundStyle(TutorStyle.turn)
+                            .font(.nx(.footnote, .medium)).foregroundStyle(TutorStyle.turn)
                     }
-                    if stopped { Text("Stopped").font(.caption).foregroundStyle(.secondary) }
+                    if stopped { Text("Stopped").font(.nx(.caption)).foregroundStyle(.secondary) }
                 }
                 .padding(.horizontal, 13).padding(.vertical, 10)
                 .background(Color(uiColor: .secondarySystemBackground),
@@ -755,7 +755,7 @@ struct AnswerBubble: View {
                             Button(action: onRead) { Label("Read aloud", systemImage: "speaker.wave.2") }
                         }
                     }
-                    .font(.caption.weight(.medium))
+                    .font(.nx(.caption, .medium))
                     .foregroundStyle(.secondary)
                     .buttonStyle(.plain)
                     .padding(.leading, 4)
@@ -791,7 +791,7 @@ struct ThinkingBubble: View {
                         }
                     }
                 }
-                Text(text).font(.subheadline)
+                Text(text).font(.nx(.subheadline))
             }
             .foregroundStyle(.secondary)
             .padding(.horizontal, 13).padding(.vertical, 10)
@@ -856,8 +856,8 @@ struct TutorPill: View {
                 HStack(spacing: 10) {
                     TutorAvatar(phase: tutor.phase, size: 34)
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(tutor.phase == .idle && tutor.yourTurn != nil ? "Your turn" : "Tutor").font(.subheadline.weight(.semibold))
-                        Text(caption).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        Text(tutor.phase == .idle && tutor.yourTurn != nil ? "Your turn" : "Tutor").font(.nx(.subheadline, .semibold))
+                        Text(caption).font(.nx(.caption)).foregroundStyle(.secondary).lineLimit(1)
                     }
                     .frame(width: 220, alignment: .leading)
                 }

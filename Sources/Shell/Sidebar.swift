@@ -105,12 +105,12 @@ struct Sidebar: View {
                                         Text(w.name).lineLimit(1).foregroundStyle(w.parked ? .secondary : .primary)
                                         Spacer()
                                         let n = p.openCount(w.id)
-                                        if n > 0 && !w.parked { Text("\(n)").font(.caption).foregroundStyle(.secondary) }
+                                        if n > 0 && !w.parked { Text("\(n)").font(.nx(.caption)).foregroundStyle(.secondary) }
                                     }
                                 }
                             }
                         } label: {
-                            Text(g.label).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+                            Text(g.label).font(.nx(.subheadline, .semibold)).foregroundStyle(.secondary)
                         }
                     }
                     row(.inbox, "Inbox", "tray", count: p.openCount(nil))
@@ -144,7 +144,7 @@ struct Sidebar: View {
                     row(.settings, "Settings", "gearshape", count: nil)
                     row(.guide, "How Nexus works", "questionmark.circle", count: nil)
                 } footer: {
-                    if s.readOnlyReason != nil { Label("Read-only", systemImage: "lock").font(.caption) }
+                    if s.readOnlyReason != nil { Label("Read-only", systemImage: "lock").font(.nx(.caption)) }
                 }
             }
     }

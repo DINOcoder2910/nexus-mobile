@@ -57,12 +57,12 @@ struct CaptureSheet: View {
             Form {
                 Section {
                     TextField(parent == nil ? "What needs doing?" : "Subtask", text: $title, axis: .vertical)
-                        .font(.title3)
+                        .font(.nx(.title3))
                         .focused($focused)
                         .autocorrectionDisabled()
                         .submitLabel(.done)
                         .onSubmit(addIt)
-                    if let parent { Label("Under “\(parent.text)”", systemImage: "arrow.turn.down.right").font(.callout).foregroundStyle(.secondary) }
+                    if let parent { Label("Under “\(parent.text)”", systemImage: "arrow.turn.down.right").font(.nx(.callout)).foregroundStyle(.secondary) }
                     preview
                 }
                 Section {
@@ -132,7 +132,7 @@ struct CaptureSheet: View {
             ForEach(Array(parsed.subtasksToAdd.enumerated()), id: \.offset) { _, s in
                 HStack(spacing: 6) {
                     Image(systemName: "arrow.turn.down.right").imageScale(.small).foregroundStyle(.secondary)
-                    Text(s.title).font(.callout)
+                    Text(s.title).font(.nx(.callout))
                     chipRow(subChips(s))
                 }
             }

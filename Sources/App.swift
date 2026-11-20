@@ -13,6 +13,8 @@ struct NexusMobileApp: App {
     @Environment(\.scenePhase) private var phase
 
     init() {
+        // the kit's type (Gabarito and Onest), before the first window draws
+        KitFonts.register()
         WebRender.warmUp()
         // Applications' Ask Claude opens the Claude chat on its own conversation, with what the page shows
         AppsData.askHandler = { looking, ctx in ClaudeChatSession.open(conversation: "apps", looking: looking, context: { ctx }) }
@@ -27,6 +29,8 @@ struct NexusMobileApp: App {
                 .environment(reminders)
                 .environment(router)
                 .tint(Theme.accent)
+                // text that names no style of its own is the kit's body type
+                .font(.nx(.body))
         }
         .onChange(of: phase) { _, now in appPhase(now) }
         // iOS wakes the app now and then: sync once, read the folder, and give iOS the reminders again
@@ -472,7 +476,7 @@ struct RootView: View {
             if which != .calendar && path.wrappedValue.last != .claude && store.snapshot.isDataFolder && store.snapshot.readOnlyReason == nil {
                 Button { addFrom(which, path.wrappedValue.last) } label: {
                     Image(systemName: "plus")
-                        .font(.title2.weight(.semibold))
+                        .font(.nx(.title2, .semibold))
                         .foregroundStyle(.white)
                         .frame(width: 56, height: 56)
                         .background(Theme.accent, in: Circle())

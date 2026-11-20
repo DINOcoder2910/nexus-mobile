@@ -43,7 +43,7 @@ struct SiteCheckSheet: View {
                     if !dropped.isEmpty {
                         Section("Left out") {
                             ForEach(dropped, id: \.label) { d in
-                                HStack { Text(d.label); Spacer(); Text(d.why).foregroundStyle(.secondary) }.font(.caption)
+                                HStack { Text(d.label); Spacer(); Text(d.why).foregroundStyle(.secondary) }.font(.nx(.caption))
                             }
                         }
                     }
@@ -80,13 +80,13 @@ struct SiteCheckSheet: View {
             }
             VStack(alignment: .leading, spacing: 3) {
                 HStack {
-                    Text(x.label).font(.subheadline.weight(.semibold))
-                    if !x.display.isEmpty { Text(x.display).font(.subheadline) }
+                    Text(x.label).font(.nx(.subheadline, .semibold))
+                    if !x.display.isEmpty { Text(x.display).font(.nx(.subheadline)) }
                     Spacer()
-                    if !x.status.isEmpty { Text(x.status == "changed" ? "was \(x.was.map { SiteFacts.fmtDate($0) } ?? "")" : x.status).font(.caption).foregroundStyle(x.status == "same" ? Color.secondary : Theme.accent) }
+                    if !x.status.isEmpty { Text(x.status == "changed" ? "was \(x.was.map { SiteFacts.fmtDate($0) } ?? "")" : x.status).font(.nx(.caption)).foregroundStyle(x.status == "same" ? Color.secondary : Theme.accent) }
                 }
-                if !x.quote.isEmpty { Text("“\(x.quote)”").font(.caption).foregroundStyle(.secondary).lineLimit(4) }
-                if !x.url.isEmpty, let u = URL(string: x.url) { Button(SiteFacts.hostOf(x.url)) { openURL(u) }.font(.caption2) }
+                if !x.quote.isEmpty { Text("“\(x.quote)”").font(.nx(.caption)).foregroundStyle(.secondary).lineLimit(4) }
+                if !x.url.isEmpty, let u = URL(string: x.url) { Button(SiteFacts.hostOf(x.url)) { openURL(u) }.font(.nx(.caption2)) }
             }
         }
     }

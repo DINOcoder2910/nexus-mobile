@@ -74,7 +74,7 @@ struct SyncSettings: View {
                 ForEach(sync.problems, id: \.self) { p in
                     VStack(alignment: .leading, spacing: 2) {
                         Text(p.path).font(.callout.monospaced())
-                        Text(p.message).font(.caption).foregroundStyle(.secondary)
+                        Text(p.message).font(.nx(.caption)).foregroundStyle(.secondary)
                     }
                 }
             } header: {
@@ -134,7 +134,7 @@ struct SyncSettings: View {
     private func choice(_ title: String, _ detail: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title).fontWeight(.semibold)
-            Text(detail).font(.caption).foregroundStyle(.secondary)
+            Text(detail).font(.nx(.caption)).foregroundStyle(.secondary)
         }
         .padding(.vertical, 2)
     }

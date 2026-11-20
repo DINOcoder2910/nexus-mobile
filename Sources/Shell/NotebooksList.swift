@@ -60,7 +60,7 @@ struct NotebookTreeLine: View {
                 Button(action: toggle) {
                     // Color's grey, not .secondary: in a button that is the tint's (green) secondary
                     Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
+                        .font(.nx(.caption, .semibold))
                         .foregroundStyle(Color.secondary)
                         .rotationEffect(.degrees(row.isOpen ? 90 : 0))
                         .frame(width: Self.arrowWidth, height: 30)
@@ -81,11 +81,11 @@ struct NotebookTreeLine: View {
             if let c = row.color {
                 Circle().fill(Color(uiColor: InkConvert.color(c))).frame(width: 9, height: 9).frame(width: 18)
             } else {
-                Image(systemName: "book.closed").foregroundStyle(.secondary).font(.footnote).frame(width: 18)
+                Image(systemName: "book.closed").foregroundStyle(.secondary).font(.nx(.footnote)).frame(width: 18)
             }
             Text(row.name).lineLimit(1)
             Spacer(minLength: 4)
-            if let n = row.boardCount, n > 0 { Text("\(n)").font(.caption).foregroundStyle(.secondary).monospacedDigit() }
+            if let n = row.boardCount, n > 0 { Text("\(n)").font(.nx(.caption)).foregroundStyle(.secondary).monospacedDigit() }
         }
         .contentShape(Rectangle())
     }
@@ -106,7 +106,7 @@ struct NotebookTreeLine: View {
 
     private var boardLabel: some View {
         HStack(spacing: 8) {
-            Image(systemName: "scribble").foregroundStyle(Color.secondary).font(.footnote).frame(width: 18)
+            Image(systemName: "scribble").foregroundStyle(Color.secondary).font(.nx(.footnote)).frame(width: 18)
             Text(row.name).lineLimit(2)  // OneNote page names run long: two lines before they are cut
             Spacer(minLength: 4)
         }

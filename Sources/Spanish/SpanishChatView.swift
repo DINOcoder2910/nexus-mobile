@@ -51,11 +51,11 @@ struct SpanishChatBody: View {
                     VStack(alignment: .leading, spacing: 14) {
                         if chat.messages.isEmpty && !chat.busy {
                             Text("Ask anything, or say what to practise (\"quiz me on the preterite\", \"teach me the negative imperative\"). The tutor asks you to write and checks it with the checker.")
-                                .font(.callout).foregroundStyle(.secondary)
+                                .font(.nx(.callout)).foregroundStyle(.secondary)
                         }
                         ForEach(Array(chat.messages.enumerated()), id: \.element.id) { i, m in message(i, m) }
                         if chat.busy { streaming.id("stream") }
-                        if !chat.error.isEmpty { Label(chat.error, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(Theme.late) }
+                        if !chat.error.isEmpty { Label(chat.error, systemImage: "exclamationmark.triangle").font(.nx(.callout)).foregroundStyle(Theme.late) }
                         Color.clear.frame(height: 1).id("end")
                     }
                     .padding()
@@ -87,8 +87,8 @@ struct SpanishChatBody: View {
             }
         case "check":
             VStack(alignment: .leading, spacing: 6) {
-                Label("Checked", systemImage: "checkmark.seal").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                if let r = m.run { SpanishResultView(run: r, compact: true) } else { Text(m.text).font(.footnote).foregroundStyle(.secondary) }
+                Label("Checked", systemImage: "checkmark.seal").font(.nx(.caption, .semibold)).foregroundStyle(.secondary)
+                if let r = m.run { SpanishResultView(run: r, compact: true) } else { Text(m.text).font(.nx(.footnote)).foregroundStyle(.secondary) }
             }
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -113,13 +113,13 @@ struct SpanishChatBody: View {
     private func offer(_ c: SpanishCards.Draft) -> some View {
         HStack(spacing: 8) {
             Text(c.front).bold() + Text(" = \(c.back)")
-            Text(Spanish.decks.first { $0.id == c.deck }?.title ?? c.deck).font(.caption).foregroundStyle(.secondary)
+            Text(Spanish.decks.first { $0.id == c.deck }?.title ?? c.deck).font(.nx(.caption)).foregroundStyle(.secondary)
             Spacer()
             Button { actions.addCard(c) } label: { Label("Add to deck", systemImage: "plus").lineLimit(1) }
                 .buttonStyle(.bordered).controlSize(.small)
                 .fixedSize()
         }
-        .font(.callout)
+        .font(.nx(.callout))
         .padding(8)
         .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
     }
@@ -127,13 +127,13 @@ struct SpanishChatBody: View {
     @ViewBuilder
     private func checkCard(_ i: Int, _ m: SpanishChat.Msg, _ q: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(q).font(.callout.weight(.semibold))
+            Text(q).font(.nx(.callout, .semibold))
             if let r = m.run {
                 SpanishResultView(run: r, compact: true)
             } else if chat.liveCheck == i {
                 SpanishAnswerField { chat.answer(store, at: i, $0) }
             } else {
-                Text(m.answered ? "Answered below." : "Not answered.").font(.caption).foregroundStyle(.secondary)
+                Text(m.answered ? "Answered below." : "Not answered.").font(.nx(.caption)).foregroundStyle(.secondary)
             }
         }
         .padding(12)
@@ -165,10 +165,10 @@ struct SpanishChatBody: View {
                 .onSubmit { chat.send(store, chat.draft) }
                 .accessibilityIdentifier("spanish-chat-input")
             if chat.busy {
-                Button { chat.stop() } label: { Image(systemName: "stop.circle.fill").font(.title2) }
+                Button { chat.stop() } label: { Image(systemName: "stop.circle.fill").font(.nx(.title2)) }
                     .accessibilityLabel("Stop")
             } else {
-                Button { chat.send(store, chat.draft) } label: { Image(systemName: "arrow.up.circle.fill").font(.title2) }
+                Button { chat.send(store, chat.draft) } label: { Image(systemName: "arrow.up.circle.fill").font(.nx(.title2)) }
                     .disabled(chat.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     .accessibilityLabel("Send")
             }
@@ -235,12 +235,12 @@ struct SpanishMemoryReview: View {
     @ViewBuilder
     private func review(_ r: SpanishChat.Review) -> some View {
         if let mem = r.memory {
-            Text("What the tutor will remember").font(.headline)
-            (Text(mem.title).bold() + Text(": " + mem.summary)).font(.callout)
+            Text("What the tutor will remember").font(.nx(.headline))
+            (Text(mem.title).bold() + Text(": " + mem.summary)).font(.nx(.callout))
             if r.changes.isEmpty {
-                Text("Nothing in your profile changes.").font(.callout).foregroundStyle(.secondary)
+                Text("Nothing in your profile changes.").font(.nx(.callout)).foregroundStyle(.secondary)
             } else {
-                Text("Your profile changes like this. Undo any part you disagree with, or tell Claude what to change.").font(.footnote).foregroundStyle(.secondary)
+                Text("Your profile changes like this. Undo any part you disagree with, or tell Claude what to change.").font(.nx(.footnote)).foregroundStyle(.secondary)
                 ForEach(r.changes) { c in
                     let kept = r.keep.contains(c.block)
                     VStack(alignment: .leading, spacing: 4) {
@@ -255,14 +255,14 @@ struct SpanishMemoryReview: View {
                         ForEach(c.added, id: \.self) { l in Text("+ " + l).foregroundStyle(Theme.accent) }
                         ForEach(c.removed, id: \.self) { l in Text("− " + l).foregroundStyle(Theme.late).strikethrough() }
                     }
-                    .font(.callout)
+                    .font(.nx(.callout))
                     .opacity(kept ? 1 : 0.45)
                     .padding(10)
                     .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10))
                 }
             }
             let notes = Array(Set(mem.notes.map(\.skill) + mem.taught.map(\.skill))).sorted()
-            if !notes.isEmpty { Text("Notes added for: " + notes.map(Spanish.skillName).joined(separator: ", ") + ".").font(.footnote).foregroundStyle(.secondary) }
+            if !notes.isEmpty { Text("Notes added for: " + notes.map(Spanish.skillName).joined(separator: ", ") + ".").font(.nx(.footnote)).foregroundStyle(.secondary) }
             TextField("Tell Claude what is wrong (\"I already know ser and estar\"), then Revise", text: Binding(get: { chat.review?.feedback ?? "" }, set: { chat.review?.feedback = $0 }), axis: .vertical)
                 .lineLimit(1...4)
                 .textFieldStyle(.roundedBorder)
@@ -276,7 +276,7 @@ struct SpanishMemoryReview: View {
                 }
                 .disabled((chat.review?.feedback ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 Spacer()
-                Button("Don't update the memory") { chat.skipMemory(store) }.font(.callout)
+                Button("Don't update the memory") { chat.skipMemory(store) }.font(.nx(.callout))
             }
         }
     }

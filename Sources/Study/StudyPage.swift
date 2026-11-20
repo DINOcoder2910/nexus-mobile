@@ -66,7 +66,7 @@ struct StudyPage: View {
             Section {
                 if s.decks.isEmpty {
                     Text("Put a deck in study/decks/ (a YAML file of cards) on the laptop and it shows here, with spaced-repetition review.")
-                        .font(.callout).foregroundStyle(.secondary)
+                        .font(.nx(.callout)).foregroundStyle(.secondary)
                 } else {
                     DeckRows(study: s)
                     PracticeRows(study: s)
@@ -119,12 +119,12 @@ struct UnitsSection: View {
         let units = study.units ?? []
         Section {
             if let e = study.unitsError {
-                Label(e, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(Theme.late)
+                Label(e, systemImage: "exclamationmark.triangle").font(.nx(.callout)).foregroundStyle(Theme.late)
             }
             if units.isEmpty {
                 if study.unitsError == nil {
                     Text("List the syllabus units in study/units.yaml (code, title, status: done, partial or not-yet) and they show here, each with its sheets.")
-                        .font(.callout).foregroundStyle(.secondary)
+                        .font(.nx(.callout)).foregroundStyle(.secondary)
                 }
             } else {
                 ForEach(study.themes) { t in
@@ -142,7 +142,7 @@ struct UnitsSection: View {
                 Spacer()
                 if !units.isEmpty {
                     let done = units.filter { $0.status == "done" }.count, part = units.filter { $0.status == "partial" }.count
-                    Text("\(done) done\(part > 0 ? ", \(part) partly" : ""), of \(units.count)").font(.caption).foregroundStyle(.secondary).textCase(nil)
+                    Text("\(done) done\(part > 0 ? ", \(part) partly" : ""), of \(units.count)").font(.nx(.caption)).foregroundStyle(.secondary).textCase(nil)
                 }
             }
         }
@@ -157,11 +157,11 @@ private struct ThemeRow: View {
         let n = StudySheets.sheetsFor(unit: theme.code, in: study.sheets.sheets).count
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
-                Text(theme.name.main).font(.body.weight(.semibold))
+                Text(theme.name.main).font(.nx(.body, .semibold))
                 Spacer(minLength: 6)
-                Text(sheetCount(n)).font(.caption).foregroundStyle(.secondary)
+                Text(sheetCount(n)).font(.nx(.caption)).foregroundStyle(.secondary)
             }
-            if let sub = theme.name.sub { Text(sub).font(.caption).foregroundStyle(.secondary).lineLimit(2) }
+            if let sub = theme.name.sub { Text(sub).font(.nx(.caption)).foregroundStyle(.secondary).lineLimit(2) }
             // a dot per unit, by how far it is covered
             HStack(spacing: 4) {
                 ForEach(theme.units) { u in StatusDot(status: u.status) }
@@ -227,12 +227,12 @@ struct ThemeUnitsView: View {
                             HStack(spacing: 10) {
                                 StatusDot(status: u.status)
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(u.code).font(.callout.weight(.semibold).monospacedDigit())
-                                    if !u.title.isEmpty { Text(u.title).font(.callout).foregroundStyle(.secondary).lineLimit(2) }
+                                    Text(u.code).font(.nx(.callout, .semibold).monospacedDigit())
+                                    if !u.title.isEmpty { Text(u.title).font(.nx(.callout)).foregroundStyle(.secondary).lineLimit(2) }
                                 }
                                 Spacer(minLength: 6)
                                 let n = StudySheets.sheetsFor(unit: u.code, in: s.sheets.sheets, extra: u.sheets).count
-                                if n > 0 { Text(sheetCount(n)).font(.caption).foregroundStyle(.secondary) }
+                                if n > 0 { Text(sheetCount(n)).font(.nx(.caption)).foregroundStyle(.secondary) }
                             }
                         }
                         .accessibilityIdentifier("study-unit-" + u.code)
@@ -243,7 +243,7 @@ struct ThemeUnitsView: View {
                             HStack(spacing: 4) { StatusDot(status: st.id); Text(st.label.lowercased()) }
                         }
                     }
-                    .font(.caption)
+                    .font(.nx(.caption))
                 }
             }
         }
@@ -272,13 +272,13 @@ struct UnitDetailView: View {
             Section {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(code).font(.title2.weight(.semibold).monospacedDigit())
+                        Text(code).font(.nx(.title2, .semibold).monospacedDigit())
                         if let u { StatusChip(status: u.status) }
                     }
-                    if let t = u?.title ?? theme?.name.sub ?? theme?.title, !t.isEmpty { Text(t).font(.headline) }
-                    if let n = u?.notes, !n.isEmpty { Text(n).font(.callout) }
+                    if let t = u?.title ?? theme?.name.sub ?? theme?.title, !t.isEmpty { Text(t).font(.nx(.headline)) }
+                    if let n = u?.notes, !n.isEmpty { Text(n).font(.nx(.callout)) }
                     if let ev = u?.evidence, !ev.isEmpty {
-                        (Text("How we know: ").foregroundStyle(.secondary) + Text(ev)).font(.callout)
+                        (Text("How we know: ").foregroundStyle(.secondary) + Text(ev)).font(.nx(.callout))
                     }
                 }
                 .padding(.vertical, 4)
@@ -286,7 +286,7 @@ struct UnitDetailView: View {
             Section {
                 if list.isEmpty {
                     Text("No sheet is linked to this unit yet. Sheets link by their unit folder, the codes in their names and the topics in their titles.")
-                        .font(.callout).foregroundStyle(.secondary)
+                        .font(.nx(.callout)).foregroundStyle(.secondary)
                 } else {
                     ForEach(list) { sh in SheetRow(sheet: sh, root: store.folder, onUnit: nil) { preview = $0 } }
                 }
@@ -295,7 +295,7 @@ struct UnitDetailView: View {
             } footer: {
                 if !list.isEmpty {
                     Button("Show them in Practice sheets") { filter = .init(unit: code); browsing = true }
-                        .font(.callout)
+                        .font(.nx(.callout))
                 }
             }
         }
@@ -327,7 +327,7 @@ struct PracticeRows: View {
                         Image(systemName: "square.grid.2x2").foregroundStyle(.secondary).frame(width: 22)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Practice classifying")
-                            Text("\(d.title): \(d.practice.count) to sort, unscheduled").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            Text("\(d.title): \(d.practice.count) to sort, unscheduled").font(.nx(.caption)).foregroundStyle(.secondary).lineLimit(1)
                         }
                     }
                 }

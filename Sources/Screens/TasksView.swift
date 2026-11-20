@@ -71,7 +71,7 @@ struct TasksView: View {
                 Text(l.rawValue)
                 if count > 0 { Text("\(count)").foregroundStyle(.secondary) }
             }
-            .font(.subheadline.weight(on ? .semibold : .regular))
+            .font(.nx(.subheadline, on ? .semibold : .regular))
             .foregroundStyle(on ? Theme.accent : Color.primary)
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
@@ -229,7 +229,7 @@ struct TaskTreeRow: View {
                     withAnimation(.snappy) { folded.formSymmetricDifference([row.task.id]) }
                 } label: {
                     Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
+                        .font(.nx(.caption, .semibold))
                         .foregroundStyle(.secondary)
                         .rotationEffect(.degrees(isFolded ? 0 : 90))
                         .frame(width: 22, height: 30)

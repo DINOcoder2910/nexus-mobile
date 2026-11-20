@@ -84,7 +84,7 @@ struct ResearchView: View {
                         ForEach(chips, id: \.key) { c in
                             Button { var f = filters; Unis.clearFilter(&f, c.key); filters = f } label: {
                                 HStack(spacing: 3) { Text(c.label); Image(systemName: "xmark").imageScale(.small) }
-                                    .font(.caption).padding(.horizontal, 8).padding(.vertical, 4)
+                                    .font(.nx(.caption)).padding(.horizontal, 8).padding(.vertical, 4)
                                     .background(Theme.accent.opacity(0.12), in: Capsule()).foregroundStyle(Theme.accent)
                             }
                             .buttonStyle(.plain)
@@ -93,7 +93,7 @@ struct ResearchView: View {
                 }
             }
             Text("\(rows.count) of \(listRows(all).count) schools\(AppsData.shared.db == nil ? "" : list == "all" ? " in the universities database and yours" : "")")
-                .font(.caption).foregroundStyle(.secondary)
+                .font(.nx(.caption)).foregroundStyle(.secondary)
         }
         .padding(.horizontal, 14).padding(.vertical, 8)
     }
@@ -142,9 +142,9 @@ struct ResearchView: View {
                     VStack(alignment: .leading, spacing: 1) {
                         HStack(spacing: 5) {
                             if r.mine { Circle().fill(store.schoolColor(r.s?.id)).frame(width: 7, height: 7) }
-                            Text(r.label).font(.subheadline.weight(r.mine ? .semibold : .regular)).lineLimit(1)
+                            Text(r.label).font(.nx(.subheadline, r.mine ? .semibold : .regular)).lineLimit(1)
                         }
-                        if r.full != r.label { Text(r.full).font(.caption2).foregroundStyle(.secondary).lineLimit(1) }
+                        if r.full != r.label { Text(r.full).font(.nx(.caption2)).foregroundStyle(.secondary).lineLimit(1) }
                     }
                 }
                 .contentShape(Rectangle())
@@ -156,9 +156,9 @@ struct ResearchView: View {
             TableColumn("Admit") { r in StatCell(row: r, k: "acc", text: Unis.accOf(r).map { pct($0) }) }.width(70)
             TableColumn("US News") { r in StatCell(row: r, k: "rank", text: Unis.rankText(r, "usnNational")) }.width(70)
             TableColumn("Eng") { r in StatCell(row: r, k: "eng", text: Unis.rankText(r, Unis.anyEng)) }.width(60)
-            TableColumn("Where") { r in Text([r.u?.city, r.u?.st].compactMap { $0 }.joined(separator: ", ")).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
+            TableColumn("Where") { r in Text([r.u?.city, r.u?.st].compactMap { $0 }.joined(separator: ", ")).font(.nx(.caption)).foregroundStyle(.secondary).lineLimit(1) }
                 .width(min: 90, ideal: 130)
-            TableColumn("Size") { r in Text(r.u?.ug.map { "\($0.formatted())" } ?? "").font(.caption).foregroundStyle(.secondary) }.width(70)
+            TableColumn("Size") { r in Text(r.u?.ug.map { "\($0.formatted())" } ?? "").font(.nx(.caption)).foregroundStyle(.secondary) }.width(70)
             TableColumn("Status") { r in StatusCell(row: r) }.width(min: 110, ideal: 150)
         }
     }
@@ -180,7 +180,7 @@ struct ResearchView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 6) {
                             if r.mine { Circle().fill(store.schoolColor(r.s?.id)).frame(width: 8, height: 8) }
-                            Text(r.label).font(.body.weight(r.mine ? .semibold : .regular)).foregroundStyle(.primary).lineLimit(1)
+                            Text(r.label).font(.nx(.body, r.mine ? .semibold : .regular)).foregroundStyle(.primary).lineLimit(1)
                             Spacer(minLength: 4)
                             TierChip(row: r)
                         }
@@ -188,7 +188,7 @@ struct ResearchView: View {
                             if let a = Unis.accOf(r) { fact("Admit", pct(a)) }
                             if let n = Unis.rankText(r, "usnNational") { fact("US News", n) }
                             if let e = Unis.rankText(r, Unis.anyEng) { fact("Eng", e) }
-                            if let st = r.u?.st { Text(st).font(.caption).foregroundStyle(.secondary) }
+                            if let st = r.u?.st { Text(st).font(.nx(.caption)).foregroundStyle(.secondary) }
                         }
                         StatusCell(row: r)
                     }
@@ -203,13 +203,13 @@ struct ResearchView: View {
                     }
                 }
             }
-            if rows.count > 400 { Text("Showing the first 400. Search or filter to find the rest.").font(.caption).foregroundStyle(.secondary) }
+            if rows.count > 400 { Text("Showing the first 400. Search or filter to find the rest.").font(.nx(.caption)).foregroundStyle(.secondary) }
         }
         .listStyle(.plain)
     }
 
     private func fact(_ l: String, _ v: String) -> some View {
-        HStack(spacing: 3) { Text(l).foregroundStyle(.secondary); Text(v) }.font(.caption)
+        HStack(spacing: 3) { Text(l).foregroundStyle(.secondary); Text(v) }.font(.nx(.caption))
     }
 }
 
@@ -221,7 +221,7 @@ struct StatCell: View {
     let k: String
     let text: String?
     var body: some View {
-        Text(text ?? "–").font(.subheadline.monospacedDigit()).foregroundStyle(text == nil ? .tertiary : .primary)
+        Text(text ?? "–").font(.nx(.subheadline).monospacedDigit()).foregroundStyle(text == nil ? .tertiary : .primary)
     }
 }
 
@@ -231,13 +231,13 @@ struct StatusCell: View {
     var body: some View {
         if let s = row.s {
             HStack(spacing: 4) {
-                Text(s.applied != nil ? "Applied" : s.applying ? "Applying" : "Considering").font(.caption.weight(.medium))
+                Text(s.applied != nil ? "Applied" : s.applying ? "Applying" : "Considering").font(.nx(.caption, .medium))
                     .foregroundStyle(s.applying ? Theme.accent : .secondary)
-                if let r = s.round, s.applying { Text(s.roundLabel(r)).font(.caption).foregroundStyle(.secondary) }
-                if let d = s.applying ? s.deadline : s.nextDeadline { Text(Apps.short(d)).font(.caption).foregroundStyle(.secondary) }
+                if let r = s.round, s.applying { Text(s.roundLabel(r)).font(.nx(.caption)).foregroundStyle(.secondary) }
+                if let d = s.applying ? s.deadline : s.nextDeadline { Text(Apps.short(d)).font(.nx(.caption)).foregroundStyle(.secondary) }
             }
         } else if row.dropped != nil {
-            Text("Removed").font(.caption).foregroundStyle(.tertiary)
+            Text("Removed").font(.nx(.caption)).foregroundStyle(.tertiary)
         }
     }
 }
@@ -258,7 +258,7 @@ struct TierChip: View {
             if t != nil { Button("No tier", role: .destructive) { set(nil, nil) } }
         } label: {
             Text(t.map { (Unis.tierNames[$0] ?? $0) + (lv.map { " \($0)" } ?? "") } ?? "Tier")
-                .font(.caption.weight(.medium))
+                .font(.nx(.caption, .medium))
                 .padding(.horizontal, 8).padding(.vertical, 3)
                 .foregroundStyle(t == nil ? Color.secondary : tierColor(t!))
                 .background((t == nil ? Color.secondary : tierColor(t!)).opacity(0.12), in: Capsule())
@@ -318,9 +318,9 @@ struct UniRecordSheet: View {
                 if let u = row.u {
                     Section {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(u.full).font(.headline)
+                            Text(u.full).font(.nx(.headline))
                             Text([u.city, u.st.flatMap { Unis.states[$0] }].compactMap { $0 }.joined(separator: ", ") + (u.ctrl.flatMap { Unis.ctrlNames[$0] }.map { " · " + $0 } ?? ""))
-                                .font(.subheadline).foregroundStyle(.secondary)
+                                .font(.nx(.subheadline)).foregroundStyle(.secondary)
                         }
                         HStack { Text("Tier"); Spacer(); TierChip(row: row) }
                     }
@@ -349,7 +349,7 @@ struct UniRecordSheet: View {
                     if u.offersEng || u.offersCS {
                         Section("Engineering") {
                             fact("Engineering", Unis.engSizeOf(u.offersEng, u.engN).flatMap { Unis.engNames[$0] }.map { $0 + (u.engN.map { ", \($0) degrees a year" } ?? "") })
-                            if !u.engFields.isEmpty { Text(u.engFields.joined(separator: ", ")).font(.caption).foregroundStyle(.secondary) }
+                            if !u.engFields.isEmpty { Text(u.engFields.joined(separator: ", ")).font(.nx(.caption)).foregroundStyle(.secondary) }
                             fact("Computer science", u.offersCS ? (u.csN.map { "\($0) degrees a year" } ?? "Offered") : nil)
                         }
                     }
@@ -470,7 +470,7 @@ struct CompareSheet: View {
                 Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 10) {
                     GridRow {
                         Text("")
-                        ForEach(rows) { r in Text(r.label).font(.headline) }
+                        ForEach(rows) { r in Text(r.label).font(.nx(.headline)) }
                     }
                     Divider()
                     ForEach(lines, id: \.0) { l in
@@ -517,7 +517,7 @@ struct AddSchoolSheet: View {
                             Button { add(u) } label: {
                                 VStack(alignment: .leading) {
                                     Text(u.short).foregroundStyle(.primary)
-                                    Text([u.full, u.city, u.st].compactMap { $0 }.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary)
+                                    Text([u.full, u.city, u.st].compactMap { $0 }.joined(separator: " · ")).font(.nx(.caption)).foregroundStyle(.secondary)
                                 }
                             }
                         }

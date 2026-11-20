@@ -99,14 +99,14 @@ struct WorkstreamView: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 10) {
                     Circle().fill(workstreamId == nil ? Color.secondary : store.color(workstream: workstreamId)).frame(width: 14, height: 14)
-                    Text(name).font(.title2.weight(.semibold))
+                    Text(name).font(.nx(.title2, .semibold))
                     if ws?.parked == true { Chip(text: "Parked", icon: "pause.circle", strong: true) }
                     Spacer(minLength: 0)
                 }
-                Text(facts.joined(separator: " · ")).font(.subheadline).foregroundStyle(.secondary)
+                Text(facts.joined(separator: " · ")).font(.nx(.subheadline)).foregroundStyle(.secondary)
                 if workstreamId == nil {
                     Text("Tasks that capture could not place in a workstream. Open one to move it, or tick it off.")
-                        .font(.callout).foregroundStyle(.secondary)
+                        .font(.nx(.callout)).foregroundStyle(.secondary)
                 }
             }
             .padding(.vertical, 4)
@@ -221,7 +221,7 @@ struct WorkstreamView: View {
                         SectionTitle(title: "Notes", count: nil)
                         Spacer()
                         if editable && !empty {
-                            Button("Edit") { editingNotes = text }.font(.callout).textCase(nil)
+                            Button("Edit") { editingNotes = text }.font(.nx(.callout)).textCase(nil)
                         }
                     }
                 }
@@ -255,10 +255,10 @@ struct WorkstreamView: View {
             Image(systemName: Self.icon(fileName)).foregroundStyle(.secondary).frame(width: 24)
             VStack(alignment: .leading, spacing: 2) {
                 Text(fileName).lineLimit(1)
-                if !dir.isEmpty { Text(dir).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
+                if !dir.isEmpty { Text(dir).font(.nx(.caption)).foregroundStyle(.secondary).lineLimit(1) }
             }
             Spacer(minLength: 8)
-            Text(f.modified.formatted(.relative(presentation: .named))).font(.caption).foregroundStyle(.secondary)
+            Text(f.modified.formatted(.relative(presentation: .named))).font(.nx(.caption)).foregroundStyle(.secondary)
         }
     }
 
@@ -296,7 +296,7 @@ struct WorkstreamView: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
+                    .font(.nx(.caption, .semibold))
                     .rotationEffect(.degrees(open.wrappedValue ? 90 : 0))
                 SectionTitle(title: title, count: count)
                 Spacer()
@@ -317,7 +317,7 @@ struct NotesEditor: View {
     var body: some View {
         NavigationStack {
             TextEditor(text: $text)
-                .font(.body)
+                .font(.nx(.body))
                 .padding(.horizontal, 12)
                 .navigationTitle(title)
                 .navigationBarTitleDisplayMode(.inline)
@@ -370,9 +370,9 @@ struct NoteText: View {
     @ViewBuilder
     private func line(_ l: Line) -> some View {
         switch l.kind {
-        case .heading1: Text(Self.inline(l.text)).font(.title3.weight(.semibold)).padding(.top, 6)
-        case .heading2: Text(Self.inline(l.text)).font(.headline).padding(.top, 4)
-        case .heading3: Text(Self.inline(l.text)).font(.subheadline.weight(.semibold)).padding(.top, 2)
+        case .heading1: Text(Self.inline(l.text)).font(.nx(.title3, .semibold)).padding(.top, 6)
+        case .heading2: Text(Self.inline(l.text)).font(.nx(.headline)).padding(.top, 4)
+        case .heading3: Text(Self.inline(l.text)).font(.nx(.subheadline, .semibold)).padding(.top, 2)
         case .bullet, .open, .ticked:
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(l.kind == .bullet ? "•" : l.kind == .open ? "☐" : "☑").foregroundStyle(.secondary)

@@ -72,24 +72,24 @@ struct DayBriefCard: View {
         let base = DayBrief.build(store.planning)
         let written = writer.text(today: store.today)
         VStack(alignment: .leading, spacing: 10) {
-            if showsGreeting { Text(base.greeting).font(.title2.weight(.semibold)) }
+            if showsGreeting { Text(base.greeting).font(.nx(.title2, .semibold)) }
             Text(written ?? base.text)
-                .font(.body)
+                .font(.nx(.body))
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("day-brief")
             HStack(spacing: 10) {
                 if written != nil {
-                    Label("Written by Claude", systemImage: "sparkles").font(.caption).foregroundStyle(Theme.claude)
+                    Label("Written by Claude", systemImage: "sparkles").font(.nx(.caption)).foregroundStyle(Theme.claude)
                 } else if writer.busy {
                     ProgressView().controlSize(.mini)
-                    Text("Claude is writing today's brief…").font(.caption).foregroundStyle(.secondary)
+                    Text("Claude is writing today's brief…").font(.nx(.caption)).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
                 if writer.on {
                     Button {
                         Task { await writer.write(store, calendar: calendar) }
                     } label: {
-                        Label(written == nil ? "Write with Claude" : "Refresh", systemImage: "arrow.clockwise").font(.caption.weight(.medium))
+                        Label(written == nil ? "Write with Claude" : "Refresh", systemImage: "arrow.clockwise").font(.nx(.caption, .medium))
                     }
                     .buttonStyle(.borderless)
                     .disabled(writer.busy)
@@ -97,7 +97,7 @@ struct DayBriefCard: View {
                 }
             }
             if let e = writer.error, written == nil, !writer.busy {
-                Text(e).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                Text(e).font(.nx(.caption)).foregroundStyle(.secondary).lineLimit(2)
             }
         }
         .padding(16)

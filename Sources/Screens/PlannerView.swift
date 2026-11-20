@@ -103,10 +103,10 @@ struct PlannerView: View {
     private func rangeLine(_ shown: [String]) -> some View {
         HStack(spacing: 8) {
             Text("\(Days.label(shown.first ?? first)) – \(Days.label(shown.last ?? first))")
-                .font(.subheadline.weight(.semibold))
+                .font(.nx(.subheadline, .semibold))
             if !stacked {
                 Text("Drag a task onto a day.")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.nx(.caption)).foregroundStyle(.secondary)
             }
         }
         .padding(.horizontal, pad)
@@ -157,7 +157,7 @@ struct PlannerView: View {
             }
             if tasks.isEmpty {
                 Text("Nothing planned")
-                    .font(.caption).foregroundStyle(.tertiary)
+                    .font(.nx(.caption)).foregroundStyle(.tertiary)
                     .frame(maxWidth: .infinity)
                     .padding(.top, deadlines.isEmpty && dayEvents.isEmpty ? (stacked ? 8 : 24) : 8)
             }
@@ -172,19 +172,19 @@ struct PlannerView: View {
         let date = parts.count > 1 ? String(parts[1]) : ""
         return HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text(weekday)
-                .font(.subheadline.weight(.semibold))
+                .font(.nx(.subheadline, .semibold))
                 .foregroundStyle(isToday ? Theme.accent : .secondary)
             Text(date)
-                .font(.subheadline.weight(isToday ? .semibold : .regular))
+                .font(.nx(.subheadline, isToday ? .semibold : .regular))
                 .foregroundStyle(isToday ? Theme.accent : .primary)
             Spacer(minLength: 4)
             if load > 0 {
-                Text(hoursText(load)).font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                Text(hoursText(load)).font(.nx(.caption)).foregroundStyle(.secondary).monospacedDigit()
             }
             Button {
                 store.capture = .init(workstream: nil, parent: nil, plan: day)
             } label: {
-                Image(systemName: "plus").font(.subheadline)
+                Image(systemName: "plus").font(.nx(.subheadline))
             }
             .buttonStyle(.borderless)
             .accessibilityLabel("Add a task on \(Days.label(day))")
@@ -201,7 +201,7 @@ struct PlannerView: View {
                 Image(systemName: "flag.fill").imageScale(.small)
                     .foregroundStyle(late ? Theme.late : (t.key ? Theme.key : Theme.soon))
                 Text(t.key ? "★ " + t.text : t.text)
-                    .font(.caption.weight(t.key ? .bold : .regular))
+                    .font(.nx(.caption, t.key ? .bold : .regular))
                     .foregroundStyle(.primary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
@@ -246,7 +246,7 @@ struct PlannerView: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 SectionTitle(title: "Slipped", count: slipped.count)
                 Text("Planned for an earlier day and not done")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.nx(.caption)).foregroundStyle(.secondary)
                 Spacer()
                 Button("Move all to today") { moveAllToToday(slipped) }
                     .buttonStyle(.bordered)
@@ -268,12 +268,12 @@ struct PlannerView: View {
         return VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .top, spacing: 6) {
                 Circle().fill(store.color(t)).frame(width: 8, height: 8).padding(.top, 5)
-                Text(t.text).font(.subheadline).lineLimit(2)
+                Text(t.text).font(.nx(.subheadline)).lineLimit(2)
                 Spacer(minLength: 0)
                 Button {
                     withAnimation(.snappy) { store.setPlan(t, t.plan.filter { $0.day >= store.today }) }
                 } label: {
-                    Image(systemName: "xmark").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    Image(systemName: "xmark").font(.nx(.caption, .semibold)).foregroundStyle(.secondary)
                 }
                 .buttonStyle(.borderless)
                 .disabled(!editable)
@@ -281,13 +281,13 @@ struct PlannerView: View {
             }
             HStack {
                 if let last {
-                    Text("Was \(Days.label(last))").font(.caption).foregroundStyle(Theme.late)
+                    Text("Was \(Days.label(last))").font(.nx(.caption)).foregroundStyle(Theme.late)
                 }
                 Spacer(minLength: 0)
                 Button("Today") {
                     withAnimation(.snappy) { store.move(t, from: last, to: store.today) }
                 }
-                .font(.caption.weight(.semibold))
+                .font(.nx(.caption, .semibold))
                 .buttonStyle(.bordered)
                 .controlSize(.mini)
                 .disabled(!editable)
@@ -360,11 +360,11 @@ struct PlannerView: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
+                        .font(.nx(.caption, .semibold))
                         .rotationEffect(.degrees(bankOpen ? 90 : 0))
                     SectionTitle(title: "Task bank", count: bank.count)
                     Text("Not planned for today or later")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.nx(.caption)).foregroundStyle(.secondary)
                     Spacer()
                 }
                 .contentShape(Rectangle())
@@ -405,8 +405,8 @@ struct PlannerView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Circle().fill(store.color(workstream: g.workstream)).frame(width: 8, height: 8)
-                Text(g.name).font(.subheadline.weight(.semibold))
-                Text("\(g.tasks.count)").font(.caption).foregroundStyle(.secondary)
+                Text(g.name).font(.nx(.subheadline, .semibold))
+                Text("\(g.tasks.count)").font(.nx(.caption)).foregroundStyle(.secondary)
                 Spacer(minLength: 0)
             }
             .padding(.bottom, 2)

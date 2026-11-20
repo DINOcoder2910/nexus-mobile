@@ -35,13 +35,13 @@ struct IdeasView: View {
             Section {
                 HStack(spacing: 10) {
                     if model.sorting { ProgressView().controlSize(.small) }
-                    Text(model.statusLine).font(.callout).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
+                    Text(model.statusLine).font(.nx(.callout)).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
                     Button { model.sort() } label: { Label("Sort now", systemImage: "sparkles") }
                         .buttonStyle(.bordered).controlSize(.small)
                         .disabled(model.sorting || g.waiting.isEmpty || model.error != nil)
                     ClaudeModeChip(small: true)
                 }
-                if let e = model.error { Text(e).font(.callout).foregroundStyle(Theme.late) }
+                if let e = model.error { Text(e).font(.nx(.callout)).foregroundStyle(Theme.late) }
             }
             if !g.waiting.isEmpty {
                 Section { ForEach(g.waiting) { x in row(x, repeats: []) } } header: { Text("New · \(g.waiting.count)").foregroundStyle(Theme.accent) }
@@ -87,20 +87,20 @@ struct IdeasView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .top, spacing: 12) {
                 Button { model.tick(x) } label: {
-                    Image(systemName: done ? "checkmark.circle.fill" : "circle").font(.title3).foregroundStyle(done ? Theme.accent : .secondary)
+                    Image(systemName: done ? "checkmark.circle.fill" : "circle").font(.nx(.title3)).foregroundStyle(done ? Theme.accent : .secondary)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(done ? "Not done" : "Done")
                 VStack(alignment: .leading, spacing: 3) {
                     Text(x.shownTitle).strikethrough(done).foregroundStyle(done ? Color.secondary : Color.primary)
-                    if let n = x.note { Text(n).font(.subheadline).foregroundStyle(.secondary) }
-                    if x.originalShown { Text("You wrote: “\(x.text)”").font(.footnote).italic().foregroundStyle(.secondary) }
+                    if let n = x.note { Text(n).font(.nx(.subheadline)).foregroundStyle(.secondary) }
+                    if x.originalShown { Text("You wrote: “\(x.text)”").font(.nx(.footnote)).italic().foregroundStyle(.secondary) }
                     let facts = factsOf(x)
-                    if !facts.isEmpty { Text(facts).font(.caption).foregroundStyle(x.who == "claude" ? Theme.claude : .secondary) }
+                    if !facts.isEmpty { Text(facts).font(.nx(.caption)).foregroundStyle(x.who == "claude" ? Theme.claude : .secondary) }
                     ForEach(repeats) { r in
                         HStack(spacing: 6) {
-                            Text("Also: “\(r.text)”").font(.footnote).italic().foregroundStyle(.secondary)
-                            Button("Not the same") { model.unmerge(r) }.font(.footnote).buttonStyle(.borderless)
+                            Text("Also: “\(r.text)”").font(.nx(.footnote)).italic().foregroundStyle(.secondary)
+                            Button("Not the same") { model.unmerge(r) }.font(.nx(.footnote)).buttonStyle(.borderless)
                         }
                     }
                 }
@@ -109,8 +109,8 @@ struct IdeasView: View {
             }
             if let reply = x.reply {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Claude").font(.caption.weight(.semibold)).foregroundStyle(Theme.claude)
-                    Text(reply).font(.subheadline).textSelection(.enabled)
+                    Text("Claude").font(.nx(.caption, .semibold)).foregroundStyle(Theme.claude)
+                    Text(reply).font(.nx(.subheadline)).textSelection(.enabled)
                 }
                 .padding(10)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -153,7 +153,7 @@ struct IdeasView: View {
 
     private func pick(_ label: String, on: Bool, tint: Color, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(label).font(.footnote.weight(.semibold))
+            Text(label).font(.nx(.footnote, .semibold))
                 .padding(.horizontal, 10).frame(height: 26)
                 .foregroundStyle(on ? tint : .secondary)
                 .background(on ? Color(uiColor: .systemBackground) : .clear, in: Capsule())

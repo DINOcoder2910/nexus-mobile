@@ -79,12 +79,12 @@ struct NotebookPage: View {
         VStack(alignment: .leading, spacing: 18) {
             crumbs
             if !nb.notebooks.isEmpty {
-                Text("Notebooks").font(.headline)
+                Text("Notebooks").font(.nx(.headline))
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 14)], spacing: 14) {
                     ForEach(nb.notebooks) { sub in NotebookCard(nb: sub, color: color, actions: actions, open: { go(.notebook(sub.path)) }) }
                 }
             }
-            Text("Boards").font(.headline)
+            Text("Boards").font(.nx(.headline))
             if nb.boards.isEmpty {
                 Text("No boards here yet. New › Blank board starts one.").foregroundStyle(.secondary)
             } else {
@@ -102,7 +102,7 @@ struct NotebookPage: View {
         let parts = path.split(separator: "/").map(String.init)
         return HStack(spacing: 6) {
             ForEach(parts.indices, id: \.self) { i in
-                if i > 0 { Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary) }
+                if i > 0 { Image(systemName: "chevron.right").font(.nx(.caption2)).foregroundStyle(.tertiary) }
                 let p = parts[0...i].joined(separator: "/")
                 let name = i == 0 ? "Notebooks" : parts[i]
                 if i == 0 || i == parts.count - 1 {
@@ -112,7 +112,7 @@ struct NotebookPage: View {
                 }
             }
         }
-        .font(.subheadline)
+        .font(.nx(.subheadline))
     }
 
     private func share(_ b: Notebook.BoardRef) {
@@ -138,12 +138,12 @@ struct NotebookCard: View {
         Button(action: open) {
             HStack(spacing: 12) {
                 Image(systemName: "book.closed.fill")
-                    .font(.title2)
+                    .font(.nx(.title2))
                     .foregroundStyle(color.map { Color(uiColor: InkConvert.color($0)) } ?? Color.accentColor)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(nb.name).font(.subheadline.weight(.medium)).lineLimit(1)
+                    Text(nb.name).font(.nx(.subheadline, .medium)).lineLimit(1)
                     let n = nb.allBoards.count
-                    Text(n == 1 ? "1 board" : "\(n) boards").font(.caption).foregroundStyle(.secondary)
+                    Text(n == 1 ? "1 board" : "\(n) boards").font(.nx(.caption)).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
             }
@@ -174,15 +174,15 @@ struct BoardCard: View {
                     if let thumb {
                         Image(uiImage: thumb).resizable().scaledToFill()
                     } else {
-                        Image(systemName: "scribble").font(.largeTitle).foregroundStyle(.quaternary)
+                        Image(systemName: "scribble").font(.nx(.largeTitle)).foregroundStyle(.quaternary)
                     }
                 }
                 .aspectRatio(4 / 3, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(uiColor: .separator)))
-                Text(b.name).font(.subheadline.weight(.medium)).lineLimit(1)
+                Text(b.name).font(.nx(.subheadline, .medium)).lineLimit(1)
                 Text(edited.map { "Edited " + $0.formatted(.relative(presentation: .named)) } ?? " ")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.nx(.caption)).foregroundStyle(.secondary)
             }
             .contentShape(Rectangle())
         }
