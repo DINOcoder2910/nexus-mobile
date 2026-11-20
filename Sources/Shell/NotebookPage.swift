@@ -1,7 +1,6 @@
 import SwiftUI
 import UIKit
 import PhotosUI
-import VisionKit
 import NexusCore
 
 /// A notebook's page: the path at the top, the notebooks inside it, then its boards as cards (the board's picture, thumb.png, its name
@@ -16,7 +15,6 @@ struct NotebookPage: View {
     @State private var pickingPDF = false
     @State private var pickingPhoto = false
     @State private var photo: PhotosPickerItem?
-    @State private var scanning = false
     @State private var sharing: SharedFile?
 
     var body: some View {
@@ -51,13 +49,6 @@ struct NotebookPage: View {
                 }
             }
         }
-        .fullScreenCover(isPresented: $scanning) {
-            ScannerView { pages in
-                scanning = false
-                if !pages.isEmpty { actions.newBoard(fromScan: pages, in: path, store) }
-            }
-            .ignoresSafeArea()
-        }
         .sheet(item: $sharing) { f in ShareSheet(url: f.url) }
     }
 
@@ -66,12 +57,20 @@ struct NotebookPage: View {
             Button { actions.ask(.board, in: path) } label: { Label("Blank board", systemImage: "scribble") }
             Button { HangWatch.note("notebook: From a PDF picker asked"); pickingPDF = true } label: { Label("From a PDF…", systemImage: "doc.richtext") }
             Button { pickingPhoto = true } label: { Label("From a photo…", systemImage: "photo") }
-            if VNDocumentCameraViewController.isSupported {
-                Button { scanning = true } label: { Label("From a scan…", systemImage: "doc.viewfinder") }
+            if ScanCamera.isSupported {
+                Button { scan() } label: { Label("From a scan…", systemImage: "doc.viewfinder") }
             }
             Divider()
             Button { actions.ask(.notebook, in: path) } label: { Label("New notebook", systemImage: "folder.badge.plus") }
         } label: { Label("New", systemImage: "plus") }
+    }
+
+    /// New › From a scan…: the same camera as a board's Scan a handout… (HandoutScan.swift), over whatever is showing.
+    private func scan() {
+        let (actions, path, store) = (actions, path, store)
+        ScanCamera.present(from: nil) { pages in
+            if !pages.isEmpty { actions.newBoard(fromScan: pages, in: path, store) }
+        }
     }
 
     @ViewBuilder
@@ -231,25 +230,3 @@ struct ShareSheet: UIViewControllerRepresentable {
     func updateUIViewController(_ vc: UIActivityViewController, context: Context) {}
 }
 
-/// The document camera: scanned pages, or none when cancelled.
-struct ScannerView: UIViewControllerRepresentable {
-    let done: ([UIImage]) -> Void
-
-    func makeCoordinator() -> Coordinator { Coordinator(done: done) }
-    func makeUIViewController(context: Context) -> VNDocumentCameraViewController {
-        let vc = VNDocumentCameraViewController()
-        vc.delegate = context.coordinator
-        return vc
-    }
-    func updateUIViewController(_ vc: VNDocumentCameraViewController, context: Context) {}
-
-    final class Coordinator: NSObject, VNDocumentCameraViewControllerDelegate {
-        let done: ([UIImage]) -> Void
-        init(done: @escaping ([UIImage]) -> Void) { self.done = done }
-        func documentCameraViewController(_ controller: VNDocumentCameraViewController, didFinishWith scan: VNDocumentCameraScan) {
-            done((0..<scan.pageCount).map { scan.imageOfPage(at: $0) })
-        }
-        func documentCameraViewControllerDidCancel(_ controller: VNDocumentCameraViewController) { done([]) }
-        func documentCameraViewController(_ controller: VNDocumentCameraViewController, didFailWithError error: Error) { done([]) }
-    }
-}
