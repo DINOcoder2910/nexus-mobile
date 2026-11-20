@@ -181,7 +181,7 @@ final class QuickRing: UIView {
         label.accessibilityIdentifier = "quick-ring-label"
         if Self.probing {
             probeLabel.font = .systemFont(ofSize: 9)
-            probeLabel.textColor = .gray
+            probeLabel.textColor = .clear // read by the tests, kept out of the screenshots
             probeLabel.numberOfLines = 2
             probeLabel.frame = CGRect(x: 8, y: 120, width: 600, height: 24)
             probeLabel.accessibilityIdentifier = "ring-probe"
