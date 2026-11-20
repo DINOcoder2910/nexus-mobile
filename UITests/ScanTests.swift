@@ -42,7 +42,7 @@ final class ScanTests: XCTestCase {
     /// The camera must come up; then finish (one page) or cancel it.
     func camera(_ what: String, finish: Bool) {
         let done = app.buttons["Finish fake scan"].firstMatch
-        XCTAssertTrue(done.waitForExistence(timeout: 10), "\(what): the camera didn't open")
+        XCTAssertTrue(done.waitForExistence(timeout: 30), "\(what): the camera didn't open")
         step("scan-\(what) camera")
         (finish ? done : app.buttons["Cancel fake scan"].firstMatch).tap()
         XCTAssertFalse(app.alerts["The camera didn't open"].exists, "\(what): the app said the camera didn't open")
@@ -56,9 +56,18 @@ final class ScanTests: XCTestCase {
         app.buttons["From a scan…"].firstMatch.tap()
         camera("1 new board", finish: true)
 
-        // the scan's board opens by itself, named from the page's title
+        // the scan's board opens by itself, named from the page's title. The page's words are read first (a few seconds on the
+        // runner), and the runner's simulator can stop answering for most of a minute while accessibility loads (Nov 20: 54 s
+        // right after this scan), so it gets a long wait and a picture of what was there if it never came.
+        sleep(3)
+        step("scan-1 after the camera")
         let insert = app.buttons["Insert"].firstMatch
-        XCTAssertTrue(insert.waitForExistence(timeout: 30), "the board made from the scan didn't open")
+        if !insert.waitForExistence(timeout: 120) {
+            step("scan-1 no board")
+            for a in app.alerts.allElementsBoundByIndex { print("UISTEP alert: \(a.label)") }
+            XCTFail("the board made from the scan didn't open")
+            return
+        }
         sleep(2)
         step("scan-board from the first scan")
 
@@ -71,7 +80,7 @@ final class ScanTests: XCTestCase {
             camera("\(i) on the board", finish: finish)
             if finish {
                 let reading = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Reading the handout'")).firstMatch
-                XCTAssertTrue(reading.waitForExistence(timeout: 10), "scan \(i): the board never started reading it")
+                XCTAssertTrue(reading.waitForExistence(timeout: 30), "scan \(i): the board never started reading it")
                 sleep(3)
                 step("scan-\(i) added")
             }
