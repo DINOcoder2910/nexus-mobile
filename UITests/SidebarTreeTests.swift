@@ -113,8 +113,9 @@ final class SidebarTreeTests: XCTestCase {
         let collapse = app.buttons["Collapse Week 1"].firstMatch
         reach(collapse, "Week 1's arrow")
         collapse.tap()
+        // 20 s, not 5: on a slow runner (Nov 20, PR #44) the light run took 29 s to open a level and the closing outlived 5 s (docs/ci-lessons.md)
         let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.staticTexts["Enthalpy of combustion"].firstMatch)
-        XCTAssertEqual(XCTWaiter().wait(for: [gone], timeout: 5), .completed, "Week 1's boards still show when it is closed")
+        XCTAssertEqual(XCTWaiter().wait(for: [gone], timeout: 20), .completed, "Week 1's boards still show when it is closed")
         sleep(1)
         shot("sidebar-switched-\(mode)")
     }
