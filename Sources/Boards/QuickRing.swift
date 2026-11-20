@@ -82,6 +82,17 @@ final class QuickRing: UIView {
     private let tick = UIImpactFeedbackGenerator(style: .light)
 
     var isOpen: Bool { state == .holdOpen || state == .tapOpen }
+
+    /// UI tests (`-NexusTestRingProbe`): what the ring saw, in a small label ("ring-probe").
+    static let probing = ProcessInfo.processInfo.arguments.contains("-NexusTestRingProbe")
+    private let probeLabel = UILabel()
+    private var probeLines: [String] = []
+    private func probe(_ s: String) {
+        guard Self.probing else { return }
+        probeLines = Array((probeLines + [s]).suffix(8))
+        probeLabel.text = probeLines.joined(separator: " | ")
+        probeLabel.accessibilityLabel = probeLabel.text
+    }
     private var reduceMotion: Bool { UIAccessibility.isReduceMotionEnabled }
 
     override init(frame: CGRect) {
@@ -168,6 +179,15 @@ final class QuickRing: UIView {
             addSubview(l)
         }
         label.accessibilityIdentifier = "quick-ring-label"
+        if Self.probing {
+            probeLabel.font = .systemFont(ofSize: 9)
+            probeLabel.textColor = .gray
+            probeLabel.numberOfLines = 2
+            probeLabel.frame = CGRect(x: 8, y: 120, width: 600, height: 24)
+            probeLabel.accessibilityIdentifier = "ring-probe"
+            probeLabel.isUserInteractionEnabled = false
+            addSubview(probeLabel)
+        }
         caption.font = UIFont.nx(13, .medium)
         caption.accessibilityIdentifier = "quick-ring-caption"
     }
@@ -225,6 +245,7 @@ final class QuickRing: UIView {
     /// to the ring (UIView's default), which handles them all.
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         guard self.point(inside: point, with: event) else { return nil }
+        if Self.probing, event?.type == .touches { probe("hit \(Int(point.x)),\(Int(point.y)) \(state)") }
         if !tab.isHidden, tab.frame.insetBy(dx: -14, dy: -10).contains(point) { return tab }
         if !bubble.isHidden, bubble.frame.insetBy(dx: -6, dy: -6).contains(point) { return bubble }
         for v in items where v.chip.frame.insetBy(dx: -8, dy: -8).contains(convert(point, to: v)) { return v.chip }
@@ -233,6 +254,7 @@ final class QuickRing: UIView {
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let p = touches.first?.location(in: self) else { return }
+        probe("began \(state) \(Int(p.x)),\(Int(p.y)) on \(touches.first?.view.map { String(describing: type(of: $0)) } ?? "nil")")
         wake()
         switch state {
         case .tucked:
@@ -280,6 +302,7 @@ final class QuickRing: UIView {
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let p = touches.first?.location(in: self) else { return }
+        probe("ended \(state) hit \(hit(p, reach: Self.outerRadius + 20).map(String.init) ?? "none")")
         switch state {
         case .pressing:
             holdTimer?.invalidate()
@@ -308,6 +331,7 @@ final class QuickRing: UIView {
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        probe("cancelled \(state)")
         holdTimer?.invalidate()
         progress.removeAllAnimations()
         switch state {
@@ -347,7 +371,13 @@ final class QuickRing: UIView {
     }
 
     /// Which way the fan opens: toward the middle of the screen.
-    private var facing: CGFloat { atan2(bounds.midY - centre.y, bounds.midX - centre.x) }
+    /// Which way the fan opens: away from the ring's side, tilted a little toward the roomier half (up or down), so the whole fan
+    /// stays on the screen (a fan aimed at the middle reached past the edge it sits on).
+    private var facing: CGFloat {
+        let up = centre.y - band.lowerBound, down = band.upperBound - centre.y
+        let tilt = max(-0.3, min(0.3, (down - up) / (2 * Self.outerRadius) * 0.3))
+        return QuickRingPrefs.right ? .pi - tilt : tilt
+    }
 
     private func angles(_ n: Int) -> [CGFloat] {
         let span = CGFloat.pi * 0.98
@@ -425,8 +455,7 @@ final class QuickRing: UIView {
         let a = atan2(dy, dx)
         var best: (Int, CGFloat)?
         for (i, v) in items.enumerated() {
-            var d = abs(a - v.angle)
-            if d > .pi { d = 2 * .pi - d }
+            let d = abs(remainder(a - v.angle, 2 * .pi))
             if best == nil || d < best!.1 { best = (i, d) }
         }
         guard let b = best, b.1 <= (items.first?.span ?? 0) * 0.75 else { return nil }
@@ -468,6 +497,7 @@ final class QuickRing: UIView {
     // MARK: picking
 
     private func pick(_ i: Int) {
+        probe("pick \(i) board \(board != nil)")
         guard items.indices.contains(i), let b = board else { close(animated: true); return }
         let v = items[i]
         let choice = v.choice

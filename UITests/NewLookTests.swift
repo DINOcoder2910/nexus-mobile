@@ -79,7 +79,7 @@ final class NewLookTests: XCTestCase {
 
     func launchBoard(dark: Bool) {
         app = XCUIApplication()
-        app.launchArguments = ["-NexusTestPdfBoard", "-board.fingersDraw", "YES", "-board.dark", dark ? "always" : "never"]
+        app.launchArguments = ["-NexusTestPdfBoard", "-NexusTestRingProbe", "-board.fingersDraw", "YES", "-board.dark", dark ? "always" : "never"]
         app.launch()
         XCTAssertTrue(app.buttons["Insert"].firstMatch.waitForExistence(timeout: 30), "the board didn't open")
         sleep(3)
@@ -104,7 +104,11 @@ final class NewLookTests: XCTestCase {
             ?? app.buttons[label].firstMatch
     }
 
-    func ringLabel() -> String { el("quick-ring").label }
+    func ringLabel() -> String {
+        let p = el("ring-probe")
+        if p.exists { print("UISTEP probe: \(p.label)") }
+        return el("quick-ring").label
+    }
 
     func testBoardBarAndRing() {
         launchBoard(dark: false)
@@ -149,11 +153,19 @@ final class NewLookTests: XCTestCase {
         shot("look-ring-picked-light")
 
         // hold and slide onto the middle choice (the ink's first colour), let go to pick it
+        // (where that choice sits: open the fan once with a tap and read it, then close it)
         let window = app.windows.firstMatch.frame
         let c = CGPoint(x: ring.frame.midX, y: ring.frame.midY)
-        let facing = atan2(window.midY - c.y, window.midX - c.x)
+        ring.tap()
+        let middle = el("ring-item-4")
+        XCTAssertTrue(middle.waitForExistence(timeout: 5), "the fan didn't open again")
+        usleep(700_000)
+        let m = CGPoint(x: middle.frame.midX, y: middle.frame.midY)
+        sleep(1) // past the double tap's time
+        ring.tap()
+        sleep(1)
         let start = app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: c.x, dy: c.y))
-        let end = app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: c.x + cos(facing) * 98, dy: c.y + sin(facing) * 98))
+        let end = app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: m.x, dy: m.y))
         start.press(forDuration: 0.7, thenDragTo: end)
         sleep(1)
         XCTAssertTrue(ringLabel().contains("Highlighter, Yellow"), "hold and slide didn't pick the first colour: \(ringLabel())")
@@ -232,7 +244,7 @@ final class NewLookPhoneTests: XCTestCase {
     }
 
     func testPhoneBoardRing() {
-        app.launchArguments = ["-NexusTestPdfBoard"]
+        app.launchArguments = ["-NexusTestPdfBoard", "-NexusTestRingProbe"]
         app.launch()
         XCTAssertTrue(app.buttons["Insert"].firstMatch.waitForExistence(timeout: 30), "the board didn't open")
         sleep(3)
@@ -246,6 +258,8 @@ final class NewLookPhoneTests: XCTestCase {
         shot("look-phone-ring-open")
         el("ring-item-1").tap()
         sleep(1)
+        let probe = el("ring-probe")
+        if probe.exists { print("UISTEP probe: \(probe.label)") }
         XCTAssertTrue(el("quick-ring").label.contains("Highlighter"), "the ring didn't pick the Highlighter")
         ring.doubleTap()
         sleep(1)

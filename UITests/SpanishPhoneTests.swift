@@ -120,7 +120,12 @@ final class SpanishPhoneTests: XCTestCase {
         sleep(1)
         shot("phone-spanish-memory")
         el("spanish-memory-save").tap()
-        XCTAssertTrue(el("spanish-sentence").waitForExistence(timeout: 10), "didn't go back to Spanish after saving")
+        // back on Spanish, which may still be scrolled to the history the sentence was picked from (the list makes only the rows
+        // on screen): scroll up to the sentence box
+        let sentence = el("spanish-sentence")
+        var up = 0
+        while !sentence.waitForExistence(timeout: 3) && up < 6 { app.swipeDown(); up += 1 }
+        XCTAssertTrue(sentence.waitForExistence(timeout: 10), "didn't go back to Spanish after saving")
         sleep(1)
         shot("phone-spanish-after-chat")
 
