@@ -149,7 +149,7 @@ final class NewLookTests: XCTestCase {
         el("ring-item-1").tap()
         sleep(1)
         XCTAssertTrue(ringLabel().contains("Highlighter"), "the ring didn't pick the Highlighter: \(ringLabel())")
-        XCTAssertTrue(button("Highlighter").isSelected, "the bar doesn't show the Highlighter picked")
+        XCTAssertTrue(app.buttons["board-tool-highlighter"].firstMatch.isSelected, "the bar doesn't show the Highlighter picked")
         shot("look-ring-picked-light")
 
         // hold and slide onto the middle choice (the ink's first colour), let go to pick it
@@ -174,7 +174,9 @@ final class NewLookTests: XCTestCase {
         ring.doubleTap()
         sleep(1)
         XCTAssertTrue(ringLabel().contains("Pen"), "double tap didn't go back to the Pen: \(ringLabel())")
-        XCTAssertTrue(button("Pen").isSelected, "the bar doesn't show the Pen picked")
+        // (by the bar button's id: a query over every "Pen" button timed out here on the runner)
+        let pen = app.buttons["board-tool-pen"].firstMatch
+        XCTAssertTrue(pen.waitForExistence(timeout: 10) && pen.isSelected, "the bar doesn't show the Pen picked")
 
         // push it into the edge: it tucks away as a tab; tap the tab to bring it back
         let r = CGPoint(x: ring.frame.midX, y: ring.frame.midY)

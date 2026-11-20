@@ -194,6 +194,7 @@ extension BoardBar {
         for t in BoardTool.allCases where t != .space || tools.tool == .space {
             let on = tools.tool == t
             let button = icon(t.symbol, t.title, selected: on) { [weak b] in b?.selectTool(t) }
+            button.accessibilityIdentifier = "board-tool-" + t.rawValue
             if t == .pen || t == .pencil || t == .highlighter {
                 let u = UIView()
                 u.isUserInteractionEnabled = false
