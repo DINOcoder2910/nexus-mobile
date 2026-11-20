@@ -406,6 +406,7 @@ struct SpanishWorkstreamSection: View {
                 NavigationLink { SpanishHome(workstreamId: id) } label: {
                     Label("Spanish: check, tutor, writing, skills", systemImage: "character.bubble")
                 }
+                .accessibilityIdentifier("workstream-spanish")
             }
         }
     }
@@ -431,15 +432,4 @@ struct SpanishSetupMenu: ViewModifier {
 
 extension View {
     func spanishSetupMenu(_ workstreamId: String?) -> some View { modifier(SpanishSetupMenu(workstreamId: workstreamId)) }
-}
-
-/// The sidebar's Spanish row (one per Spanish workstream; the iPhone's More list is the same sidebar).
-struct SpanishSidebarRows<R: View>: View {
-    let row: (Screen, String, String) -> R
-    var body: some View {
-        let ws = SpanishLibrary.shared.workstreams
-        ForEach(ws, id: \.id) { w in
-            row(.spanish(w.id), ws.count == 1 ? "Spanish" : "Spanish · \(w.name)", "character.bubble")
-        }
-    }
 }

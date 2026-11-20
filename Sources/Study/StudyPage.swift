@@ -59,6 +59,7 @@ struct StudyPage: View {
                     } label: {
                         Label("Spanish: checker, tutor, writing, skills", systemImage: "character.bubble")
                     }
+                    .accessibilityIdentifier("study-spanish")
                 }
             }
             UnitsSection(study: s)

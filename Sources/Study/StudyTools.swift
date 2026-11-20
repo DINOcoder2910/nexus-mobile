@@ -16,12 +16,6 @@ enum StudyTools {
         return Bundle.main.url(forResource: name, withExtension: "html", subdirectory: "Tools")
     }
 
-    /// The sidebar shows "Study tools" for a chemistry workstream with a study folder, or when the laptop has sent the tools.
-    static func shown(_ store: NexusStore) -> Bool {
-        StudyLibrary.shared.studies.contains { $0.isChemistry }
-            || FileManager.default.fileExists(atPath: store.folder.appendingPathComponent(ToolCatalog.indexFile).path)
-    }
-
     static func tool(_ name: String) -> ToolCatalog.Tool? { ToolCatalog.tools.first { $0.name == name } }
 
     static func icon(_ name: String) -> String {
@@ -42,23 +36,6 @@ enum StudyTools {
     static func keep(_ name: String, _ s: JSONValue?) {
         if let s, let kept = ToolCatalog.keepState(s) { UserDefaults.standard.set(kept.text, forKey: key(name)) }
         else { UserDefaults.standard.removeObject(forKey: key(name)) }
-    }
-}
-
-/// The three tools as a list (the sidebar's Study tools, and the Tools section of a chemistry workstream's Study page).
-struct StudyToolsHome: View {
-    @Environment(NexusStore.self) private var store
-
-    var body: some View {
-        List {
-            Section {
-                StudyToolRows()
-            } footer: {
-                Text("The same tools as the laptop's Study tab and a board's Tools panel. They run on this \(Device.name), offline.")
-            }
-        }
-        .listStyle(.insetGrouped)
-        .navigationTitle("Study tools")
     }
 }
 

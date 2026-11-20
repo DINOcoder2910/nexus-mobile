@@ -152,10 +152,6 @@ struct WindowRoot: View {
 /// Where the sidebar can take you.
 enum Screen: Hashable {
     case today, planner, calendar, tasks, someday, inbox, workstream(String), boards, boardSearch, settings, study, ideas, time
-    /// The VSEPR chart, Enthalpies and Molecules, each on its own screen.
-    case studyTools
-    /// A workstream's Spanish study (its id).
-    case spanish(String)
     /// Home (the laptop's first screen) and How Nexus works.
     case home, guide
     /// Files: a folder of the data folder ("" is the folder itself).
@@ -321,8 +317,6 @@ struct RootView: View {
         case .notebook(let path): return "the notebook \(path)"
         case .settings: return "Settings"
         case .study: return "Study"
-        case .studyTools: return "Study tools (the VSEPR chart, Enthalpies, Molecules)"
-        case .spanish(let id): return "Spanish study" + (store.workstream(id).map { " (\($0.name))" } ?? "")
         case .ideas: return "Ideas"
         case .time: return "Time (tracked time)"
         case .claude: return "Claude"
@@ -415,10 +409,8 @@ struct RootView: View {
             case .notebook(let path): NotebookPage(path: path, go: go)
             case .settings: SettingsView()
             case .study: StudyHome()
-            case .studyTools: StudyToolsHome()
             case .applications: ApplicationsView(go: go)
             case .school(let id): SchoolPage(id: id, go: go)
-            case .spanish(let id): SpanishHome(workstreamId: id)
             case .ideas: IdeasView()
             case .time: TimeView()
             case .claude: ClaudeChatView()
