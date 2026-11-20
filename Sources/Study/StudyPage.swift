@@ -13,6 +13,8 @@ struct StudyPage: View {
     @State private var filter = StudySheets.Filter()
     @State private var uploading = false
     @State private var preview: URL?
+    @State private var openTheme: String?
+    @State private var openUnit: String?
 
     private var lib: StudyLibrary { StudyLibrary.shared }
 
@@ -22,7 +24,7 @@ struct StudyPage: View {
                 if size == .regular {
                     HStack(spacing: 0) {
                         overview(s, wide: true)
-                            .frame(minWidth: 320, idealWidth: 400, maxWidth: 440)
+                            .frame(minWidth: 340, idealWidth: 460, maxWidth: 560)
                         Divider().ignoresSafeArea()
                         SheetsBrowser(workstreamId: workstreamId, filter: $filter, embedded: true)
                     }
@@ -62,7 +64,7 @@ struct StudyPage: View {
                     .accessibilityIdentifier("study-spanish")
                 }
             }
-            UnitsSection(study: s)
+            UnitsSection(study: s, openTheme: $openTheme, openUnit: $openUnit)
             Section {
                 if s.decks.isEmpty {
                     Text("Put a deck in study/decks/ (a YAML file of cards) on the laptop and it shows here, with spaced-repetition review.")
@@ -106,14 +108,23 @@ struct StudyPage: View {
         }
         .listStyle(.insetGrouped)
         .refreshable { lib.load(store) }
+        .navigationDestination(item: $openTheme) { code in ThemeUnitsView(workstreamId: workstreamId, theme: code) }
+        .navigationDestination(item: $openUnit) { code in UnitDetailView(workstreamId: workstreamId, code: code) }
     }
 }
 
 // MARK: units
 
-/// Units covered: each theme of study/units.yaml as a row with its units' progress; a theme opens its units.
+/// Units covered, as the new look keeps it (picked Nov 20 2026 over unit cards; project files new-look/mockups/study-ipad-light-v2.png):
+/// one card of study/units.yaml's themes, each a row with its question, its sheet count and a chip per unit (done, partly, not yet),
+/// the unit studied now outlined in the subject's colour and its theme's row lifted onto the page; a legend under it. A theme's
+/// row opens its units, a chip opens that unit.
 struct UnitsSection: View {
     let study: StudyLibrary.Study
+    @Environment(NexusStore.self) private var store
+    /// What a tap opens (StudyPage's list pushes it: a navigation destination can't sit inside the lazy list).
+    @Binding var openTheme: String?
+    @Binding var openUnit: String?
 
     var body: some View {
         let units = study.units ?? []
@@ -127,48 +138,198 @@ struct UnitsSection: View {
                         .font(.nx(.callout)).foregroundStyle(.secondary)
                 }
             } else {
-                ForEach(study.themes) { t in
-                    NavigationLink {
-                        ThemeUnitsView(workstreamId: study.id, theme: t.code)
-                    } label: {
-                        ThemeRow(study: study, theme: t)
-                    }
-                    .accessibilityIdentifier("study-theme-" + t.code)
-                }
+                card(units)
+                    .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                    .listRowBackground(Color.clear)
             }
         } header: {
-            HStack {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
                 SectionTitle(title: "Units covered")
-                Spacer()
                 if !units.isEmpty {
                     let done = units.filter { $0.status == "done" }.count, part = units.filter { $0.status == "partial" }.count
-                    Text("\(done) done\(part > 0 ? ", \(part) partly" : ""), of \(units.count)").font(.nx(.caption)).foregroundStyle(.secondary).textCase(nil)
+                    Text("\(done) done\(part > 0 ? ", \(part) partly" : ""), of \(units.count)").font(.nx(.subheadline)).foregroundStyle(Kit.muted).textCase(nil)
                 }
+                Spacer()
+            }
+        }
+    }
+
+    private func card(_ units: [StudyUnits.Unit]) -> some View {
+        let now = StudyUnits.current(units)
+        let color = store.color(workstream: study.id)
+        return VStack(spacing: 2) {
+            ForEach(study.themes) { t in
+                ThemeRow(study: study, theme: t, now: now, color: color, open: { openTheme = t.code }, openUnit: { openUnit = $0 })
+            }
+            UnitLegend()
+        }
+        .padding(6)
+        .background(Kit.rests, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+}
+
+/// A theme of the units card: its name and question, how many sheets, and its units as chips.
+private struct ThemeRow: View {
+    let study: StudyLibrary.Study
+    let theme: StudyUnits.Theme
+    let now: String?
+    let color: Color
+    let open: () -> Void
+    let openUnit: (String) -> Void
+    @Environment(\.horizontalSizeClass) private var size
+
+    var body: some View {
+        let n = StudySheets.sheetsFor(unit: theme.code, in: study.sheets.sheets).count
+        let current = theme.units.contains { $0.code == now }
+        let name = Button(action: open) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(theme.name.main).font(.nx(.callout, .semibold)).foregroundStyle(Kit.ink)
+                if let sub = theme.name.sub { Text(sub).font(.nx(.subheadline)).foregroundStyle(Kit.muted).lineLimit(size == .regular ? 1 : 2) }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .accessibilityIdentifier("study-theme-" + theme.code)
+        let count = Text(sheetCount(n)).font(.nx(.subheadline)).foregroundStyle(Kit.faint).opacity(n == 0 ? 0.6 : 1).monospacedDigit()
+        let chips = FlowChips(units: theme.units, now: now, color: color, openUnit: openUnit)
+        // a row of three columns where there is room (the iPad's Study tab), else the chips under the name
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 14) {
+                name.frame(minWidth: 220)
+                count.frame(width: 72, alignment: .trailing)
+                chips.frame(width: 290, alignment: .leading)
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                name
+                HStack(alignment: .center, spacing: 10) { chips; Spacer(minLength: 0); count }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background {
+            if current {
+                RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Kit.page).shadow(color: .black.opacity(0.07), radius: 6, y: 2)
             }
         }
     }
 }
 
-private struct ThemeRow: View {
-    let study: StudyLibrary.Study
-    let theme: StudyUnits.Theme
+/// A theme's units as chips, wrapping onto a second line when they don't fit.
+private struct FlowChips: View {
+    let units: [StudyUnits.Unit]
+    let now: String?
+    let color: Color
+    let openUnit: (String) -> Void
 
     var body: some View {
-        let n = StudySheets.sheetsFor(unit: theme.code, in: study.sheets.sheets).count
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(theme.name.main).font(.nx(.body, .semibold))
-                Spacer(minLength: 6)
-                Text(sheetCount(n)).font(.nx(.caption)).foregroundStyle(.secondary)
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 6) { chips }
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(Array(stride(from: 0, to: units.count, by: 3)), id: \.self) { i in
+                    HStack(spacing: 6) {
+                        ForEach(units[i..<min(i + 3, units.count)]) { u in chip(u) }
+                    }
+                }
             }
-            if let sub = theme.name.sub { Text(sub).font(.nx(.caption)).foregroundStyle(.secondary).lineLimit(2) }
-            // a dot per unit, by how far it is covered
-            HStack(spacing: 4) {
-                ForEach(theme.units) { u in StatusDot(status: u.status) }
-            }
-            .accessibilityLabel(theme.units.map { "\($0.code) \(StudyUnits.statusLabel($0.status))" }.joined(separator: ", "))
         }
-        .padding(.vertical, 2)
+    }
+
+    private var chips: some View { ForEach(units) { u in chip(u) } }
+
+    private func chip(_ u: StudyUnits.Unit) -> some View {
+        Button { openUnit(u.code) } label: {
+            UnitChip(code: u.code, status: u.code == now ? "now" : u.status, color: color)
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel("\(u.code) \(u.code == now ? "now" : StudyUnits.statusLabel(u.status))")
+    }
+}
+
+/// One unit as the kit's chip: done (a tick on the accent's wash), partly (half a circle on amber's), not yet (a ring on a tone),
+/// or the one studied now (outlined in the subject's colour, "· now").
+struct UnitChip: View {
+    let code: String
+    let status: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 6) {
+            UnitMark(status: status, color: fg)
+            Text(code).font(.nx(size: 14, .semibold, display: true, relativeTo: .subheadline)).monospacedDigit()
+            if status == "now" { Text("· now").font(.nx(.caption, .medium)).opacity(0.85) }
+        }
+        .foregroundStyle(fg)
+        .padding(.leading, 9)
+        .padding(.trailing, 11)
+        .frame(height: 30)
+        .background(bg, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .overlay {
+            if status == "now" { RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(color, lineWidth: 2) }
+        }
+    }
+
+    private var fg: Color {
+        switch status {
+        case "done": return Theme.accent
+        case "partial": return Theme.soon
+        case "now": return color
+        default: return Kit.muted
+        }
+    }
+
+    private var bg: Color {
+        switch status {
+        case "done": return Kit.accentWash
+        case "partial": return Kit.warnWash
+        case "now": return Kit.page
+        default: return Kit.hover
+        }
+    }
+}
+
+/// The chip's mark: a tick, half a circle, or a ring.
+struct UnitMark: View {
+    let status: String
+    let color: Color
+
+    var body: some View {
+        Group {
+            switch status {
+            case "done":
+                Image(systemName: "checkmark").font(.system(size: 11, weight: .bold))
+            case "partial":
+                ZStack {
+                    Circle().strokeBorder(color, lineWidth: 1.8)
+                    Circle().trim(from: 0.25, to: 0.75).fill(color).rotationEffect(.degrees(180)).padding(1)
+                }
+                .frame(width: 12, height: 12)
+            default:
+                Circle().strokeBorder(color, lineWidth: 1.8).frame(width: 12, height: 12)
+            }
+        }
+        .foregroundStyle(color)
+        .frame(width: 13, height: 13)
+    }
+}
+
+/// done · partly · not yet, and how the card works.
+private struct UnitLegend: View {
+    var body: some View {
+        HStack(spacing: 16) {
+            HStack(spacing: 5) { UnitMark(status: "done", color: Theme.accent); Text("done") }
+            HStack(spacing: 5) { UnitMark(status: "partial", color: Theme.soon); Text("partly") }
+            HStack(spacing: 5) { UnitMark(status: "not-yet", color: Kit.faint); Text("not yet") }
+            Spacer(minLength: 8)
+            Text("Tap a unit to see its sheets")
+        }
+        .font(.nx(.caption))
+        .foregroundStyle(Kit.faint)
+        .lineLimit(1)
+        .minimumScaleFactor(0.85)
+        .padding(.horizontal, 12)
+        .padding(.top, 8)
+        .padding(.bottom, 6)
     }
 }
 

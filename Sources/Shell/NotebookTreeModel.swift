@@ -31,6 +31,23 @@ final class NotebookTreeModel {
         return NotebookTree.rows(top: top, open: open, counts: counts) { level($0) }
     }
 
+    /// The rows for some notebooks only (a subject's, in the new look's sidebar), with their open notebooks inside.
+    func rows(_ root: URL, top: [String], open: Set<String>) -> [NotebookTreeRow] {
+        _ = version
+        use(root)
+        return NotebookTree.rows(top: top, open: open, counts: counts) { level($0) }
+    }
+
+    /// Where a subject's notebooks are looked for: every top notebook and the notebooks right inside it (a OneNote import's
+    /// "School" notebook holds "Chemistry"). One folder listing per top notebook, kept.
+    func candidates(_ root: URL) -> [String] {
+        _ = version
+        use(root)
+        let top = self.top ?? Notebook.top(root)
+        self.top = top
+        return top.flatMap { [$0] + level($0).notebooks }
+    }
+
     /// One notebook's level, read once.
     func level(_ path: String) -> NotebookLevel {
         if let l = levels[path] { return l }

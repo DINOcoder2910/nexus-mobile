@@ -166,6 +166,8 @@ enum Screen: Hashable {
     case notebook(String)
     /// Applications (the tracker and Research), and a school's page by its workstream id.
     case applications, school(String)
+    /// A subject's page (a workstream in the new look: its next tasks, notebooks, study and files), and its Study page.
+    case subject(String), studyPage(String)
 }
 
 /// The shell: the sidebar on the left (where you go), the screen on the right, and the task panel, add sheet and undo bar over both.
@@ -189,7 +191,7 @@ struct RootView: View {
     @State private var todayPath: [Screen] = []
     @State private var calendarPath: [Screen] = []
     @State private var inboxPath: [Screen] = []
-    @State private var notebooksPath: [Screen] = []
+    @State private var subjectsPath: [Screen] = []
     @State private var morePath: [Screen] = []
 
     var body: some View {
@@ -329,6 +331,8 @@ struct RootView: View {
         case .home: return "Home"
         case .guide: return "How Nexus works"
         case .files(let path): return path.isEmpty ? "Files (the data folder)" : "Files: \(path)"
+        case .subject(let id): return store.workstream(id).map { "\($0.name)'s page (\($0.folder))" } ?? id
+        case .studyPage(let id): return store.workstream(id).map { "\($0.name)'s Study (\($0.folder)/study)" } ?? id
         }
     }
 
@@ -418,13 +422,15 @@ struct RootView: View {
             case .ideas: IdeasView()
             case .time: TimeView()
             case .claude: ClaudeChatView()
+            case .subject(let id): SubjectPage(workstreamId: id, go: go)
+            case .studyPage(let id): StudyPage(workstreamId: id)
             }
         }
     }
 
     // MARK: the iPhone: a tab bar
 
-    enum PhoneTab: Hashable { case today, calendar, inbox, notebooks, more }
+    enum PhoneTab: Hashable { case today, calendar, inbox, subjects, more }
 
     private var phoneTabs: some View {
         TabView(selection: $tab) {
@@ -438,11 +444,12 @@ struct RootView: View {
                 .tabItem { Label("Inbox", systemImage: "tray") }
                 .badge(store.snapshot.isDataFolder ? store.planning.openCount(nil) : 0)
                 .tag(PhoneTab.inbox)
-            phoneStack(.notebooks, $notebooksPath) {
-                Sidebar(selection: .constant(nil), pushes: true, notebooksOnly: true, title: "Notebooks")
+            // the new look's Subjects tab: each subject opens its page; every notebook below them
+            phoneStack(.subjects, $subjectsPath) {
+                Sidebar(selection: .constant(nil), pushes: true, subjectsTab: true, title: "Subjects")
             }
-            .tabItem { Label("Notebooks", systemImage: "book.closed") }
-            .tag(PhoneTab.notebooks)
+            .tabItem { Label("Subjects", systemImage: "books.vertical") }
+            .tag(PhoneTab.subjects)
             // More is every screen, the ones in the tab bar too (the sidebar as a list)
             phoneStack(.more, $morePath) {
                 Sidebar(selection: .constant(nil), pushes: true, title: "More")
@@ -515,7 +522,7 @@ struct RootView: View {
         case .today: tab = .today; todayPath = []
         case .calendar: tab = .calendar; calendarPath = []
         case .inbox: tab = .inbox; inboxPath = []
-        case .notebook, .boardSearch, .boards: tab = .notebooks; notebooksPath = [s]
+        case .notebook, .boardSearch, .boards, .subject: tab = .subjects; subjectsPath = [s]
         default: tab = .more; morePath = [s]
         }
     }
