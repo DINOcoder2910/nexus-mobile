@@ -117,6 +117,9 @@ final class QuickRing: UIView {
 
         core.frame = CGRect(x: (Self.bubbleSize - Self.coreSize) / 2, y: (Self.bubbleSize - Self.coreSize) / 2, width: Self.coreSize, height: Self.coreSize)
         core.layer.cornerRadius = Self.coreSize / 2
+        // a light rim, so a black or dark ink still reads on the dark button
+        core.layer.borderWidth = 2
+        core.layer.borderColor = UIColor(white: 1, alpha: 0.85).cgColor
         core.isUserInteractionEnabled = false
         bubble.addSubview(core)
         coreIcon.frame = core.bounds.insetBy(dx: 10, dy: 10)
@@ -224,7 +227,7 @@ final class QuickRing: UIView {
         guard self.point(inside: point, with: event) else { return nil }
         if !tab.isHidden, tab.frame.insetBy(dx: -14, dy: -10).contains(point) { return tab }
         if !bubble.isHidden, bubble.frame.insetBy(dx: -6, dy: -6).contains(point) { return bubble }
-        for v in items where v.chip.frame.insetBy(dx: -8, dy: -8).contains(convert(point, to: v)) { return v }
+        for v in items where v.chip.frame.insetBy(dx: -8, dy: -8).contains(convert(point, to: v)) { return v.chip }
         return self
     }
 
@@ -362,7 +365,7 @@ final class QuickRing: UIView {
         fan.subviews.forEach { $0.removeFromSuperview() }
         items = list.enumerated().map { (i, c) -> RingItemView in
             let v = RingItemView(frame: fan.bounds, choice: c, angle: a[i], span: step, current: isCurrent(c))
-            v.accessibilityIdentifier = "ring-item-\(i)"
+            v.chip.accessibilityIdentifier = "ring-item-\(i)"
             fan.addSubview(v)
             return v
         }
@@ -735,7 +738,6 @@ final class RingItemView: UIView {
         let s: CGFloat = 38
         chip.frame = CGRect(x: m.x + cos(angle) * QuickRing.itemRadius - s / 2, y: m.y + sin(angle) * QuickRing.itemRadius - s / 2, width: s, height: s)
         chip.layer.cornerRadius = s / 2
-        chip.isUserInteractionEnabled = false
         addSubview(chip)
         switch choice {
         case .tool(let t):
@@ -762,18 +764,14 @@ final class RingItemView: UIView {
             chip.addSubview(dot)
             if current { chip.layer.borderColor = UIColor(white: 1, alpha: 0.7).cgColor; chip.layer.borderWidth = 2 }
         }
-        isAccessibilityElement = true
-        accessibilityLabel = title
-        accessibilityTraits = current ? [.button, .selected] : .button
+        // the chip is the choice for VoiceOver and UI tests (the wedge's view fills the whole fan)
+        isAccessibilityElement = false
+        chip.isAccessibilityElement = true
+        chip.accessibilityLabel = title
+        chip.accessibilityTraits = current ? [.button, .selected] : .button
     }
 
     required init?(coder: NSCoder) { fatalError() }
-
-    /// Only the chip counts for VoiceOver and UI tests: the view itself fills the whole fan.
-    override var accessibilityFrame: CGRect {
-        get { UIAccessibility.convertToScreenCoordinates(chip.frame, in: self) }
-        set { super.accessibilityFrame = newValue }
-    }
 
     func setHot(_ on: Bool, near: Bool) {
         let scale: CGFloat = on ? 1.34 : near ? 1.1 : 1

@@ -206,6 +206,7 @@ struct SpanishMemoryReview: View {
     @Environment(NexusStore.self) private var store
 
     var body: some View {
+        VStack(spacing: 0) {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 if let r = chat.review {
@@ -226,7 +227,12 @@ struct SpanishMemoryReview: View {
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxHeight: 420)
+        .frame(maxHeight: 360)
+            if chat.review?.phase == .review && chat.review?.memory != nil {
+                Divider()
+                actions
+            }
+        }
         .background(Color.secondary.opacity(0.05))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("spanish-memory-review")
@@ -266,18 +272,24 @@ struct SpanishMemoryReview: View {
             TextField("Tell Claude what is wrong (\"I already know ser and estar\"), then Revise", text: Binding(get: { chat.review?.feedback ?? "" }, set: { chat.review?.feedback = $0 }), axis: .vertical)
                 .lineLimit(1...4)
                 .textFieldStyle(.roundedBorder)
-            HStack {
-                Button("Save") { if let msg = chat.saveMemory(store) { store.toast = .init(message: msg) } }
-                    .buttonStyle(.borderedProminent)
-                    .accessibilityIdentifier("spanish-memory-save")
-                Button("Revise") {
-                    let f = (chat.review?.feedback ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !f.isEmpty { chat.consolidate(store, feedback: f) }
-                }
-                .disabled((chat.review?.feedback ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                Spacer()
-                Button("Don't update the memory") { chat.skipMemory(store) }.font(.nx(.callout))
-            }
         }
+    }
+
+    /// Save, Revise and Don't update, under the review's scrolling part so they are always in reach.
+    private var actions: some View {
+        HStack {
+            Button("Save") { if let msg = chat.saveMemory(store) { store.toast = .init(message: msg) } }
+                .buttonStyle(.borderedProminent)
+                .accessibilityIdentifier("spanish-memory-save")
+            Button("Revise") {
+                let f = (chat.review?.feedback ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                if !f.isEmpty { chat.consolidate(store, feedback: f) }
+            }
+            .disabled((chat.review?.feedback ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            Spacer()
+            Button("Don't update the memory") { chat.skipMemory(store) }.font(.nx(.callout))
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 10)
     }
 }

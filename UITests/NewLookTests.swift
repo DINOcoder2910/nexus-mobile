@@ -51,7 +51,7 @@ final class NewLookTests: XCTestCase {
         app.buttons["Collapse Chemistry HL"].firstMatch.tap()
 
         // the name steps inside the subject: only its parts, the places as icons on top, Back to every subject
-        let row = el("subject-chemistry-hl")
+        let row = app.staticTexts["Chemistry HL"].firstMatch
         reach(row, "Chemistry HL's row")
         row.tap()
         XCTAssertTrue(el("subject-back").waitForExistence(timeout: 10), "didn't step inside Chemistry HL")

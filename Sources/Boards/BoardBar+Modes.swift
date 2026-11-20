@@ -9,11 +9,11 @@ enum BarMode: Int, CaseIterable {
 }
 
 /// The new look's board bar on a wide screen:
-/// - **open (A)**: the top row has the way back, the board's name, the Draw | Insert | View switch in the middle, undo, redo and
-///   the board's buttons; the row under it holds the switch's choice. Draw: the tools and +, every colour and every size, always
-///   in view for one-tap switching, the tool's own options, the picked item's actions, the page and zoom pills, and ︿ to fold.
-///   Insert: text, a picture, a PDF printout, a scan, shapes, a tool card. View: the background, dark board, fingers, the ruler,
-///   contents, earlier versions, hiding the bars, page and zoom.
+/// - **open (A)**: the top row has the way back, the board's name, the Draw | Insert | View switch in the middle, the page and
+///   zoom pills, undo, redo and the board's buttons; the row under it holds the switch's choice. Draw: the tools, every colour and
+///   every size, always in view for one-tap switching, the tool's own options, the picked item's actions, and ︿ to fold.
+///   Insert: text, a picture, a PDF printout, a scan, shapes, Insert space, a tool card. View: the background, dark board,
+///   fingers, the ruler, the quick ring, contents, hiding the bars.
 /// - **folded (B)**: one bar: "Draw ▾" (its menu switches to Insert or View, which opens the bar again), the tools, the first four
 ///   colours and two sizes, undo, redo, ⋯ and ﹀. The rest of the colours and sizes are a tap on ﹀ away. Swipe the bar up to
 ///   fold it, down to open it; it stays as you left it (UserDefaults).
@@ -119,6 +119,15 @@ extension BoardBar {
         let even = left.widthAnchor.constraint(equalTo: right.widthAnchor)
         even.priority = .init(200)
         even.isActive = true
+        // the page and zoom pills sit in the top row, so the row under it keeps its room for the tools, colours and sizes
+        if !readOnly {
+            if !b.pdfs.isEmpty {
+                pagePill.menu = b.pageMenu()
+                trail.insertArrangedSubview(pagePill, at: 0)
+            }
+            zoomPill.menu = b.zoomMenu()
+            trail.insertArrangedSubview(zoomPill, at: b.pdfs.isEmpty ? 0 : 1)
+        }
         topRow.addArrangedSubview(trail)
 
         // the row under it
@@ -146,12 +155,6 @@ extension BoardBar {
                 rightStack.addArrangedSubview(textButton("Delete", "trash") { [weak b] in b?.deleteSelected() })
                 rightStack.addArrangedSubview(divider())
             }
-            if !b.pdfs.isEmpty {
-                pagePill.menu = b.pageMenu()
-                rightStack.addArrangedSubview(pagePill)
-            }
-            zoomPill.menu = b.zoomMenu()
-            rightStack.addArrangedSubview(zoomPill)
         case .insert:
             fillInsertRow(b)
             toolRow.addArrangedSubview(rowScroll)
@@ -160,12 +163,6 @@ extension BoardBar {
             fillViewRow(b)
             toolRow.addArrangedSubview(rowScroll)
             toolRow.addArrangedSubview(spacer())
-            if !b.pdfs.isEmpty {
-                pagePill.menu = b.pageMenu()
-                rightStack.addArrangedSubview(pagePill)
-            }
-            zoomPill.menu = b.zoomMenu()
-            rightStack.addArrangedSubview(zoomPill)
         }
         rightStack.addArrangedSubview(icon("chevron.up", "Fold the bar") { [weak self] in self?.setFolded(true) })
         toolRow.addArrangedSubview(rightStack)
@@ -190,10 +187,11 @@ extension BoardBar {
         return tc
     }
 
-    /// The tools and + (the Insert menu, as before), each ink tool with a line of its colour under it.
+    /// The tools, each ink tool with a line of its colour under it. Insert space and what + used to hold are in Insert's row, so
+    /// Draw's row has room for every colour and size.
     func fillTools(_ b: BoardController) {
         let tools = BoardTools.shared
-        for t in BoardTool.allCases {
+        for t in BoardTool.allCases where t != .space || tools.tool == .space {
             let on = tools.tool == t
             let button = icon(t.symbol, t.title, selected: on) { [weak b] in b?.selectTool(t) }
             if t == .pen || t == .pencil || t == .highlighter {
@@ -212,7 +210,6 @@ extension BoardBar {
             }
             toolsStack.addArrangedSubview(button)
         }
-        toolsStack.addArrangedSubview(menuButton("plus", "Insert", b.insertMenu()))
     }
 
     /// A stored ink colour as it shows on this board (PencilKit shows black as white on a dark board).
@@ -315,6 +312,12 @@ extension BoardBar {
     func fillInsertRow(_ b: BoardController) {
         for e in b.insertMenu().children { if let x = rowButton(e) { rowStack.addArrangedSubview(x) } }
         rowStack.addArrangedSubview(divider())
+        let space = BoardTools.shared.tool == .space
+        rowStack.addArrangedSubview(rowButton(UIAction(title: BoardTool.space.title, image: UIImage(systemName: BoardTool.space.symbol), state: space ? .on : .off) { [weak b] _ in
+            // its options are in Draw's row
+            b?.selectTool(.space)
+            b?.bar.setMode(.draw)
+        })!)
         rowStack.addArrangedSubview(rowButton(UIAction(title: "Tool card", image: UIImage(systemName: "square.grid.2x2")) { [weak b] _ in b?.toggleToolPanel() })!)
     }
 

@@ -66,6 +66,7 @@ struct SubjectPage: View {
                 }
             }
         }
+        .spanishSetupMenu(w.id)
         .notebookPrompts(actions, store: store)
         .task(id: "\(w.id)|\(store.notebooksVersion)|\(store.snapshot.loadedAt)") { readNotebooks(w) }
     }
@@ -107,7 +108,7 @@ struct SubjectPage: View {
         ScrollView {
             if size == .regular {
                 HStack(alignment: .top, spacing: 24) {
-                    VStack(alignment: .leading, spacing: 24) { nextUp(w); studyCard(w) }
+                    VStack(alignment: .leading, spacing: 24) { nextUp(w); studyCard(w); spanishCard(w) }
                         .frame(maxWidth: .infinity, alignment: .topLeading)
                     VStack(alignment: .leading, spacing: 24) { notebooksCard(w); filesCard(w) }
                         .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -115,7 +116,7 @@ struct SubjectPage: View {
                 .padding(.horizontal, 28)
                 .padding(.bottom, 28)
             } else {
-                VStack(alignment: .leading, spacing: 22) { nextUp(w); notebooksCard(w); studyCard(w); filesCard(w) }
+                VStack(alignment: .leading, spacing: 22) { nextUp(w); notebooksCard(w); studyCard(w); spanishCard(w); filesCard(w) }
                     .padding(.horizontal, 16)
                     .padding(.bottom, 90)
             }
@@ -216,6 +217,29 @@ struct SubjectPage: View {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: size == .regular ? 160 : 140), spacing: 14)], spacing: 14) {
                     ForEach(boards.prefix(4)) { b in BoardCard(b: b, actions: actions, share: {}) }
                 }
+            }
+        }
+    }
+
+    /// Spanish study, when the subject has it (Set up Spanish study, in the … menu, adds it).
+    @ViewBuilder
+    private func spanishCard(_ w: Workstream) -> some View {
+        if SpanishLibrary.shared.workstream(w.id) != nil {
+            VStack(alignment: .leading, spacing: 10) {
+                cardHead("Spanish", link: nil)
+                NavigationLink { SpanishHome(workstreamId: w.id) } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "character.bubble").font(.system(size: 18)).foregroundStyle(Kit.muted)
+                            .frame(width: 38, height: 38).background(Kit.hover, in: RoundedRectangle(cornerRadius: Kit.controlRadius, style: .continuous))
+                        Text("Check, tutor, writing, skills").font(.nx(.callout, .medium)).foregroundStyle(Kit.ink)
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.nx(.caption, .semibold)).foregroundStyle(Kit.faint)
+                    }
+                    .padding(12)
+                    .kitSurface()
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("workstream-spanish")
             }
         }
     }

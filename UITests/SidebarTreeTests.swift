@@ -145,7 +145,12 @@ final class SidebarPhoneTests: XCTestCase {
             XCTAssertTrue(arrow.waitForExistence(timeout: 5), "no arrow for " + name)
             arrow.tap()
         }
-        XCTAssertTrue(app.staticTexts["Bond enthalpy"].firstMatch.waitForExistence(timeout: 5), "R3 Energetics' boards aren't listed")
+        // the boards come under R3 Energetics, below the fold now that the subjects come first: the list makes their rows once they
+        // scroll into view
+        let bond = app.staticTexts["Bond enthalpy"].firstMatch
+        var down = 0
+        while !(bond.exists && bond.isHittable) && down < 6 { app.collectionViews.firstMatch.swipeUp(velocity: .slow); down += 1 }
+        XCTAssertTrue(bond.waitForExistence(timeout: 5), "R3 Energetics' boards aren't listed")
         sleep(1)
         print("UISTEP \(Date().timeIntervalSince1970) sidebar-phone-tree")
         let a = XCTAttachment(screenshot: XCUIScreen.main.screenshot())

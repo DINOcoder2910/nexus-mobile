@@ -203,10 +203,11 @@ struct Sidebar: View {
                 } else {
                     arrow(open, name: w.name) { setOpen(w.id, !open) }
                 }
+                // no id on the iPad's row: on the row its arrow took the id too (a tap "on the row" opened it), and on the name it
+                // would hide the name from tests that find the row by it; tests tap the name
                 label
             }
             .tag(SidebarItem.screen(school ? .school(w.id) : .subject(w.id)))
-            .accessibilityIdentifier("subject-" + w.id)
             if open { subjectParts(w, indent: 1) }
         }
     }
