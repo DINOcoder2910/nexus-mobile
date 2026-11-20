@@ -9,8 +9,15 @@ final class BoardBar: UIView {
     static let topHeight: CGFloat = 52
     static let rowHeight: CGFloat = 44
     static var height: CGFloat { topHeight + rowHeight }
-    /// This bar's height under the safe area: a third row (the tools) when it is narrow.
-    var height: CGFloat { compact ? BoardBar.height + BoardBar.rowHeight : BoardBar.height }
+    /// This bar's height under the safe area: a third row (the tools) when it is narrow; one row less when it is folded.
+    var height: CGFloat { BoardBar.topHeight + (compact ? BoardBar.rowHeight : 0) + (folded ? 0 : BoardBar.rowHeight) }
+    /// The row under the top one is shown (the new look's A) or tucked into the top bar (B). Remembered (BoardBar+Modes.swift).
+    var folded: Bool { UserDefaults.standard.bool(forKey: BoardBar.foldedKey) }
+    /// What the row under the top one holds: Draw (the tools, colours and sizes), Insert or View. Each board opens on Draw.
+    var mode = BarMode.draw
+    /// The Draw | Insert | View switch in the top row.
+    let modePill = ModePill()
+    lazy var toolRowHeight = toolRow.heightAnchor.constraint(equalToConstant: BoardBar.rowHeight)
     /// Narrow (an iPhone, or a narrow pane on the iPad): the tools get their own row, the rest goes in the ⋯ menu.
     var compact = false {
         didSet {
@@ -43,7 +50,7 @@ final class BoardBar: UIView {
         super.init(frame: frame)
         back.translatesAutoresizingMaskIntoConstraints = false
         addSubview(back)
-        line.backgroundColor = UIColor.separator
+        line.backgroundColor = Kit.ui.line
         line.translatesAutoresizingMaskIntoConstraints = false
         addSubview(line)
 
@@ -111,7 +118,7 @@ final class BoardBar: UIView {
             middleRow.topAnchor.constraint(equalTo: topRow.bottomAnchor),
             middleHeight,
             toolRow.topAnchor.constraint(equalTo: middleRow.bottomAnchor),
-            toolRow.heightAnchor.constraint(equalToConstant: BoardBar.rowHeight),
+            toolRowHeight,
             toolsStack.leadingAnchor.constraint(equalTo: toolsScroll.contentLayoutGuide.leadingAnchor),
             toolsStack.trailingAnchor.constraint(equalTo: toolsScroll.contentLayoutGuide.trailingAnchor),
             toolsStack.topAnchor.constraint(equalTo: toolsScroll.contentLayoutGuide.topAnchor),
@@ -135,6 +142,7 @@ final class BoardBar: UIView {
         rowWidth.isActive = true
         rowScroll.setContentCompressionResistancePriority(.init(300), for: .horizontal)
         rowScroll.setContentHuggingPriority(.init(260), for: .horizontal)
+        setUpModes() // BoardBar+Modes.swift: the switch, swiping the bar to fold it
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -142,15 +150,18 @@ final class BoardBar: UIView {
     // MARK: building
 
     func icon(_ symbol: String, _ label: String, selected: Bool = false, size: CGFloat = 17, action: @escaping () -> Void) -> UIButton {
-        var c = selected ? UIButton.Configuration.tinted() : UIButton.Configuration.plain()
+        var c = UIButton.Configuration.plain()
         c.image = UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: size, weight: .regular))
         c.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 9, bottom: 8, trailing: 9)
-        c.cornerStyle = .medium
+        c.background.cornerRadius = Kit.controlRadius
+        // the kit: a picked tool rests on a tone, in ink, not on the accent's tint
+        if selected { c.background.backgroundColor = Kit.ui.hover }
+        c.baseForegroundColor = Kit.ui.ink
         let b = UIButton(configuration: c, primaryAction: UIAction { _ in action() })
         b.accessibilityLabel = label
         if selected { b.accessibilityTraits.insert(.selected) } // VoiceOver says which tool is on
         b.toolTip = label
-        b.tintColor = selected ? .tintColor : .label
+        b.tintColor = .label
         return b
     }
 
@@ -174,7 +185,7 @@ final class BoardBar: UIView {
         return v
     }
 
-    private func divider() -> UIView {
+    func divider() -> UIView {
         let v = UIView()
         v.backgroundColor = .separator
         v.translatesAutoresizingMaskIntoConstraints = false
@@ -183,7 +194,7 @@ final class BoardBar: UIView {
         return v
     }
 
-    private func colorDot(_ hex: String, selected: Bool, action: @escaping () -> Void, edit: @escaping () -> Void) -> UIView {
+    func colorDot(_ hex: String, selected: Bool, action: @escaping () -> Void, edit: @escaping () -> Void) -> UIView {
         let b = UIButton(type: .custom)
         b.translatesAutoresizingMaskIntoConstraints = false
         b.widthAnchor.constraint(equalToConstant: 30).isActive = true
@@ -213,7 +224,7 @@ final class BoardBar: UIView {
         return b
     }
 
-    private func widthDot(_ size: CGFloat, selected: Bool, name: String = "Width", action: @escaping () -> Void) -> UIView {
+    func widthDot(_ size: CGFloat, selected: Bool, name: String = "Width", action: @escaping () -> Void) -> UIView {
         var c = selected ? UIButton.Configuration.tinted() : UIButton.Configuration.plain()
         c.cornerStyle = .capsule
         let b = UIButton(configuration: c, primaryAction: UIAction { _ in action() })
@@ -283,90 +294,11 @@ final class BoardBar: UIView {
         for v in s.arrangedSubviews { s.removeArrangedSubview(v); v.removeFromSuperview() }
     }
 
-    /// Builds both rows again from the board's state (a tool, colour or selection changed).
+    /// Builds the rows again from the board's state (a tool, colour or selection changed).
     func refresh() {
         guard let b = board else { return }
         if compact { refreshCompact(b); return } // BoardBar+Compact.swift
-        middleRow.isHidden = true
-        let tools = BoardTools.shared
-        let readOnly = b.readOnly
-        HoldTarget.shared.actions.removeAll()
-
-        // top row
-        clear(topRow)
-        let lead = UIStackView()
-        lead.axis = .horizontal
-        lead.spacing = 0
-        lead.addArrangedSubview(icon(b.isSidePane ? "xmark" : "chevron.backward", b.isSidePane ? "Close this pane" : "Close the board") { [weak b] in b?.close() })
-        if b.onSidebar != nil { lead.addArrangedSubview(icon("sidebar.left", "Sidebar") { [weak b] in b?.onSidebar?() }) }
-        topRow.addArrangedSubview(lead)
-        var tc = UIButton.Configuration.plain()
-        tc.title = b.boardName
-        tc.subtitle = b.placeName
-        tc.titleLineBreakMode = .byTruncatingMiddle
-        tc.subtitleLineBreakMode = .byTruncatingHead
-        tc.titleAlignment = .leading
-        tc.baseForegroundColor = .label
-        tc.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4)
-        titleButton.configuration = tc
-        titleButton.menu = b.titleMenu()
-        topRow.addArrangedSubview(titleButton)
-
-        clear(toolsStack)
-        if !readOnly {
-            for t in BoardTool.allCases {
-                toolsStack.addArrangedSubview(icon(t.symbol, t.title, selected: tools.tool == t) { [weak b] in b?.selectTool(t) })
-            }
-            toolsStack.addArrangedSubview(menuButton("plus", "Insert", b.insertMenu()))
-        } else {
-            toolsStack.addArrangedSubview(label("Read only"))
-        }
-        topRow.addArrangedSubview(toolsScroll)
-        let after = spacer()
-        topRow.addArrangedSubview(after)
-        let w = after.widthAnchor.constraint(equalTo: titleButton.widthAnchor, multiplier: 0.6)
-        w.priority = .init(150)
-        w.isActive = true
-
-        let trail = UIStackView()
-        trail.axis = .horizontal
-        trail.spacing = 0
-        if !readOnly {
-            trail.addArrangedSubview(icon("arrow.uturn.backward", "Undo") { [weak b] in b?.undo() })
-            trail.addArrangedSubview(icon("arrow.uturn.forward", "Redo") { [weak b] in b?.redo() })
-            trail.addArrangedSubview(menuButton("square.grid.3x3", "Background", b.backgroundMenu()))
-        }
-        b.extraBarButtons().forEach { trail.addArrangedSubview($0) }
-        trail.addArrangedSubview(menuButton("ellipsis.circle", "Board menu", b.boardMenu()))
-        topRow.addArrangedSubview(trail)
-
-        // tool row
-        clear(toolRow)
-        clear(rowStack)
-        clear(rightStack)
-        if !readOnly { fillToolRow(b) }
-        toolRow.addArrangedSubview(rowScroll)
-        toolRow.addArrangedSubview(spacer())
-
-        if let it = b.selectedItem, !readOnly {
-            if it.type == "text" {
-                rightStack.addArrangedSubview(textButton("Type", "character.cursor.ibeam") { [weak b] in b?.editSelected() })
-            }
-            if it.type == "tool" { b.toolCardButtons(it).forEach { rightStack.addArrangedSubview($0) } }
-            rightStack.addArrangedSubview(textButton("Delete", "trash") { [weak b] in b?.deleteSelected() })
-            rightStack.addArrangedSubview(divider())
-        }
-        if !b.pdfs.isEmpty {
-            pagePill.menu = b.pageMenu()
-            rightStack.addArrangedSubview(pagePill)
-        }
-        zoomPill.menu = b.zoomMenu()
-        rightStack.addArrangedSubview(zoomPill)
-        if !readOnly {
-            rightStack.addArrangedSubview(icon("ruler", "Ruler", selected: b.canvas.isRulerActive) { [weak b] in b?.toggleRuler() })
-        }
-        toolRow.addArrangedSubview(rightStack)
-        updatePills()
+        refreshWide(b) // BoardBar+Modes.swift
     }
 
     func fillToolRow(_ b: BoardController) {

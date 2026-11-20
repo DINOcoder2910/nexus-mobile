@@ -85,6 +85,10 @@ extension BoardController {
         }
         if !readOnly {
             view.append(UIAction(title: "Ruler", image: UIImage(systemName: "ruler"), state: canvas.isRulerActive ? .on : .off) { [weak self] _ in self?.toggleRuler() })
+            view.append(UIAction(title: "Quick ring", image: UIImage(systemName: "circle.circle"), state: QuickRingPrefs.on ? .on : .off) { [weak self] _ in
+                QuickRingPrefs.on.toggle()
+                self?.quickRingChanged()
+            })
         }
         return [
             UIMenu(options: .displayInline, children: extras),
