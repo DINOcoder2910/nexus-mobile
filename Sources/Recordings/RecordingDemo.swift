@@ -25,6 +25,35 @@ enum RecordingDemo {
                      model: "claude-sonnet-5-5", made: Recordings.iso(Date()))
     }
 
+    static let lessonTranscript = Recordings.Transcript(language: "en-US", engine: "demo", segments: [
+        .init(start: 4, end: 14, text: "Right, today we're doing half-equations. Remember, oxidation states are just bookkeeping."),
+        .init(start: 300, end: 318, text: "Atoms first, then oxygens with water, then hydrogens with H plus, then the charge with electrons. Say it with me."),
+        .init(start: 754, end: 760, text: "Don't forget, this comes up every year in Paper 2."),
+        .init(start: 1500, end: 1512, text: "Let's do permanganate going to manganese two plus, in acid."),
+        .init(start: 2810, end: 2830, text: "For homework, questions one to six on the sheet. Quiz next Friday."),
+    ])
+
+    /// What Claude would say about each pin (the demo has no Claude).
+    static func moments(_ pins: [Recordings.Pin]) -> [Recordings.Moment] {
+        pins.map { p in
+            let what: String
+            switch p.kind {
+            case "lost": what = "Balancing the charge: count the charges on each side, then add electrons to the more positive side until they match. In MnO₄⁻ + 8H⁺ → Mn²⁺ + 4H₂O the left is +7 and the right +2, so 5e⁻ go on the left."
+            case "exam": what = "Mr Hale said balancing a half-equation in acid comes up every year in Paper 2, usually for 2 marks."
+            case "homework": what = "Questions 1–6 on the half-equations sheet, before the quiz next Friday."
+            default: what = "The order for every half-equation: atoms, then O with water, then H with H⁺, then charge with electrons."
+            }
+            return .init(at: p.at, kind: p.kind, what: what)
+        }
+    }
+
+    /// The seeded class's pins: two from the buttons, one found by what was said.
+    static let classPins: [Recordings.Pin] = [
+        .init(at: 310, kind: "important", picture: "pictures/0310.jpg"),
+        .init(at: 1505, kind: "lost", picture: "pictures/1505.jpg"),
+        .init(at: 2810, kind: "homework", by: "auto", said: "For homework, questions one to six on the sheet."),
+    ]
+
     static var classProposal: Recordings.Proposal {
         .init(title: "Redox: writing half-equations", subject: "chemistry-hl", people: ["Mr Hale"],
               summary: "How to write and balance half-equations in acidic solution, then combine them into a full redox equation.",
@@ -51,7 +80,8 @@ enum RecordingDemo {
         let root = store.folder
         guard Recordings.list(root).isEmpty else { return }
         let now = Date()
-        func put(_ kind: Recordings.Kind, ago: Double, duration: Double, proposal: Recordings.Proposal, pictures: [(Double, String)], t: Recordings.Transcript) {
+        func put(_ kind: Recordings.Kind, ago: Double, duration: Double, proposal: Recordings.Proposal, pictures: [(Double, String)], t: Recordings.Transcript,
+                 pins: [Recordings.Pin] = []) {
             let start = now.addingTimeInterval(-ago)
             let path = Recordings.dir + "/" + Recordings.folderName(started: start, kind: kind)
             let folder = root.appendingPathComponent(path)
@@ -62,18 +92,16 @@ enum RecordingDemo {
                 if let data = board(label) { try? FolderAccess.writeData(folder.appendingPathComponent(file), data) }
                 m.pictures.append(.init(file: file, at: at))
             }
+            m.pins = pins
+            var proposal = proposal
+            proposal.moments = moments(pins)
             try? FolderAccess.write(folder.appendingPathComponent(Recordings.metaFile), m.json.pretty + "\n")
             try? FolderAccess.write(folder.appendingPathComponent(Recordings.transcriptFile), t.json.pretty + "\n")
             try? FolderAccess.write(folder.appendingPathComponent(Recordings.transcriptText), t.markdown(title: m.title))
             try? FolderAccess.write(folder.appendingPathComponent(Recordings.proposalFile), proposal.json.pretty + "\n")
         }
-        let lesson = Recordings.Transcript(language: "en-US", engine: "demo", segments: [
-            .init(start: 4, end: 14, text: "Right, today we're doing half-equations. Remember, oxidation states are just bookkeeping."),
-            .init(start: 300, end: 318, text: "Atoms first, then oxygens with water, then hydrogens with H plus, then the charge with electrons. Say it with me."),
-            .init(start: 1500, end: 1512, text: "Let's do permanganate going to manganese two plus, in acid."),
-            .init(start: 2810, end: 2830, text: "For homework, questions one to six on the sheet. Quiz next Friday."),
-        ])
-        put(.lesson, ago: 3 * 3600, duration: 2940, proposal: classProposal, pictures: [(310, "Atoms → O (H₂O) → H (H⁺) → charge (e⁻)"), (1505, "MnO₄⁻ + 8H⁺ + 5e⁻ → Mn²⁺ + 4H₂O")], t: lesson)
+        put(.lesson, ago: 3 * 3600, duration: 2940, proposal: classProposal, pictures: [(310, "Atoms → O (H₂O) → H (H⁺) → charge (e⁻)"), (1505, "MnO₄⁻ + 8H⁺ + 5e⁻ → Mn²⁺ + 4H₂O")],
+            t: lessonTranscript, pins: classPins)
         put(.meeting, ago: 26 * 60, duration: 36, proposal: meetingProposal, pictures: [], t: transcript)
         AppServices.store.didWrite(touched: [Recordings.dir])
         store.reload()

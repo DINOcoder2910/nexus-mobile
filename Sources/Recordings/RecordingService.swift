@@ -34,6 +34,18 @@ final class RecordingService: NSObject {
     var problem: String?
     /// The camera sheet for a snap while recording sound.
     var snapping = false
+    /// A pin just found by what was said, shown as a pop-up for a few seconds (LiveMoments.swift).
+    var popup: MomentPopup?
+    /// Listening along while a class records (iOS 26), or why it isn't (shown on the recording card).
+    private(set) var listening = false
+
+    /// LiveEars while listening (typed loosely: it is iOS 26 only).
+    @ObservationIgnored private var ears: AnyObject?
+    /// The lines heard live, and up to when Haiku has read them.
+    @ObservationIgnored private var heardLines: [Recordings.Segment] = []
+    @ObservationIgnored private var askedUpTo = -1.0
+    @ObservationIgnored private var asking: Task<Void, Never>?
+    @ObservationIgnored private var demoLive: Task<Void, Never>?
 
     @ObservationIgnored private var recorder: AVAudioRecorder?
     @ObservationIgnored private var tick: Timer?
@@ -106,12 +118,17 @@ final class RecordingService: NSObject {
         startTicking()
         store.didWrite(touched: [path])
         version += 1
+        if kind == .lesson && !film { await startListening() }
     }
 
     /// Stops, moves the sound (and film) into the folder, then turns it into words and asks Claude.
     func stop() async {
         guard var a = active else { return }
         tick?.invalidate(); tick = nil
+        await stopListening()
+        popup = nil
+        // the pins made while recording (written as they came, but `a` is what is written last)
+        if let now = active { a.meta.pins = now.meta.pins; a.meta.pictures = now.meta.pictures }
         if RecordingDemo.on { await stopDemo(a); return }
         a.meta.duration = elapsed
         a.meta.state = "transcribing"
@@ -161,10 +178,119 @@ final class RecordingService: NSObject {
         do {
             try FolderAccess.writeData(root.appendingPathComponent(a.path + "/" + file), data)
             a.meta.pictures.append(.init(file: file, at: when))
+            // a snap soon after a pin (the pop-up's Snap) is that moment's picture
+            if let i = a.meta.pins.lastIndex(where: { $0.picture == nil && $0.at <= when && when - $0.at < 60 }) { a.meta.pins[i].picture = file }
             try writeMeta(a.path, a.meta)
             active = a
             store.didWrite(touched: [a.path])
         } catch { problem = "The picture couldn't be saved: \(error.localizedDescription)" }
+    }
+
+    // MARK: moments (LiveMoments.swift)
+
+    /// Pins this moment: a live button (`by` "you"), or something said (`by` "auto": skipped when the same kind is pinned within 30 s;
+    /// then a pop-up, when they are on).
+    func pin(_ kind: String, by: String = "you", said: String? = nil, at: Double? = nil) {
+        guard var a = active else { return }
+        let when = ((at ?? elapsed) * 10).rounded() / 10
+        let near = by == "auto" ? 30.0 : 3.0
+        if a.meta.pins.contains(where: { $0.kind == kind && abs($0.at - when) <= near }) { return }
+        let p = Recordings.Pin(at: when, kind: kind, by: by, said: said)
+        a.meta.pins.append(p)
+        a.meta.pins.sort { $0.at < $1.at }
+        active = a
+        try? writeMeta(a.path, a.meta)
+        store.didWrite(touched: [a.path])
+        if by == "auto" && MomentSettings.popups {
+            let pop = MomentPopup(pin: p)
+            withAnimation(.snappy) { popup = pop }
+            Task {
+                try? await Task.sleep(for: .seconds(7))
+                if self.popup?.id == pop.id { withAnimation(.snappy) { self.popup = nil } }
+            }
+        } else if by == "you" {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
+    }
+
+    /// The pop-up's Undo.
+    func unpin(_ p: Recordings.Pin) {
+        withAnimation(.snappy) { popup = nil }
+        guard var a = active, let i = a.meta.pins.firstIndex(of: p) else { return }
+        a.meta.pins.remove(at: i)
+        active = a
+        try? writeMeta(a.path, a.meta)
+        store.didWrite(touched: [a.path])
+    }
+
+    /// A line heard live: the phrases now, Haiku with the next minute's lines.
+    func heard(_ at: Double, _ text: String) {
+        guard active != nil else { return }
+        heardLines.append(.init(start: at, end: at, text: text))
+        if let kind = Recordings.pinKind(of: text) { pin(kind, by: "auto", said: Recordings.pinSaid(text), at: at) }
+    }
+
+    /// Listening along while a class's sound records (when pins by what's said are on): iOS 26's on-device speech, and every
+    /// minute Haiku over the new lines (when that is on). Nothing here stops the recording if it fails.
+    private func startListening() async {
+        heardLines = []; askedUpTo = -1
+        guard MomentSettings.auto else { return }
+        if RecordingDemo.on {
+            listening = true
+            demoLive = Task {
+                try? await Task.sleep(for: .seconds(2))
+                self.heard(self.elapsed, "Don't forget, this comes up every year in Paper 2.")
+            }
+            return
+        }
+        guard #available(iOS 26.0, *) else { return }
+        let e = LiveEars()
+        do {
+            try await e.start(offset: elapsed) { [weak self] at, text in self?.heard(at, text) }
+            ears = e
+            listening = true
+        } catch {
+            await e.stop()
+            return
+        }
+        guard MomentSettings.claude else { return }
+        asking = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(60))
+                guard !Task.isCancelled, self.active != nil else { return }
+                let new = self.heardLines.filter { $0.start > self.askedUpTo }
+                guard new.reduce(0, { $0 + $1.text.split(separator: " ").count }) >= 25, let last = new.last else { continue }
+                self.askedUpTo = last.start
+                for p in await MomentClaude.ask(new) { self.pin(p.kind, by: "auto", said: p.said, at: p.at) }
+            }
+        }
+    }
+
+    private func stopListening() async {
+        asking?.cancel(); asking = nil
+        demoLive?.cancel(); demoLive = nil
+        if #available(iOS 26.0, *), let e = ears as? LiveEars { await e.stop() }
+        ears = nil
+        listening = false
+    }
+
+    /// After the recording: pins found by what was said, over the whole transcript (a class or a screen; a filmed class wasn't
+    /// listened to live), and for a film a picture from it at each pin that has none.
+    private func pinFromTranscript(_ path: String, _ meta: inout Recordings.Meta, _ t: Recordings.Transcript) async {
+        let folder = root.appendingPathComponent(path)
+        if MomentSettings.auto, meta.kind == .lesson || meta.kind == .screen {
+            meta.pins += Recordings.autoPins(t.segments, existing: meta.pins)
+            meta.pins.sort { $0.at < $1.at }
+        }
+        if let v = meta.video, v == Recordings.videoFile, FileManager.default.fileExists(atPath: folder.appendingPathComponent(v).path) {
+            let want = meta.pins.indices.filter { meta.pins[$0].picture == nil }
+            if !want.isEmpty {
+                let pics = await Self.frames(fromFilm: folder.appendingPathComponent(v), at: want.map { meta.pins[$0].at }, into: folder, existing: meta.pictures, note: "Pinned")
+                for (i, p) in zip(want, pics) where p != nil { meta.pins[i].picture = p!.file; meta.pictures.append(p!) }
+                meta.pictures.sort { $0.at < $1.at }
+            }
+        }
+        try? writeMeta(path, meta)
     }
 
     // MARK: after recording
@@ -195,6 +321,12 @@ final class RecordingService: NSObject {
             store.didWrite(touched: [path])
         }
         if !FileManager.default.fileExists(atPath: folder.appendingPathComponent(Recordings.proposalFile).path) {
+            if let text = try? FolderAccess.read(folder.appendingPathComponent(Recordings.transcriptFile)), let v = try? JSONValue.parse(text),
+               let t = Recordings.Transcript(json: v) {
+                working[path] = "Finding the moments…"
+                version += 1
+                await pinFromTranscript(path, &meta, t)
+            }
             working[path] = "Claude is reading it…"
             version += 1
             do {
@@ -284,6 +416,7 @@ final class RecordingService: NSObject {
             Task { @MainActor in
                 try? AVAudioSession.sharedInstance().setActive(true)
                 _ = self?.recorder?.record()
+                if #available(iOS 26.0, *), let e = self?.ears as? LiveEars { e.resume() }
             }
         }
     }
@@ -354,6 +487,25 @@ final class RecordingService: NSObject {
         return out.sorted { $0.at < $1.at }
     }
 
+    /// A picture from the film at each of `times` (nil where it couldn't be taken), in the same order.
+    static func frames(fromFilm film: URL, at times: [Double], into folder: URL, existing: [Recordings.Picture], note: String?) async -> [Recordings.Picture?] {
+        let gen = AVAssetImageGenerator(asset: AVURLAsset(url: film))
+        gen.appliesPreferredTrackTransform = true
+        gen.requestedTimeToleranceBefore = CMTime(seconds: 0.5, preferredTimescale: 600)
+        gen.requestedTimeToleranceAfter = CMTime(seconds: 0.5, preferredTimescale: 600)
+        var taken = Set(existing.map(\.file))
+        var out: [Recordings.Picture?] = []
+        for at in times {
+            guard let cg = try? await gen.image(at: CMTime(seconds: at, preferredTimescale: 600)).image, let data = jpeg(UIImage(cgImage: cg)) else { out.append(nil); continue }
+            let file = Recordings.pictureFile(at: at, taken: taken)
+            if (try? FolderAccess.writeData(folder.appendingPathComponent(file), data)) != nil {
+                taken.insert(file)
+                out.append(.init(file: file, at: at, note: note))
+            } else { out.append(nil) }
+        }
+        return out
+    }
+
     private static func grey(_ cg: CGImage) -> [UInt8]? {
         let w = 32, h = 24
         var px = [UInt8](repeating: 0, count: w * h)
@@ -386,6 +538,7 @@ final class RecordingService: NSObject {
         startTicking()
         store.didWrite(touched: [path])
         version += 1
+        if kind == .lesson && !film { Task { await startListening() } }
     }
 
     private func stopDemo(_ a: Active) async {
@@ -393,15 +546,19 @@ final class RecordingService: NSObject {
         m.duration = elapsed
         m.state = "done"
         let folder = root.appendingPathComponent(a.path)
-        let t = RecordingDemo.transcript
+        let lesson = m.kind == .lesson
+        let t = lesson ? RecordingDemo.lessonTranscript : RecordingDemo.transcript
         try? FolderAccess.write(folder.appendingPathComponent(Recordings.transcriptFile), t.json.pretty + "\n")
         try? FolderAccess.write(folder.appendingPathComponent(Recordings.transcriptText), t.markdown(title: m.title))
         try? writeMeta(a.path, m)
         active = nil
+        await pinFromTranscript(a.path, &m, t)
         working[a.path] = "Claude is reading it…"
         version += 1
         try? await Task.sleep(for: .seconds(2))
-        try? FolderAccess.write(folder.appendingPathComponent(Recordings.proposalFile), RecordingDemo.meetingProposal.json.pretty + "\n")
+        var p = lesson ? RecordingDemo.classProposal : RecordingDemo.meetingProposal
+        p.moments = RecordingDemo.moments(m.pins)
+        try? FolderAccess.write(folder.appendingPathComponent(Recordings.proposalFile), p.json.pretty + "\n")
         working[a.path] = nil
         store.didWrite(touched: [a.path])
         version += 1

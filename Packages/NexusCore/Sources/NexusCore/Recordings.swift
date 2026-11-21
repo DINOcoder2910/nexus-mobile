@@ -84,6 +84,117 @@ public enum Recordings {
         public init(file: String, at: Double, note: String? = nil) { self.file = file; self.at = at; self.note = note }
     }
 
+    /// A moment marked while recording: by a live button (`by` "you") or found by what was said ("auto"). `kind`: important, lost
+    /// ("Lost me": explain this part later), exam (an exam tip) or homework.
+    public struct Pin: Equatable, Sendable {
+        public var at: Double
+        public var kind: String
+        public var by: String
+        public var said: String?
+        public var picture: String?
+        public init(at: Double, kind: String, by: String = "you", said: String? = nil, picture: String? = nil) {
+            self.at = at; self.kind = kind; self.by = by; self.said = said; self.picture = picture
+        }
+        init?(json p: JSONValue) {
+            guard let at = p["at"]?.number else { return nil }
+            self.at = at
+            kind = p["kind"]?.string.flatMap { Recordings.pinKinds.contains($0) ? $0 : nil } ?? "important"
+            by = p["by"]?.string ?? "you"
+            said = p["said"]?.string
+            picture = p["picture"]?.string
+        }
+        public var json: JSONValue {
+            var e: [(String, JSONValue)] = [("at", .number(Recordings.r1(at))), ("kind", .string(kind)), ("by", .string(by))]
+            if let s = said { e.append(("said", .string(s))) }
+            if let p = picture { e.append(("picture", .string(p))) }
+            return .object(e)
+        }
+    }
+
+    /// The kinds of pin, in the order the live buttons show them.
+    public static let pinKinds = ["important", "lost", "exam", "homework"]
+
+    /// A pin's kind as the buttons and the summary say it.
+    public static func pinLabel(_ kind: String) -> String {
+        switch kind {
+        case "lost": return "Lost me"
+        case "exam": return "Exam tip"
+        case "homework": return "Homework"
+        default: return "Important"
+        }
+    }
+
+    public static func pinIcon(_ kind: String) -> String {
+        switch kind {
+        case "lost": return "questionmark.circle"
+        case "exam": return "graduationcap"
+        case "homework": return "checklist"
+        default: return "star"
+        }
+    }
+
+    /// The phrases that make an auto pin, by kind, in the order they are tried (the Rust core's PIN_PHRASES, the same lists).
+    public static let pinPhrases: [(kind: String, phrases: [String])] = [
+        ("exam", ["comes up every year", "comes up in the exam", "comes up in exams", "comes up on the test", "comes up a lot", "in the exam", "on the exam",
+                  "in the test", "on the test", "in paper 1", "in paper 2", "in paper 3", "mark scheme", "markscheme", "examiner", "past paper", "lose marks",
+                  "lose a mark", "get the mark", "for the marks"]),
+        ("homework", ["homework", "for next lesson", "for next class", "for next time", "due on", "due next", "due tomorrow", "hand it in", "hand in",
+                      "submit it", "finish it at home", "finish this at home"]),
+        ("important", ["this is important", "really important", "very important", "super important", "remember this", "remember that",
+                       "write this down", "write that down", "don't forget", "do not forget", "make sure you", "key point", "the key thing", "the key idea",
+                       "pay attention", "common mistake", "people always get", "students always", "always get this wrong", "be careful"]),
+    ]
+
+    /// Which kind of auto pin some words make, if any.
+    public static func pinKind(of text: String) -> String? {
+        let words = text.lowercased().replacingOccurrences(of: "’", with: "'").split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+        return pinPhrases.first { $0.phrases.contains { words.contains($0) } }?.kind
+    }
+
+    /// At most 140 characters, cut at a word with "…".
+    public static func pinSaid(_ text: String) -> String {
+        let t = text.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+        if t.count <= 140 { return t }
+        var cut = String(t.prefix(139))
+        if let sp = cut.lastIndex(of: " "), cut.distance(from: cut.startIndex, to: sp) > 60 { cut = String(cut[..<sp]) }
+        while let l = cut.last, [",", ";", ":", " "].contains(l) { cut.removeLast() }
+        return cut + "…"
+    }
+
+    /// The pins found by what was said (nexus docs/data-format.md "Recordings"): new ones only, in time order.
+    public static func autoPins(_ segments: [Segment], existing: [Pin]) -> [Pin] {
+        var have = existing.map { (at: $0.at, kind: $0.kind) }
+        var out: [Pin] = []
+        for s in segments {
+            guard let kind = pinKind(of: s.text) else { continue }
+            if have.contains(where: { $0.kind == kind && abs($0.at - s.start) <= 30 }) { continue }
+            have.append((s.start, kind))
+            out.append(Pin(at: r1(s.start), kind: kind, by: "auto", said: pinSaid(s.text)))
+        }
+        return out
+    }
+
+    /// Listening along to a class (the phone, every minute or so, with Haiku): which of the last lines are moments to pin. The phrase
+    /// rule (`autoPins`) catches the plain ones at once; this catches the ones said another way.
+    public static let liveSystem = """
+    You listen along to a class a student is recording. You get the last lines heard, each "[mm:ss] words", from speech recognition \
+    (it mishears some words). Pick the moments the student would want marked: the teacher says something comes up in the exam or a \
+    test, or how marks are given ("exam"); sets homework, a hand-in or a deadline ("homework"); or stresses something as important: \
+    a key rule, a method to always use, a common mistake ("important"). Most stretches have none: only pick a clear one.
+    Answer with ONE JSON object and nothing else: {"pins": [{"at": "mm:ss" of its line, "kind": "exam" | "homework" | "important", \
+    "said": the words that make it a moment, at most 25}]}, and {"pins": []} when there are none.
+    """
+
+    /// Haiku's answer while listening, as auto pins (an unknown kind, no time or no words left out).
+    public static func parseLivePins(_ text: String) -> [Pin] {
+        guard let a = text.firstIndex(of: "{"), let b = text.lastIndex(of: "}"), a < b, let v = try? JSONValue.parse(String(text[a...b])) else { return [] }
+        return (v["pins"]?.array ?? []).compactMap { e in
+            guard let k = e["kind"]?.string, ["exam", "homework", "important"].contains(k), let at = e["at"].flatMap(seconds),
+                  let w = e["said"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines), !w.isEmpty else { return nil }
+            return Pin(at: r1(at), kind: k, by: "auto", said: pinSaid(w))
+        }
+    }
+
     public struct Meta: Equatable {
         public var id: String
         public var kind: Kind
@@ -99,6 +210,8 @@ public enum Recordings {
         public var language: String?
         public var subject: String?
         public var pictures: [Picture]
+        /// Moments marked while recording (live buttons, and found by what was said), in time order.
+        public var pins: [Pin] = []
         /// The file as read: fields this app doesn't know are kept when it is written again.
         public var raw: JSONValue?
 
@@ -125,6 +238,7 @@ public enum Recordings {
                 guard let f = p["file"]?.string else { return nil }
                 return Picture(file: f, at: p["at"]?.number ?? 0, note: p["note"]?.string)
             }
+            pins = (v["pins"]?.array ?? []).compactMap(Pin.init(json:)).sorted { $0.at < $1.at }
             raw = v
         }
 
@@ -140,7 +254,7 @@ public enum Recordings {
                 if let n = p.note { e.append(("note", .string(n))) }
                 return .object(e)
             }
-            return o.setting("pictures", .array(pics))
+            return o.setting("pictures", .array(pics)).setting("pins", pins.isEmpty ? nil : .array(pins.map(\.json)))
         }
 
         public var startedDate: Date? { Recordings.date(started) }
@@ -329,6 +443,14 @@ public enum Recordings {
         }
     }
 
+    /// What Claude says about a pinned moment: what was happening then (for "lost", a short explanation of that part).
+    public struct Moment: Equatable, Sendable {
+        public var at: Double
+        public var kind: String
+        public var what: String
+        public init(at: Double, kind: String, what: String) { self.at = at; self.kind = kind; self.what = what }
+    }
+
     public struct Proposal: Equatable, Sendable {
         public var title: String
         /// A workstream id, nil for the Inbox.
@@ -342,6 +464,8 @@ public enum Recordings {
         public var tasks: [ProposedTask]
         public var dates: [ProposedDate]
         public var classNotes: ClassNotes?
+        /// One for each pin, in the order Claude gave them.
+        public var moments: [Moment] = []
         public var model: String?
         public var made: String?
         /// Take the subject's teaching note too (a class only).
@@ -383,6 +507,12 @@ public enum Recordings {
             } else {
                 classNotes = nil
             }
+            moments = (v["moments"]?.array ?? []).compactMap { e in
+                guard let w = e["what"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines), !w.isEmpty,
+                      let at = e["at"].flatMap(Recordings.seconds) else { return nil }
+                let k = e["kind"]?.string ?? ""
+                return Moment(at: at, kind: Recordings.pinKinds.contains(k) ? k : "important", what: w)
+            }
             model = v["model"]?.string
             made = v["made"]?.string
             takeTeaching = v["takeTeaching"]?.bool ?? true
@@ -414,6 +544,9 @@ public enum Recordings {
                 e += [("taught", .string(c.taught)), ("examples", .array(c.examples.map { .string($0) })), ("teaching", .string(c.teaching))]
                 o.append(("class", .object(e)))
                 if !takeTeaching { o.append(("takeTeaching", .bool(false))) }
+            }
+            if !moments.isEmpty {
+                o.append(("moments", .array(moments.map { .object([("at", .number(Recordings.r1($0.at))), ("kind", .string($0.kind)), ("what", .string($0.what))]) })))
             }
             if let m = model { o.append(("model", .string(m))) }
             if let m = made { o.append(("made", .string(m))) }
@@ -455,6 +588,9 @@ public enum Recordings {
     taught in order, "examples": the worked examples and questions used (one string each, with the numbers), "teaching": markdown \
     on HOW the teacher teaches it: their method and steps, the words and shortcuts they use, what they stress or say comes up in \
     tests, common mistakes they warn about. A tutor will read "teaching" to explain things the way this class does.}
+    - "moments": one for each pinned moment you are given, in order, each {"at": "mm:ss", "kind": its kind, "what": one or two \
+    sentences on what was being said or shown then and why it matters}. For "lost" (the user got lost there), say what that part was \
+    and explain it briefly and clearly. A "homework" moment is usually a task too. [] when no moments are given.
     Pictures, when given, are photos or screenshots the user took at those moments (the board, slides): use what they show.
     """
 
@@ -473,6 +609,13 @@ public enum Recordings {
         if !pictures.isEmpty {
             lines.append("")
             lines.append("Pictures, in order: " + pictures.map { clock($0.at) }.joined(separator: ", ") + ".")
+        }
+        if !meta.pins.isEmpty {
+            lines.append("")
+            lines.append("Pinned moments (kind: important, lost, exam or homework; by the user's button, or found by what was said):")
+            for p in meta.pins {
+                lines.append("- [\(clock(p.at))] \(p.kind) (\(p.by == "auto" ? "found" : "pinned by the user"))" + (p.said.map { ": \"\($0)\"" } ?? ""))
+            }
         }
         lines.append("")
         lines.append("Transcript:")
@@ -516,6 +659,9 @@ public enum Recordings {
             if !c.examples.isEmpty { l += ["", "## Examples", ""] + c.examples.map { "- \($0)" } }
             if !c.teaching.isEmpty { l += ["", "## How it was taught", "", c.teaching.trimmingCharacters(in: .whitespacesAndNewlines)] }
         }
+        if !p.moments.isEmpty {
+            l += ["", "## Moments", ""] + p.moments.map { "- \(clock($0.at)) · \(pinLabel($0.kind)): \($0.what.trimmingCharacters(in: .whitespacesAndNewlines))" }
+        }
         if !meta.pictures.isEmpty {
             l += ["", "## Pictures", ""] + meta.pictures.map { "- \(clock($0.at)): ![](\($0.file))" }
         }
@@ -531,14 +677,18 @@ public enum Recordings {
     }
 
     /// The subject's teaching.md with this class added at the top (newest first), under its heading.
-    public static func addTeaching(_ existing: String?, subjectName: String, date: String, title: String, path: String, notes c: ClassNotes) -> String {
+    /// `moments`: the proposal's; the "lost" ones are listed, so the tutor knows where the user got lost.
+    public static func addTeaching(_ existing: String?, subjectName: String, date: String, title: String, path: String, notes c: ClassNotes,
+                                   moments: [Moment] = []) -> String {
         let head = "# How \(subjectName) is taught\n\nWhat each recorded class showed about how it is taught, newest first. The tutor reads this to explain things the way your class does.\n"
         var body = (existing ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if body.isEmpty { body = head.trimmingCharacters(in: .whitespacesAndNewlines) }
         var entry = ["## \(date): \(title)" + (c.unit.map { " (\($0))" } ?? ""), ""]
         entry.append(c.teaching.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "(nothing noted)" : c.teaching.trimmingCharacters(in: .whitespacesAndNewlines))
         if !c.examples.isEmpty { entry += ["", "Examples used:"] + c.examples.map { "- \($0)" } }
-        entry += ["", "[The class](\(path)/\(summaryFile))"]
+        let lost = moments.filter { $0.kind == "lost" }
+        if !lost.isEmpty { entry += ["", "Where I got lost:"] + lost.map { "- \(clock($0.at)): \($0.what.trimmingCharacters(in: .whitespacesAndNewlines))" } }
+        entry +=["", "[The class](\(path)/\(summaryFile))"]
         // the entry goes after the head (the part before the first "## ")
         if let r = body.range(of: "\n## ") {
             var above = String(body[..<r.lowerBound])

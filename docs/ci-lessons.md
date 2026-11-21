@@ -9,6 +9,8 @@ Every iPad or iPhone CI or build failure goes here, with its cause and fix, so i
 
 ## Time limits
 
+- **Nov 21: `RecordingsTests.testRecordings` failed "Failed to get screenshot: Timed out while requesting screenshot"** (ui-check on f6947c7, iPad only; the iPhone passed the same test). The simulator didn't answer XCTest's screenshot call; nothing in the app or the test changed there. Fix: none in code; the next push re-ran it. If `shot()` times out twice in a row, read the freeze reports first (a stuck main thread also stops screenshots).
+
 - **Nov 19: "The job was not acquired by Runner of type hosted even after multiple attempts"** (ui-check on 0f84b86). GitHub had no Mac free for 15 minutes and failed the run before a single step; nothing in the repo caused it. Fix: re-run the run (Actions › the run › Re-run), don't push to retrigger. Whoever pushed should check the run is actually running, not just queued: this one sat failed overnight because the failure looked like any other.
 - **Nov 19: ui-check's iPad step hit its 70-minute limit, the iPhone step its 40.** Every test that ran passed; the runner was slow (the same tests took up to twice as long as on Nov 18), so `TutorPanelTests.testTutorChatDark` and `TimeTrackingPhoneTests` were cut off. Fix: iPad step 95, iPhone step 55, job 170. When the suite grows, raise these with it: a limit is for a hung run, not for a slow Mac.
 - **Nov 18: the iPhone step hit 25 minutes** on main (12 tests, about 26 minutes). Raised to 40, job 130 (PR #42).

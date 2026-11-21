@@ -109,9 +109,17 @@ final class SharedCasesTests: XCTestCase {
             let k = try XCTUnwrap(x["class"])
             let notes = Recordings.ClassNotes(unit: k["unit"]?.string, taught: k["taught"]?.string ?? "", examples: (k["examples"]?.array ?? []).compactMap(\.string),
                                               teaching: k["teaching"]?.string ?? "")
+            let moments = (x["moments"]?.array ?? []).map { Recordings.Moment(at: $0["at"]?.number ?? 0, kind: $0["kind"]?.string ?? "", what: $0["what"]?.string ?? "") }
             let got = Recordings.addTeaching(x["existing"]?.string, subjectName: x["subjectName"]?.string ?? "", date: x["date"]?.string ?? "",
-                                             title: x["title"]?.string ?? "", path: x["path"]?.string ?? "", notes: notes)
+                                             title: x["title"]?.string ?? "", path: x["path"]?.string ?? "", notes: notes, moments: moments)
             XCTAssertEqual(got, x["expect"]?.string, "teaching: \(x["about"]?.string ?? "")")
         }
+        for x in c["autoPins"]?.array ?? [] {
+            let segs = (x["segments"]?.array ?? []).map { Recordings.Segment(start: $0["start"]?.number ?? 0, end: $0["end"]?.number ?? 0, text: $0["text"]?.string ?? "") }
+            let have = (x["existing"]?.array ?? []).compactMap(Recordings.Pin.init(json:))
+            let got = JSONValue.array(Recordings.autoPins(segs, existing: have).map(\.json))
+            XCTAssertEqual(got.text, (x["expect"] ?? .null).text, "autoPins: \(x["about"]?.string ?? "")")
+        }
+        XCTAssertFalse((c["autoPins"]?.array ?? []).isEmpty, "the autoPins cases are read")
     }
 }

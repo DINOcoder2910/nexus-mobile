@@ -1,6 +1,6 @@
 {
   "rule": "recordings",
-  "about": "Recordings (docs/data-format.md \"Recordings\"): a time as a clock, a start time as the summary says it (offset in minutes from UTC), the status from recording.json's state and the files present, what Claude answered read into a proposal (null when it has no title), summary.md, a filed task's note, and a class added to its subject's teaching.md (newest first, under the heading). The laptop's old app has no recordings: the Rust core and NexusCore run these.",
+  "about": "Recordings (docs/data-format.md \"Recordings\"): a time as a clock, a start time as the summary says it (offset in minutes from UTC), the status from recording.json's state and the files present, what Claude answered read into a proposal (null when it has no title), summary.md, a filed task's note, a class added to its subject's teaching.md (newest first, under the heading, with where the user got lost), and the pins found by what was said (autoPins). The laptop's old app has no recordings: the Rust core and NexusCore run these.",
   "clock": [[0, "0:00"], [59.9, "0:59"], [75, "1:15"], [3600, "1:00:00"], [3725, "1:02:05"]],
   "stamp": [
     { "iso": "2026-11-21T09:00:00.000Z", "offset": 330, "stamp": "Sat 21 Nov 2026, 14:30", "day": "2026-11-21" },
@@ -37,7 +37,16 @@
     { "about": "\"inbox\" is the Inbox", "text": "{\"title\": \"A\", \"subject\": \"inbox\"}", "subjects": ["inbox"],
       "expect": { "title": "A", "subject": null, "people": [], "speakers": {}, "summary": "", "decisions": [], "tasks": [], "dates": [] } },
     { "about": "no title: nothing to file", "text": "{\"summary\": \"x\"}", "subjects": [], "expect": null },
-    { "about": "no JSON at all", "text": "Sorry, I couldn't hear anything.", "subjects": [], "expect": null }
+    { "about": "no JSON at all", "text": "Sorry, I couldn't hear anything.", "subjects": [], "expect": null },
+    {
+      "about": "moments in the order given: what trimmed, an unknown kind is important, no what or no time left out",
+      "text": "{\"title\": \"Redox\", \"summary\": \"x\", \"moments\": [{\"at\": \"5:10\", \"kind\": \"exam\", \"what\": \" Balancing in acid comes up every year. \"}, {\"at\": 75.25, \"kind\": \"lost\", \"what\": \"Adding H+ before electrons.\"}, {\"at\": \"1:00\", \"kind\": \"weird\", \"what\": \"Unknown kind\"}, {\"at\": \"2:00\", \"kind\": \"exam\", \"what\": \"  \"}, {\"kind\": \"exam\", \"what\": \"no time\"}]}",
+      "subjects": [],
+      "expect": { "title": "Redox", "subject": null, "people": [], "speakers": {}, "summary": "x", "decisions": [], "tasks": [], "dates": [],
+        "moments": [{ "at": 310, "kind": "exam", "what": "Balancing in acid comes up every year." }, { "at": 75.3, "kind": "lost", "what": "Adding H+ before electrons." }, { "at": 60, "kind": "important", "what": "Unknown kind" }] }
+    },
+    { "about": "no moments: the key is left out", "text": "{\"title\": \"A\", \"moments\": []}", "subjects": [],
+      "expect": { "title": "A", "subject": null, "people": [], "speakers": {}, "summary": "", "decisions": [], "tasks": [], "dates": [] } }
   ],
   "summary": [
     {
@@ -59,6 +68,17 @@
       "subjectName": null,
       "proposal": { "title": "Quick chat", "subject": null, "people": [], "speakers": {}, "summary": "  Nothing much.  ", "decisions": ["Meet again"], "tasks": [], "dates": [] },
       "expect": "# Quick chat\n\nMeeting, Sat 21 Nov 2026, 09:00, 0:36\n\n## Summary\n\nNothing much.\n\n## Decided\n\n- Meet again\n\n[The full transcript](transcript.md)\n"
+    },
+    {
+      "about": "moments, in the order given, after the class's notes and before the pictures",
+      "meta": { "format": "nexus-recordings/1", "id": "i9j0k1l2", "kind": "class", "title": "Class", "started": "2026-11-21T09:00:00Z", "duration": 36, "device": "iPhone", "state": "done", "audio": "audio.m4a",
+        "pictures": [{ "file": "pictures/0310.jpg", "at": 310 }],
+        "pins": [{ "at": 310, "kind": "exam", "by": "auto", "said": "This comes up every year." }, { "at": 75, "kind": "lost", "by": "you" }] },
+      "offset": 0,
+      "subjectName": null,
+      "proposal": { "title": "Redox", "subject": null, "people": [], "speakers": {}, "summary": "Nothing much.", "decisions": [], "tasks": [], "dates": [],
+        "moments": [{ "at": 310, "kind": "exam", "what": " Comes up every year. " }, { "at": 75, "kind": "lost", "what": "Adding H+ first." }] },
+      "expect": "# Redox\n\nClass, Sat 21 Nov 2026, 09:00, 0:36\n\n## Summary\n\nNothing much.\n\n## Moments\n\n- 5:10 · Exam tip: Comes up every year.\n- 1:15 · Lost me: Adding H+ first.\n\n## Pictures\n\n- 5:10: ![](pictures/0310.jpg)\n\n[The full transcript](transcript.md)\n"
     }
   ],
   "taskNote": [
@@ -87,6 +107,48 @@
       "subjectName": "Chemistry HL", "date": "2026-11-24", "title": "Cells", "path": "recordings/2026-11-24 0910 Class",
       "class": { "taught": "y", "examples": [], "teaching": "Uses diagrams." },
       "expect": "# Chemistry notes on teaching\n\nMy own words.\n\n## 2026-11-24: Cells\n\nUses diagrams.\n\n[The class](recordings/2026-11-24 0910 Class/summary.md)\n"
+    },
+    {
+      "about": "the moments where the user got lost are listed (the others aren't), after the examples",
+      "existing": null, "subjectName": "Chemistry HL", "date": "2026-11-24", "title": "Cells", "path": "recordings/2026-11-24 0910 Class",
+      "class": { "taught": "y", "examples": ["Q1"], "teaching": "Uses diagrams." },
+      "moments": [{ "at": 75, "kind": "lost", "what": " Adding H+ first. " }, { "at": 310, "kind": "exam", "what": "x" }],
+      "expect": "# How Chemistry HL is taught\n\nWhat each recorded class showed about how it is taught, newest first. The tutor reads this to explain things the way your class does.\n\n## 2026-11-24: Cells\n\nUses diagrams.\n\nExamples used:\n- Q1\n\nWhere I got lost:\n- 1:15: Adding H+ first.\n\n[The class](recordings/2026-11-24 0910 Class/summary.md)\n"
+    }
+  ],
+  "autoPins": [
+    {
+      "about": "the first kind that matches wins, tried in the order exam, homework, important; case, ’ and spaces don't matter; said keeps the words as heard, spaces collapsed; no phrase, no pin",
+      "segments": [
+        { "start": 10, "end": 14, "text": "So today we do half-equations." },
+        { "start": 20, "end": 24, "text": "This  is REALLY important, write this down." },
+        { "start": 40, "end": 46, "text": "Don’t forget, this comes up every year in Paper 2." },
+        { "start": 50, "end": 55, "text": "Homework is the sheet, due on Friday." }
+      ],
+      "expect": [
+        { "at": 20, "kind": "important", "by": "auto", "said": "This is REALLY important, write this down." },
+        { "at": 40, "kind": "exam", "by": "auto", "said": "Don’t forget, this comes up every year in Paper 2." },
+        { "at": 50, "kind": "homework", "by": "auto", "said": "Homework is the sheet, due on Friday." }
+      ]
+    },
+    {
+      "about": "a pin of the same kind within 30 s is skipped, one already there or one found earlier in the pass; another kind isn't",
+      "existing": [{ "at": 100, "kind": "exam", "by": "you" }],
+      "segments": [
+        { "start": 120, "end": 123, "text": "That's on the test." },
+        { "start": 131, "end": 135, "text": "In the exam they want units." },
+        { "start": 150, "end": 153, "text": "Mark scheme says two marks." },
+        { "start": 155, "end": 158, "text": "Be careful with signs." }
+      ],
+      "expect": [
+        { "at": 131, "kind": "exam", "by": "auto", "said": "In the exam they want units." },
+        { "at": 155, "kind": "important", "by": "auto", "said": "Be careful with signs." }
+      ]
+    },
+    {
+      "about": "long words are cut at a word, at most 140 characters with the …",
+      "segments": [{ "start": 5.25, "end": 20, "text": "Remember this one thing about the equilibrium constant because it tells you which way the reaction goes and how far it goes before it stops changing at all" }],
+      "expect": [{ "at": 5.3, "kind": "important", "by": "auto", "said": "Remember this one thing about the equilibrium constant because it tells you which way the reaction goes and how far it goes before it…" }]
     }
   ]
 }

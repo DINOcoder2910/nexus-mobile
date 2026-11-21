@@ -144,4 +144,25 @@ final class RecordingsTests: XCTestCase {
         let f = Recordings.Filed(accepted: "t", device: "iPhone", subject: "econ", tasks: [(id: "k1", file: "classes/econ/tasks.yaml")], teaching: "classes/econ/teaching.md", teachingBefore: "")
         XCTAssertEqual(Recordings.Filed(json: try JSONValue.parse(f.json.text)), f)
     }
+
+    func testPinsRoundTripAndPrompt() throws {
+        var m = Recordings.Meta(id: "x", kind: .lesson, started: Date(timeIntervalSince1970: 1_795_000_000), device: "d")
+        m.pins = [.init(at: 75, kind: "lost"), .init(at: 310, kind: "exam", by: "auto", said: "This comes up every year.", picture: "pictures/0310.jpg")]
+        let back = try XCTUnwrap(Recordings.Meta(json: try JSONValue.parse(m.json.text)))
+        XCTAssertEqual(back.pins, m.pins)
+        XCTAssertNil(Recordings.Meta(id: "y", kind: .meeting, started: Date(), device: "d").json["pins"], "no pins, no key")
+        let s = Recordings.prompt(meta: m, transcript: .init(language: "en", engine: "e", segments: []), subjects: [], event: nil, today: "2026-11-21")
+        XCTAssertTrue(s.contains("- [1:15] lost (pinned by the user)\n- [5:10] exam (found): \"This comes up every year.\""), s)
+        XCTAssertEqual(Recordings.pinKind(of: "OK so this WILL come up — it comes up every year"), "exam")
+        XCTAssertNil(Recordings.pinKind(of: "Let's start."))
+    }
+
+    func testLivePinsFromHaiku() {
+        let got = Recordings.parseLivePins("""
+        Here: {"pins": [{"at": "12:04", "kind": "exam", "said": " They always ask this in Paper 2 "}, {"at": "1:00", "kind": "lost", "said": "x"},
+        {"kind": "exam", "said": "no time"}, {"at": 30, "kind": "important", "said": ""}, {"at": 61.25, "kind": "homework", "said": "Sheet by Monday"}]}
+        """)
+        XCTAssertEqual(got, [.init(at: 724, kind: "exam", by: "auto", said: "They always ask this in Paper 2"), .init(at: 61.3, kind: "homework", by: "auto", said: "Sheet by Monday")])
+        XCTAssertEqual(Recordings.parseLivePins("no idea"), [])
+    }
 }

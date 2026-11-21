@@ -67,6 +67,8 @@ struct SettingsView: View {
 
             TutorSettings()
 
+            RecordingSettings()
+
             if !s.problems.isEmpty {
                 Section("Things to check") {
                     ForEach(s.problems) { p in

@@ -74,6 +74,11 @@ class RecordingsTests: XCTestCase {
         reveal(how)
         XCTAssertTrue(how.exists, "no teaching notes")
         shot("rec-3-class-teaching")
+        // the pinned moments: what Claude said about each, a Lost me explained
+        let lost = app.buttons["rec-moment-lost"].firstMatch
+        reveal(lost, 12)
+        XCTAssertTrue(lost.exists, "no Lost me moment")
+        shot("rec-3b-moments")
         let words = app.staticTexts["Transcript"].firstMatch
         reveal(words, 12)
         shot("rec-4-class-transcript")
@@ -116,6 +121,29 @@ class RecordingsTests: XCTestCase {
         let ready = app.staticTexts["Ready to review"].firstMatch
         XCTAssertTrue(ready.waitForExistence(timeout: 20), "the new recording isn't ready to review")
         shot("rec-8-after-stop")
+    }
+
+    /// Recording a class: what the teacher says pins itself, with a pop-up (Undo, Snap); the live buttons pin the moment.
+    func testClassMoments() {
+        launch()
+        openRecordings()
+        let start = app.buttons["rec-start-class"].firstMatch
+        reveal(start)
+        start.tap()
+        XCTAssertTrue(app.buttons["rec-stop"].firstMatch.waitForExistence(timeout: 10), "the class didn't start recording")
+        XCTAssertTrue(app.otherElements["rec-popup"].firstMatch.waitForExistence(timeout: 15) || app.buttons["rec-popup-undo"].firstMatch.waitForExistence(timeout: 3),
+                      "no pop-up for “this comes up every year”")
+        shot("rec-11-live-popup")
+        let lost = app.buttons["rec-pin-lost"].firstMatch
+        XCTAssertTrue(lost.exists, "no Lost me button")
+        lost.tap()
+        let count = app.staticTexts["rec-pin-count"].firstMatch
+        XCTAssertTrue(count.waitForExistence(timeout: 5), "no count of pinned moments")
+        XCTAssertTrue(count.label.hasPrefix("2 moments pinned"), "pins: \(count.label)")
+        sleep(7) // the pop-up goes by itself
+        shot("rec-12-live-buttons")
+        app.buttons["rec-stop"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["rec-start-class"].firstMatch.waitForExistence(timeout: 10), "recording didn't stop")
     }
 
     func testQuickPage() {

@@ -95,9 +95,16 @@ struct RecordButtons: View {
     var body: some View {
         if let a = rec.active {
             // the buttons keep their words where they fit (the iPad), else show only their pictures (the iPhone), never wrapped
-            ViewThatFits(in: .horizontal) {
-                running(a, words: true)
-                running(a, words: false)
+            VStack(alignment: .leading, spacing: 10) {
+                ViewThatFits(in: .horizontal) {
+                    running(a, words: true)
+                    running(a, words: false)
+                }
+                LiveButtons(big: big)
+                if rec.listening {
+                    Label("Listening for exam tips, homework and what to remember", systemImage: "ear").font(.caption).foregroundStyle(.secondary)
+                        .accessibilityIdentifier("rec-listening")
+                }
             }
             .padding(.vertical, big ? 8 : 2)
         } else {
@@ -137,6 +144,8 @@ struct RecordButtons: View {
             .accessibilityLabel("Stop")
             .accessibilityIdentifier("rec-stop")
         }
+        // its own height (in a list row, ViewThatFits let the picture-only buttons grow into tall capsules)
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -171,6 +180,7 @@ struct RecordingPage: View {
                 }
                 if filed == nil, proposal != nil { review }
                 if let f = filed, let p = proposal { filedSection(p, f) }
+                if !m.pins.isEmpty || !(proposal?.moments.isEmpty ?? true) { momentsSection(m) }
                 if !m.pictures.isEmpty { picturesSection(m) }
                 if let t = transcript { transcriptSection(t) }
             } else {
@@ -338,6 +348,48 @@ struct RecordingPage: View {
         }
     }
 
+    /// The pinned moments: what Claude said about each (once it has prepared it), else what was heard; its picture; tap to play.
+    private func momentsSection(_ m: Recordings.Meta) -> some View {
+        let said = proposal?.moments ?? []
+        let rows = Self.momentRows(m.pins, said)
+        return Section {
+            ForEach(rows.indices, id: \.self) { i in
+                let r = rows[i]
+                Button { seek(r.at) } label: {
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: Recordings.pinIcon(r.kind)).foregroundStyle(LiveButtons.tint(r.kind)).frame(width: 22)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(Recordings.pinLabel(r.kind) + " · " + Recordings.clock(r.at) + (r.by == "auto" ? " · found" : ""))
+                                .font(.caption.weight(.semibold)).foregroundStyle(LiveButtons.tint(r.kind))
+                            Text(LocalizedStringKey(r.text)).foregroundStyle(.primary).fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 0)
+                        if let f = r.picture, let img = UIImage(contentsOfFile: folder.appendingPathComponent(f).path) {
+                            Image(uiImage: img).resizable().scaledToFill().frame(width: 72, height: 48).clipped().clipShape(RoundedRectangle(cornerRadius: 6))
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("rec-moment-\(r.kind)")
+            }
+        } header: { Text("Moments") } footer: {
+            Text(said.isEmpty ? "Claude says what was happening at each one when it reads the recording." : "Tap one to play from there. The ones you pinned as Lost me go into the subject's teaching notes, so the tutor knows.")
+        }
+    }
+
+    struct MomentRow { var at: Double; var kind: String; var text: String; var by: String?; var picture: String? }
+
+    /// Claude's moments with each one's pin (its picture, who pinned it); before Claude has read it, the pins with what was heard.
+    static func momentRows(_ pins: [Recordings.Pin], _ said: [Recordings.Moment]) -> [MomentRow] {
+        if said.isEmpty {
+            return pins.map { MomentRow(at: $0.at, kind: $0.kind, text: $0.said.map { "“\($0)”" } ?? "Pinned with the button", by: $0.by, picture: $0.picture) }
+        }
+        return said.map { s in
+            let near = pins.filter { abs($0.at - s.at) < 5 }.min { abs($0.at - s.at) < abs($1.at - s.at) }
+            return MomentRow(at: s.at, kind: s.kind, text: s.what, by: near?.by, picture: near?.picture)
+        }
+    }
+
     private func picturesSection(_ m: Recordings.Meta) -> some View {
         Section("Pictures") {
             ScrollView(.horizontal, showsIndicators: false) {
@@ -426,7 +478,7 @@ struct RecordingPill: View {
                 Circle().fill(.red).frame(width: 10, height: 10)
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Recording \(a.meta.kind.word.lowercased())").font(.subheadline.weight(.semibold)).lineLimit(1)
-                    Text(Recordings.clock(rec.elapsed)).font(.caption).monospacedDigit().foregroundStyle(.secondary)
+                    Text(Recordings.clock(rec.elapsed) + (a.meta.pins.isEmpty ? "" : " · \(a.meta.pins.count) pinned")).font(.caption).monospacedDigit().foregroundStyle(.secondary)
                 }
                 Button { rec.snap() } label: {
                     Image(systemName: "camera.fill").font(.subheadline).frame(width: 34, height: 34).background(.thinMaterial, in: Circle())
@@ -460,6 +512,7 @@ struct RecordingCovers: ViewModifier {
             .overlay(alignment: .bottom) {
                 if pill { RecordingPill().padding(.bottom, 20).animation(.snappy, value: rec.active == nil) }
             }
+            .overlay(alignment: .top) { MomentPopupView() }
             .sheet(isPresented: Binding(get: { rec.snapping }, set: { rec.snapping = $0 })) {
                 SnapCamera { img in
                     rec.snapping = false
@@ -481,6 +534,10 @@ struct RecordingCovers: ViewModifier {
                             if let n = rec.active?.marks.count, n > 0 { Text("· \(n) snapped").font(.subheadline) }
                         }
                         .foregroundStyle(.white).padding(.horizontal, 14).padding(.vertical, 8).background(.black.opacity(0.5), in: Capsule())
+                        LiveButtons(big: false)
+                            .padding(10).background(.black.opacity(0.5), in: RoundedRectangle(cornerRadius: 14))
+                            .environment(\.colorScheme, .dark)
+                            .frame(maxWidth: 520).padding(.horizontal, 16)
                         HStack(spacing: 40) {
                             Button { rec.snap() } label: { Label("Snap this", systemImage: "camera.viewfinder").font(.headline) }
                                 .buttonStyle(.borderedProminent).tint(.white).foregroundStyle(.black)
@@ -492,6 +549,7 @@ struct RecordingCovers: ViewModifier {
                     .padding(.bottom, 30)
                 }
                 .ignoresSafeArea()
+                .overlay(alignment: .top) { MomentPopupView() }
             }
             .alert("Recording", isPresented: Binding(get: { rec.problem != nil }, set: { if !$0 { rec.problem = nil } })) {
                 Button("OK", role: .cancel) {}

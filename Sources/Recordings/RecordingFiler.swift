@@ -42,7 +42,7 @@ enum RecordingFiler {
                 let rel = ws.folder + "/" + Recordings.teachingFile
                 teachingBefore = (try? FolderAccess.read(root.appendingPathComponent(rel))) ?? ""
                 let day = meta.startedDate.map { Recordings.localDay($0) } ?? store.today
-                try put(rel, Recordings.addTeaching(teachingBefore, subjectName: ws.name, date: day, title: p.title, path: path, notes: c), "Teaching notes")
+                try put(rel, Recordings.addTeaching(teachingBefore, subjectName: ws.name, date: day, title: p.title, path: path, notes: c, moments: p.moments), "Teaching notes")
                 teaching = rel
             }
             try put(path + "/" + Recordings.summaryFile, Recordings.summaryMarkdown(meta: meta, proposal: p, subjectName: ws?.name), "Summary")
