@@ -183,6 +183,7 @@ struct NextUpCard: View {
         .background(color.opacity(0.10), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .contentShape(Rectangle())
         .onTapGesture { store.open(task) }
+        .contextMenu { TaskMenu(task: task, day: v.today) }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("next-up")
     }

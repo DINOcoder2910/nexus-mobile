@@ -102,8 +102,11 @@ struct TodayView: View {
         let left = v.list.count
         let first = left > 0 ? Text("\(left) to do").bold() + Text(v.estLeft > 0 ? ", about \(TimeWords.about(v.estLeft)). " : ". ")
                              : Text("Nothing left for today. ").bold()
+        // time tracked today on every device (TimeTracker), once there is a minute of it
+        let tracked = TimeLog.daySeconds(TimeTracker.shared.entries, store.today)
         return first + Text(v.freeLeft > 0 ? "You have about \(TimeWords.about(v.freeLeft)) free\(events > 0 ? " between classes" : "")."
                                            : "No free time left today.")
+            + Text(tracked >= 60 ? " \(TimeLog.spent(tracked)) tracked." : "").foregroundColor(Kit.muted)
     }
 
     // MARK: Key dates and From Study
