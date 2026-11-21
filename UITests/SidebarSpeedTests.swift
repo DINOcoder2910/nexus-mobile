@@ -18,6 +18,9 @@ final class SidebarSpeedTests: XCTestCase {
     func reach(_ el: XCUIElement, _ what: String) {
         var tries = 0
         while !(el.exists && el.isHittable) && tries < 10 { app.collectionViews.firstMatch.swipeUp(velocity: .slow); tries += 1 }
+        // a row that only just scrolled in sits under the sidebar's footer icons, where a tap lands on the footer: lift it clear
+        let bottom = app.windows.firstMatch.frame.maxY
+        if el.exists && el.frame.maxY > bottom - 140 { app.collectionViews.firstMatch.swipeUp(velocity: .slow) }
         XCTAssertTrue(el.waitForExistence(timeout: 5) && el.isHittable, "can't reach " + what)
     }
 
