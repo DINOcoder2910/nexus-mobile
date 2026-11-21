@@ -49,8 +49,23 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
         spaceTap.delegate = self
         canvas.addGestureRecognizer(spaceTap)
 
+        quickRing.board = self
+        quickRing.frame = view.bounds
+        quickRing.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        quickRing.isHidden = !QuickRingPrefs.on
+        view.addSubview(quickRing)
+
         navigationController?.setNavigationBarHidden(true, animated: false)
         bar.refresh()
+    }
+
+    /// The quick ring turned on or off (the View row, or ⋯ on a narrow bar).
+    func quickRingChanged() {
+        let on = QuickRingPrefs.on && !readOnly
+        if on { quickRing.isHidden = false; quickRing.alpha = 0; quickRing.place() }
+        else { quickRing.close(animated: false) }
+        UIView.animate(withDuration: 0.25) { self.quickRing.alpha = on ? 1 : 0 } completion: { _ in if !on { self.quickRing.isHidden = true } }
+        toast(on ? "Quick ring on" : "Quick ring off")
     }
 
     static let anyTouch = [NSNumber(value: UITouch.TouchType.direct.rawValue), NSNumber(value: UITouch.TouchType.pencil.rawValue)]
@@ -60,6 +75,10 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
         bar.compact = view.bounds.width < BoardBar.compactWidth // a narrow screen gives the tools their own row
         bar.frame = CGRect(x: 0, y: 0, width: view.bounds.width, height: top + bar.height)
         showBarsButton.frame = CGRect(x: view.bounds.width - view.safeAreaInsets.right - 56, y: top + 8, width: 44, height: 32)
+        quickRing.isHidden = !QuickRingPrefs.on || readOnly
+        quickRing.layOut(top: topInset)
+        view.bringSubviewToFront(quickRing)
+        if let p = toolPanel?.view, p.superview == view { view.bringSubviewToFront(p) } // the Tools card sits over the ring
         view.bringSubviewToFront(bar)
         view.bringSubviewToFront(showBarsButton)
     }
@@ -95,6 +114,7 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
     func toolChanged() {
         applyTool()
         bar.refresh()
+        quickRing.refresh()
     }
 
     /// Puts the current tool on the canvas; tools that don't draw turn the Pencil's drawing off (it scrolls, types or makes space).

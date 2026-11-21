@@ -21,7 +21,7 @@ struct StudyHome: View {
                 if lib.hasDecks {
                     Section {
                         Text(due == 0 ? "Nothing due right now." : "\(due) \(due == 1 ? "card" : "cards") due.")
-                            .font(.title3.weight(.semibold))
+                            .font(.nx(.title3, .semibold))
                             .listRowBackground(Color.clear)
                     }
                 }
@@ -61,7 +61,7 @@ struct StudyPageRow: View {
                 Image(systemName: "books.vertical").foregroundStyle(Theme.accent).frame(width: 22)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Units, sheets and tools")
-                    Text(parts.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary)
+                    Text(parts.joined(separator: " · ")).font(.nx(.caption)).foregroundStyle(.secondary)
                 }
             }
         }
@@ -85,7 +85,7 @@ struct DeckRows: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(f.fileId).foregroundStyle(.secondary)
                     Label("This deck \(f.error ?? "could not be read").", systemImage: "exclamationmark.triangle")
-                        .font(.caption).foregroundStyle(Theme.late)
+                        .font(.nx(.caption)).foregroundStyle(Theme.late)
                 }
             }
         }
@@ -104,7 +104,7 @@ private struct DeckRowLabel: View {
                 .foregroundStyle(.secondary).frame(width: 22)
             VStack(alignment: .leading, spacing: 2) {
                 Text(deck.title).lineLimit(1)
-                Text("\(deck.cards.count) \(deck.cards.count == 1 ? "card" : "cards")").font(.caption).foregroundStyle(.secondary)
+                Text("\(deck.cards.count) \(deck.cards.count == 1 ? "card" : "cards")").font(.nx(.caption)).foregroundStyle(.secondary)
             }
             Spacer(minLength: 6)
             if let c {
@@ -215,8 +215,8 @@ struct DeckView: View {
         List {
             Section {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(deck.title).font(.title2.weight(.semibold))
-                    if !deck.description.isEmpty { Text(deck.description).font(.callout).foregroundStyle(.secondary) }
+                    Text(deck.title).font(.nx(.title2, .semibold))
+                    if !deck.description.isEmpty { Text(deck.description).font(.nx(.callout)).foregroundStyle(.secondary) }
                     HStack(spacing: 6) {
                         Chip(text: "\(c.due) due", color: c.due > 0 ? Theme.accent : .secondary, strong: c.due > 0)
                         Chip(text: "\(c.new) new")
@@ -243,7 +243,7 @@ struct DeckView: View {
                     Stepper(value: $prefs.perDay, in: 0...999) {
                         VStack(alignment: .leading) {
                             Text("\(prefs.perDay) new cards a day")
-                            Text("\(startedToday) started today, \(c.new) not seen yet").font(.caption).foregroundStyle(.secondary)
+                            Text("\(startedToday) started today, \(c.new) not seen yet").font(.nx(.caption)).foregroundStyle(.secondary)
                         }
                     }
                 } else {
@@ -251,18 +251,18 @@ struct DeckView: View {
                         ForEach(StudySession.Mode.allCases, id: \.rawValue) { Text(shortLabel($0)).tag($0.rawValue) }
                     }
                     .pickerStyle(.segmented)
-                    Text(prefs.sessionMode.detail).font(.caption).foregroundStyle(.secondary)
+                    Text(prefs.sessionMode.detail).font(.nx(.caption)).foregroundStyle(.secondary)
                     if deck.reversible {
                         Picker("Which way", selection: $prefs.direction) {
                             ForEach(StudyDeck.Direction.allCases, id: \.rawValue) { Text(deck.directionLabel($0)).tag($0.rawValue) }
                         }
                         .pickerStyle(.segmented)
-                        Text("Each way keeps its own schedule.").font(.caption).foregroundStyle(.secondary)
+                        Text("Each way keeps its own schedule.").font(.nx(.caption)).foregroundStyle(.secondary)
                     }
                     Stepper(value: $prefs.newLimit, in: 0...999) {
                         VStack(alignment: .leading) {
                             Text("At most \(prefs.newLimit) new cards")
-                            Text("\(c.new) not seen yet").font(.caption).foregroundStyle(.secondary)
+                            Text("\(c.new) not seen yet").font(.nx(.caption)).foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -270,7 +270,7 @@ struct DeckView: View {
 
             Section {
                 Button { start(practise: false) } label: {
-                    Text(n > 0 ? "Start: \(n) \(n == 1 ? "card" : "cards")" : "Nothing due").frame(maxWidth: .infinity).font(.headline)
+                    Text(n > 0 ? "Start: \(n) \(n == 1 ? "card" : "cards")" : "Nothing due").frame(maxWidth: .infinity).font(.nx(.headline))
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
@@ -335,12 +335,12 @@ private struct CardRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(card.front)
                 Text(card.back).foregroundStyle(.secondary)
-                if !card.covers.isEmpty { Text(card.covers.joined(separator: ", ")).font(.caption).foregroundStyle(.tertiary) }
+                if !card.covers.isEmpty { Text(card.covers.joined(separator: ", ")).font(.nx(.caption)).foregroundStyle(.tertiary) }
             }
             Spacer(minLength: 6)
             status
         }
-        .font(.callout)
+        .font(.nx(.callout))
     }
 
     @ViewBuilder private var status: some View {

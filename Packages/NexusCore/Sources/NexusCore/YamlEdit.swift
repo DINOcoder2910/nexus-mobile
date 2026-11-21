@@ -281,6 +281,57 @@ public enum YamlEdit {
         return join(lines, trailing)
     }
 
+    /// Takes a task, with everything under it, out of a text. Returns the text after, the task's lines as they were, and the indent
+    /// of its "- ". A list it leaves empty is written `tasks: []`, and an emptied `subtasks:` goes.
+    public static func removeTask(_ text: String, id: String) throws -> (text: String, lines: [String], dashIndent: Int) {
+        var (lines, trailing) = split(text)
+        guard let b = findOpening(&lines, id: id) else { throw Failure.notFound(id) }
+        let cut = Array(lines[b.item..<b.end])
+        lines.removeSubrange(b.item..<b.end)
+        var next = b.item
+        while next < lines.count, isBlank(lines[next]) || isComment(lines[next]) { next += 1 }
+        let sibling = next < lines.count && dash(lines[next])?.0 == b.dashIndent
+        var k = b.item - 1
+        while k >= 0, isBlank(lines[k]) || isComment(lines[k]) { k -= 1 }
+        if !sibling, k >= 0 {
+            let key = lines[k]
+            var rest = key.dropFirst(indent(key))
+            let dashed = rest.hasPrefix("- ")
+            if dashed { rest = rest.dropFirst(2).drop { $0 == " " } }
+            let name = rest.trimmingCharacters(in: .whitespaces)
+            if name == "tasks:" {
+                lines[k] = key + " []"
+                lines.removeSubrange((k + 1)..<b.item)
+            } else if name == "subtasks:" {
+                if dashed { lines[k] = key + " []" } else { lines.remove(at: k) }
+            }
+        }
+        return (join(lines, trailing), cut, b.dashIndent)
+    }
+
+    /// Puts a task's lines (as `removeTask` gave them, its "- " at `from`) at the end of a text's top-level list.
+    public static func appendTask(_ text: String, lines item: [String], from: Int) -> String {
+        var (lines, trailing) = split(text)
+        func at(_ dashIndent: Int) -> [String] {
+            item.map { l in isBlank(l) ? l : String(repeating: " ", count: dashIndent) + String(l.dropFirst(min(from, indent(l)))) }
+        }
+        guard let t = lines.firstIndex(where: { $0.hasPrefix("tasks:") }) else {
+            let prefix = lines.isEmpty || lines.allSatisfy(isBlank) ? [] : lines + [""]
+            return join(prefix + ["tasks:"] + at(2), true)
+        }
+        let inline = lines[t].dropFirst("tasks:".count).trimmingCharacters(in: .whitespaces)
+        var end = t + 1
+        while end < lines.count, isBlank(lines[end]) || isComment(lines[end]) || indent(lines[end]) > 0 || lines[end].hasPrefix("- ") { end += 1 }
+        while end > t + 1, isBlank(lines[end - 1]) { end -= 1 }
+        if inline == "[]" || (inline.isEmpty && end == t + 1) {
+            lines.replaceSubrange(t..<end, with: ["tasks:"] + at(2))
+        } else {
+            let dashIndent = (t + 1..<end).compactMap { dash(lines[$0]) }.first?.0 ?? 2
+            lines.insert(contentsOf: at(dashIndent), at: end)
+        }
+        return join(lines, trailing)
+    }
+
     /// Every id used in a text (to keep new ids unique within a file even before the index knows them).
     public static func ids(_ text: String) -> Set<String> {
         var out = Set<String>()

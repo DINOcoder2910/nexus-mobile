@@ -34,12 +34,12 @@ struct ShareHowTo: View {
                 ForEach(Array(steps.enumerated()), id: \.offset) { i, s in
                     HStack(alignment: .top, spacing: 12) {
                         Text("\(i + 1)")
-                            .font(.subheadline.weight(.bold)).foregroundStyle(.white)
+                            .font(.nx(.subheadline, .bold)).foregroundStyle(.white)
                             .frame(width: 26, height: 26)
                             .background(Theme.accent, in: Circle())
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(s.0).font(.body.weight(.medium))
-                            Text(s.1).font(.callout).foregroundStyle(.secondary)
+                            Text(s.0).font(.nx(.body, .medium))
+                            Text(s.1).font(.nx(.callout)).foregroundStyle(.secondary)
                         }
                     }
                     .padding(.vertical, 2)
@@ -58,7 +58,7 @@ struct ShareHowTo: View {
                 Label("A link or some words become a task in the Inbox, with the link kept as it is.", systemImage: "tray")
                 Label("It syncs to your other devices straight away, without opening Nexus.", systemImage: "arrow.triangle.2.circlepath")
             }
-            .font(.callout)
+            .font(.nx(.callout))
         }
         .navigationTitle("Share into Nexus")
         .navigationBarTitleDisplayMode(.inline)

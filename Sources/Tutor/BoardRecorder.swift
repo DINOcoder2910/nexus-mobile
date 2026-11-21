@@ -350,16 +350,16 @@ struct RecordingBar: View {
                 Button { rec.mode == .playing ? rec.pause() : rec.play() } label: {
                     Image(systemName: rec.mode == .playing ? "pause.fill" : "play.fill").frame(width: 22)
                 }
-                Text(clock(rec.elapsed)).monospacedDigit().font(.callout)
+                Text(clock(rec.elapsed)).monospacedDigit().font(.nx(.callout))
                 Slider(value: Binding(get: { rec.elapsed }, set: { rec.seek($0) }), in: 0...max(1, rec.duration)).frame(width: 240)
-                Text(clock(rec.duration)).monospacedDigit().font(.callout).foregroundStyle(.secondary)
-                Toggle(isOn: Binding(get: { rec.inStep }, set: { rec.inStep = $0; rec.showInStep() })) { Text("In step").font(.callout) }
+                Text(clock(rec.duration)).monospacedDigit().font(.nx(.callout)).foregroundStyle(.secondary)
+                Toggle(isOn: Binding(get: { rec.inStep }, set: { rec.inStep = $0; rec.showInStep() })) { Text("In step").font(.nx(.callout)) }
                     .toggleStyle(.button)
                 Button { rec.stopPlaying() } label: { Image(systemName: "xmark") }.accessibilityLabel("Close the recording")
             case .idle:
                 EmptyView()
             }
-            if let p = rec.problem { Text(p).font(.footnote).foregroundStyle(.red).frame(maxWidth: 260) }
+            if let p = rec.problem { Text(p).font(.nx(.footnote)).foregroundStyle(.red).frame(maxWidth: 260) }
         }
         .padding(.horizontal, 14).padding(.vertical, 8)
         .background(.regularMaterial, in: Capsule())

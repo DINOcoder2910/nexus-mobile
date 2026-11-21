@@ -30,9 +30,11 @@ class DayOrderTests: XCTestCase {
     }
 
     func testTodayFollowsTheDayOrder() {
-        let timed = app.staticTexts["Q1–5"].firstMatch
-        let dragged = app.staticTexts["Try the iPad planner"].firstMatch
-        let other = app.staticTexts["Redox worksheet"].firstMatch
+        // in the list itself (Next up, the day's hours and Tomorrow can show the same titles)
+        let list = app.otherElements["today-list"].firstMatch
+        let timed = list.staticTexts["Q1–5"].firstMatch
+        let dragged = list.staticTexts["Try the iPad planner"].firstMatch
+        let other = list.staticTexts["Redox worksheet"].firstMatch
         XCTAssertTrue(other.waitForExistence(timeout: 20), "Today isn't up")
         // the system's notifications question (the reminders ask on a first launch) would cover the screenshot
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")

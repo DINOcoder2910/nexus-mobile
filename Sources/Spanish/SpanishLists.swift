@@ -16,12 +16,12 @@ struct SpanishHistoryList: View {
         VStack(alignment: .leading, spacing: 8) {
             if inline { bar(all.count, list.count) }
             if list.isEmpty {
-                Text("Nothing checked yet.").foregroundStyle(.secondary).font(.callout)
+                Text("Nothing checked yet.").foregroundStyle(.secondary).font(.nx(.callout))
             }
             ScrollViewReader { proxy in
                 List {
                     ForEach(list) { e in row(e) }
-                    if !inline { Text("Tick the checks to talk through with the tutor.").font(.caption).foregroundStyle(.secondary).listRowSeparator(.hidden) }
+                    if !inline { Text("Tick the checks to talk through with the tutor.").font(.nx(.caption)).foregroundStyle(.secondary).listRowSeparator(.hidden) }
                 }
                 .listStyle(.plain)
                 .onAppear { if let last = list.last { proxy.scrollTo(last.id, anchor: .bottom) } }
@@ -39,8 +39,8 @@ struct SpanishHistoryList: View {
 
     private func bar(_ total: Int, _ shown: Int) -> some View {
         HStack {
-            Text("History").font(.headline)
-            Text(total > shown ? "the last \(shown) of \(total)" : "\(total) \(total == 1 ? "check" : "checks")").font(.caption).foregroundStyle(.secondary)
+            Text("History").font(.nx(.headline))
+            Text(total > shown ? "the last \(shown) of \(total)" : "\(total) \(total == 1 ? "check" : "checks")").font(.nx(.caption)).foregroundStyle(.secondary)
             Spacer()
             if !picked.isEmpty { Button("Clear") { picked = [] }.controlSize(.small) }
             moveButton.buttonStyle(.borderedProminent).controlSize(.small)
@@ -68,16 +68,16 @@ struct SpanishHistoryList: View {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: on ? "checkmark.circle.fill" : "circle")
                     .foregroundStyle(on ? Theme.accent : Color.secondary)
-                    .font(.title3)
+                    .font(.nx(.title3))
                 VStack(alignment: .leading, spacing: 3) {
                     SpanishSentence(text: e.text, marks: marks, font: .callout).allowsHitTesting(false)
                     if !e.mistakes.isEmpty && e.fixed != e.text {
-                        (Text("Fixed  ").foregroundStyle(.secondary) + Text(e.fixed)).font(.footnote)
+                        (Text("Fixed  ").foregroundStyle(.secondary) + Text(e.fixed)).font(.nx(.footnote))
                     } else {
-                        Label("No mistakes", systemImage: "checkmark").font(.footnote).foregroundStyle(Theme.accent)
+                        Label("No mistakes", systemImage: "checkmark").font(.nx(.footnote)).foregroundStyle(Theme.accent)
                     }
-                    if !e.question.isEmpty { Text("Answering: " + e.question).font(.caption).foregroundStyle(.secondary) }
-                    Text(Self.when(e.at) + (e.source == "chat" ? " · tutor" : e.source == "board" ? " · board" : "")).font(.caption2).foregroundStyle(.tertiary)
+                    if !e.question.isEmpty { Text("Answering: " + e.question).font(.nx(.caption)).foregroundStyle(.secondary) }
+                    Text(Self.when(e.at) + (e.source == "chat" ? " · tutor" : e.source == "board" ? " · board" : "")).font(.nx(.caption2)).foregroundStyle(.tertiary)
                 }
             }
             .contentShape(Rectangle())
@@ -121,7 +121,7 @@ struct SpanishSkillsList: View {
         let note = (lib.workstream(workstreamId)?.folder ?? "") + "/" + Spanish.P.note(s.id)
         return VStack(alignment: .leading, spacing: 5) {
             HStack(alignment: .firstTextBaseline) {
-                Text(s.name).font(.callout.weight(.medium))
+                Text(s.name).font(.nx(.callout, .medium))
                 Spacer()
                 Menu {
                     Picker("Course status", selection: Binding(get: { status }, set: { lib.setStatus(store, workstreamId, skill: s.id, status: $0) })) {
@@ -136,7 +136,7 @@ struct SpanishSkillsList: View {
             }
             HStack(spacing: 8) {
                 Text(st.map { "\($0.accuracy)% · \($0.tries) \($0.tries == 1 ? "try" : "tries") · \(SpanishCheck.statWords[$0.status] ?? $0.status)" } ?? "not practised yet")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.nx(.caption)).foregroundStyle(.secondary)
                 Spacer()
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
@@ -153,11 +153,11 @@ struct SpanishSkillsList: View {
                     Button(status == "reteach" ? "Teach me" : "Practise") {
                         onPractise(status == "reteach" ? "Teach me \(s.name.lowercased()) (\(s.id)) from scratch." : "Let's practise \(s.name.lowercased()) (\(s.id)).")
                     }
-                    .font(.callout)
+                    .font(.nx(.callout))
                 }
             }
             .buttonStyle(.borderless)
-            Text(s.rule).font(.caption2).foregroundStyle(.tertiary).lineLimit(2)
+            Text(s.rule).font(.nx(.caption2)).foregroundStyle(.tertiary).lineLimit(2)
         }
         .padding(.vertical, 2)
         .accessibilityElement(children: .contain)

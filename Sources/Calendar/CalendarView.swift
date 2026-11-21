@@ -99,7 +99,7 @@ struct CalendarView: View {
                 // a drawer, not a second navigation stack: its own small header
                 VStack(spacing: 0) {
                     HStack {
-                        Text("Place tasks").font(.headline)
+                        Text("Place tasks").font(.nx(.headline))
                         Spacer()
                         Button { withAnimation(.snappy) { placing = false } } label: { Image(systemName: "xmark") }
                             .accessibilityLabel("Close Place tasks")
@@ -327,7 +327,7 @@ struct CalendarView: View {
                         }
                     } header: {
                         Text((entry.day == store.today ? "Today · " : entry.day == Days.add(store.today, 1) ? "Tomorrow · " : "") + Days.label(entry.day))
-                            .font(.subheadline.weight(.semibold)).textCase(nil)
+                            .font(.nx(.subheadline, .semibold)).textCase(nil)
                             .foregroundStyle(entry.day == store.today ? Theme.accent : .secondary)
                     }
                 }
@@ -382,11 +382,11 @@ struct CalendarAccessCard: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "calendar.badge.exclamationmark").font(.title2).foregroundStyle(Theme.accent)
+            Image(systemName: "calendar.badge.exclamationmark").font(.nx(.title2)).foregroundStyle(Theme.accent)
             VStack(alignment: .leading, spacing: 6) {
-                Text(cal.notAsked ? "Show your calendars here" : "Nexus can't see your calendars").font(.headline)
+                Text(cal.notAsked ? "Show your calendars here" : "Nexus can't see your calendars").font(.nx(.headline))
                 Text("Nexus shows the calendars on this \(Device.name). Add your Google and school accounts in the Settings app (Calendar › Accounts) and their events appear here, beside your planned tasks.")
-                    .font(.callout).foregroundStyle(.secondary)
+                    .font(.nx(.callout)).foregroundStyle(.secondary)
                 Button(cal.notAsked ? "Allow access" : "Open Settings") {
                     if cal.notAsked {
                         Task { await cal.requestAccess() }

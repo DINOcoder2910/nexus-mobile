@@ -128,7 +128,7 @@ struct ShortcutsView: View {
                     Label("No conflicts", systemImage: "checkmark.circle").foregroundStyle(.secondary)
                 }
                 Spacer()
-                Text("\(f.shortcuts.count) shortcuts · \(changed) changed").font(.callout).foregroundStyle(.secondary)
+                Text("\(f.shortcuts.count) shortcuts · \(changed) changed").font(.nx(.callout)).foregroundStyle(.secondary)
             }
             Toggle("Conflicts only", isOn: $conflictsOnly)
         } footer: {
@@ -148,7 +148,7 @@ struct ShortcutsView: View {
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
+                    .font(.nx(.caption, .semibold))
                     .rotationEffect(.degrees(open ? 90 : 0))
                 Text(g.name)
                 Spacer()
@@ -247,7 +247,7 @@ struct ShortcutRow: View {
         HStack(alignment: .center, spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(s.name)
-                if let place = place { Text(place).font(.caption).foregroundStyle(.secondary) }
+                if let place = place { Text(place).font(.nx(.caption)).foregroundStyle(.secondary) }
                 ForEach(Array(issues.enumerated()), id: \.offset) { _, i in issueLine(i) }
             }
             Spacer(minLength: 8)
@@ -337,7 +337,7 @@ struct ShortcutRow: View {
                 return ("\(b): “\(other)” (\(where_)) gets it first", "exclamationmark.circle", .orange)
             }
         }()
-        return Label(text, systemImage: icon).font(.caption).foregroundStyle(color)
+        return Label(text, systemImage: icon).font(.nx(.caption)).foregroundStyle(color)
     }
 
     private func lowerFirst(_ s: String) -> String { s.prefix(1).lowercased() + s.dropFirst() }
@@ -351,7 +351,7 @@ struct KeyChip: View {
 
     var body: some View {
         Text(text)
-            .font(.callout.weight(.medium))
+            .font(.nx(.callout, .medium))
             .monospacedDigit()
             .foregroundStyle(muted ? Color.secondary : Color.primary)
             .padding(.horizontal, 9)

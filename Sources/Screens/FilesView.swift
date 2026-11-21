@@ -92,21 +92,21 @@ struct FilesView: View {
     private func row(_ e: FileEntry) -> some View {
         HStack(spacing: 12) {
             Image(systemName: e.symbol)
-                .font(.title3)
+                .font(.nx(.title3))
                 .foregroundStyle(e.tint)
                 .frame(width: 28)
             VStack(alignment: .leading, spacing: 2) {
                 Text(e.display).lineLimit(1).truncationMode(.middle)
-                if !wide, let sub = e.subtitle { Text(sub).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
+                if !wide, let sub = e.subtitle { Text(sub).font(.nx(.caption)).foregroundStyle(.secondary).lineLimit(1) }
             }
             Spacer(minLength: 8)
             if wide {
                 Text(e.size.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "")
-                    .font(.callout).foregroundStyle(.secondary).monospacedDigit().frame(width: 80, alignment: .trailing)
+                    .font(.nx(.callout)).foregroundStyle(.secondary).monospacedDigit().frame(width: 80, alignment: .trailing)
                 Text(e.modified.map { $0.formatted(date: .abbreviated, time: .shortened) } ?? "")
-                    .font(.callout).foregroundStyle(.secondary).frame(width: 170, alignment: .trailing)
+                    .font(.nx(.callout)).foregroundStyle(.secondary).frame(width: 170, alignment: .trailing)
             }
-            if !e.canChange { Image(systemName: "lock").font(.caption2).foregroundStyle(.tertiary) }
+            if !e.canChange { Image(systemName: "lock").font(.nx(.caption2)).foregroundStyle(.tertiary) }
         }
         .contentShape(Rectangle())
     }

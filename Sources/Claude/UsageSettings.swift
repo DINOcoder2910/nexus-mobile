@@ -17,15 +17,15 @@ struct UsageSettings: View {
         let bar = UsageShare.apiBar(own: m, credit: credit, others: others, device: Device.name)
         Section {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Anthropic API credits").font(.subheadline.weight(.semibold))
+                Text("Anthropic API credits").font(.nx(.subheadline, .semibold))
                 if let f = bar.fraction {
                     ProgressView(value: f)
                         .tint(f >= 0.9 ? Theme.late : f >= 0.75 ? Theme.soon : Theme.accent)
                         .accessibilityIdentifier("usage.api.bar")
                 }
-                Text(bar.main).font(.callout).monospacedDigit().accessibilityIdentifier("usage.api.main")
-                Text(bar.sub).font(.caption).foregroundStyle(.secondary)
-                if !bar.parts.isEmpty { Text(bar.parts).font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("usage.api.parts") }
+                Text(bar.main).font(.nx(.callout)).monospacedDigit().accessibilityIdentifier("usage.api.main")
+                Text(bar.sub).font(.nx(.caption)).foregroundStyle(.secondary)
+                if !bar.parts.isEmpty { Text(bar.parts).font(.nx(.caption)).foregroundStyle(.secondary).accessibilityIdentifier("usage.api.parts") }
             }
             .padding(.vertical, 4)
             LabeledContent("Monthly API credit") {
@@ -33,27 +33,27 @@ struct UsageSettings: View {
                 Text("$ a month").foregroundStyle(.secondary)
             }
             VStack(alignment: .leading, spacing: 8) {
-                Text("Claude plan" + ((plan?.plan.isEmpty ?? true) ? "" : " (\(plan!.plan))")).font(.subheadline.weight(.semibold))
+                Text("Claude plan" + ((plan?.plan.isEmpty ?? true) ? "" : " (\(plan!.plan))")).font(.nx(.subheadline, .semibold))
                 if let plan {
                     ForEach(plan.rows) { r in
                         VStack(alignment: .leading, spacing: 3) {
                             HStack {
-                                Text(r.label).font(.callout)
+                                Text(r.label).font(.nx(.callout))
                                 Spacer()
-                                Text("\(Int(r.pct.rounded()))%").font(.callout).monospacedDigit().foregroundStyle(.secondary)
+                                Text("\(Int(r.pct.rounded()))%").font(.nx(.callout)).monospacedDigit().foregroundStyle(.secondary)
                             }
                             ProgressView(value: r.pct / 100).tint(r.pct >= 90 ? Theme.late : r.pct >= 75 ? Theme.soon : Theme.accent)
-                            if !r.reset.isEmpty { Text(r.reset).font(.caption).foregroundStyle(.secondary) }
+                            if !r.reset.isEmpty { Text(r.reset).font(.nx(.caption)).foregroundStyle(.secondary) }
                         }
                     }
                     .accessibilityIdentifier("usage.plan.rows")
                     if let at = plan.at {
                         Text("Read on the laptop " + at.formatted(.relative(presentation: .named)) + ", the same numbers as Claude Code's /usage.")
-                            .font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("usage.plan.at")
+                            .font(.nx(.caption)).foregroundStyle(.secondary).accessibilityIdentifier("usage.plan.at")
                     }
                 } else {
                     Text("Not read yet: your plan's usage comes from Claude Code on the laptop. Nexus there reads it about once an hour, and it shows here after the next sync.")
-                        .font(.callout).foregroundStyle(.secondary)
+                        .font(.nx(.callout)).foregroundStyle(.secondary)
                         .accessibilityIdentifier("usage.plan.none")
                 }
             }

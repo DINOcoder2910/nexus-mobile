@@ -92,6 +92,8 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     let bar = BoardBar()
     let paperView = PaperView()
     let showBarsButton = UIButton(type: .system)
+    /// The quick ring floating at the edge of the board (QuickRing.swift).
+    let quickRing = QuickRing()
     var themeWatch: (any UITraitChangeRegistration)?
     var colorEdit: (BoardTool, Int)?
     var spaceStart: CGFloat?

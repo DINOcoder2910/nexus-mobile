@@ -21,7 +21,7 @@ struct CalendarSettings: View {
                                 HStack(spacing: 8) {
                                     Circle().fill(Color(cgColor: c.cgColor)).frame(width: 10, height: 10)
                                     Text(c.title)
-                                    if !c.allowsContentModifications { Text("read only").font(.caption).foregroundStyle(.secondary) }
+                                    if !c.allowsContentModifications { Text("read only").font(.nx(.caption)).foregroundStyle(.secondary) }
                                 }
                             }
                         }
