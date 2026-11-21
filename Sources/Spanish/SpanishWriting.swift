@@ -49,11 +49,11 @@ struct SpanishPromptRows: View {
     var body: some View {
         let d = lib.data(workstreamId)
         if let e = d.promptsError {
-            Label(e, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(Theme.late)
+            Label(e, systemImage: "exclamationmark.triangle").font(.nx(.footnote)).foregroundStyle(Theme.late)
         }
         if d.prompts.isEmpty {
             Text("Add the prompts your tutor gives you. Nexus never writes prompts; it marks what you write exactly as the IB does.")
-                .font(.callout).foregroundStyle(.secondary)
+                .font(.nx(.callout)).foregroundStyle(.secondary)
                 .accessibilityIdentifier("spanish-prompts-empty")
         }
         ForEach(d.prompts) { p in
@@ -62,10 +62,10 @@ struct SpanishPromptRows: View {
                 SpanishWriteView(workstreamId: workstreamId, promptId: p.id)
             } label: {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(p.text).lineLimit(3).font(.callout)
+                    Text(p.text).lineLimit(3).font(.nx(.callout))
                     let facts = [p.unit.isEmpty ? "" : Spanish.units.first { $0.code == p.unit }?.title ?? p.unit, p.types.joined(separator: ", "), p.source,
                                  mine.isEmpty ? "" : "\(mine.count) \(mine.count == 1 ? "piece" : "pieces")" + (mine.first?.total.map { ", last \($0)/15" } ?? "")].filter { !$0.isEmpty }
-                    if !facts.isEmpty { Text(facts.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary) }
+                    if !facts.isEmpty { Text(facts.joined(separator: " · ")).font(.nx(.caption)).foregroundStyle(.secondary) }
                 }
                 .padding(.vertical, 2)
             }
@@ -73,7 +73,7 @@ struct SpanishPromptRows: View {
         }
         Text(d.samples.isEmpty ? "Teacher-marked samples: none yet. Put marked pieces in \(Spanish.P.samples)/ (A, B and C in the front matter) and the marking matches your teacher's standard."
                                : "Marking matches \(d.samples.count) \(d.samples.count == 1 ? "piece" : "pieces") your teacher marked (\(Spanish.P.samples)/).")
-            .font(.caption).foregroundStyle(.secondary)
+            .font(.nx(.caption)).foregroundStyle(.secondary)
     }
 }
 
@@ -190,14 +190,14 @@ struct SpanishWriteView: View {
         let g = lib.grades[k]
         return VStack(alignment: .leading, spacing: 12) {
             Text(p.text)
-                .font(.callout)
+                .font(.nx(.callout))
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
                 .overlay(alignment: .leading) { Rectangle().fill(Theme.accent).frame(width: 3) }
-            if !p.types.isEmpty { Text("Text types offered: " + p.types.joined(separator: ", ")).font(.caption).foregroundStyle(.secondary) }
+            if !p.types.isEmpty { Text("Text types offered: " + p.types.joined(separator: ", ")).font(.nx(.caption)).foregroundStyle(.secondary) }
             TextEditor(text: text)
-                .font(.body)
+                .font(.nx(.body))
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.sentences)
                 .accessibilityIdentifier("spanish-piece")
@@ -211,11 +211,11 @@ struct SpanishWriteView: View {
                 Text("\(c.counted) words").bold()
                 Text("counted · \(c.paragraphs) \(c.paragraphs == 1 ? "paragraph" : "paragraphs") · " + (c.band == "short" ? "under 70" : c.band == "long" ? "over 150" : "within 70–150"))
             }
-            .font(.callout)
+            .font(.nx(.callout))
             .foregroundStyle(c.band == "ok" ? Color.primary : Theme.soon)
             .accessibilityIdentifier("spanish-count")
             if !c.skipped.isEmpty {
-                Text("Not counted: " + c.skipped.map { "\($0.why) “\($0.line)”" }.joined(separator: ", ")).font(.caption).foregroundStyle(.secondary)
+                Text("Not counted: " + c.skipped.map { "\($0.why) “\($0.line)”" }.joined(separator: ", ")).font(.nx(.caption)).foregroundStyle(.secondary)
             }
             HStack(spacing: 10) {
                 Button { SpanishKeyboard.hide(); SpanishGradeRun.mark(store, workstreamId, p) } label: {
@@ -227,7 +227,7 @@ struct SpanishWriteView: View {
                 ClaudeModeChip(small: true)
             }
             Text("Marked by \(SpanishModel.label(SpanishModel.current)) with the official criteria and the examiners' rules\(lib.data(workstreamId).samples.isEmpty ? "" : " and your teacher's marked pieces").")
-                .font(.caption).foregroundStyle(.secondary)
+                .font(.nx(.caption)).foregroundStyle(.secondary)
         }
     }
 
@@ -237,14 +237,14 @@ struct SpanishWriteView: View {
         let mine = lib.data(workstreamId).pieces.filter { $0.prompt == p.id }
         VStack(alignment: .leading, spacing: 14) {
             if let g = lib.grades[k] {
-                if !g.error.isEmpty { Label(g.error, systemImage: "exclamationmark.triangle").foregroundStyle(Theme.late).font(.callout) }
+                if !g.error.isEmpty { Label(g.error, systemImage: "exclamationmark.triangle").foregroundStyle(Theme.late).font(.nx(.callout)) }
                 if let x = g.grade { SpanishGradeView(grade: x, path: g.path) }
             } else if size == .regular {
                 Text("The marks show here: each criterion's mark, what was met and missed, the evidence from your piece and what to do next.")
-                    .font(.callout).foregroundStyle(.secondary)
+                    .font(.nx(.callout)).foregroundStyle(.secondary)
             }
             if !mine.isEmpty {
-                Text("Your pieces").font(.headline)
+                Text("Your pieces").font(.nx(.headline))
                 ForEach(mine, id: \.path) { x in
                     SpanishFileLink(title: "\(x.written)\(x.total.map { " · \($0)/15" } ?? "") · \(x.words) words", path: x.path)
                 }
@@ -260,7 +260,7 @@ struct SpanishFileLink: View {
     @Environment(\.spanish) private var actions
     var body: some View {
         Button { actions.showFile(path, (path as NSString).lastPathComponent) } label: { Label(title, systemImage: "doc.text") }
-            .font(.callout)
+            .font(.nx(.callout))
     }
 }
 
@@ -273,13 +273,13 @@ struct SpanishGradeView: View {
         let x = grade
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("\(x.total)/15").font(.largeTitle.weight(.bold)).accessibilityIdentifier("spanish-grade-total")
+                Text("\(x.total)/15").font(.nx(.largeTitle, .bold)).accessibilityIdentifier("spanish-grade-total")
                 VStack(alignment: .leading) {
-                    Text("A \(x.A.mark)/6 · B \(x.B.mark)/6 · C \(x.C.mark)/3").font(.callout.weight(.medium))
-                    if !x.textType.isEmpty { Text("read as \(x.textType)").font(.caption).foregroundStyle(.secondary) }
+                    Text("A \(x.A.mark)/6 · B \(x.B.mark)/6 · C \(x.C.mark)/3").font(.nx(.callout, .medium))
+                    if !x.textType.isEmpty { Text("read as \(x.textType)").font(.nx(.caption)).foregroundStyle(.secondary) }
                 }
             }
-            if !x.overall.isEmpty { Text(x.overall).font(.callout) }
+            if !x.overall.isEmpty { Text(x.overall).font(.nx(.callout)) }
             ForEach(SpanishGrade.criteria, id: \.key) { c in
                 let k = x.mark(c.key)
                 DisclosureGroup {
@@ -289,22 +289,22 @@ struct SpanishGradeView: View {
                         if !k.evidence.isEmpty { Text(k.evidence.map { "“\($0)”" }.joined(separator: "  ")).italic().foregroundStyle(.secondary) }
                         if !k.next.isEmpty { (Text("Next: ").bold() + Text(k.next.joined(separator: " "))) }
                     }
-                    .font(.callout)
+                    .font(.nx(.callout))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.top, 4)
                 } label: {
                     HStack { Text("\(c.key) \(c.name)").bold(); Spacer(); Text("\(k.mark)/\(c.max)").monospacedDigit() }
                 }
             }
-            if !x.applied.isEmpty { (Text("Examiner rules applied: ").bold() + Text(x.applied.joined(separator: " "))).font(.footnote) }
+            if !x.applied.isEmpty { (Text("Examiner rules applied: ").bold() + Text(x.applied.joined(separator: " "))).font(.nx(.footnote)) }
             if !x.mistakes.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(Array(x.mistakes.enumerated()), id: \.offset) { _, m in
                         HStack(alignment: .firstTextBaseline, spacing: 6) {
                             Text(m.wrong).strikethrough() + Text(" → ") + Text(m.right).bold()
-                            Text(Spanish.skillName(m.skill)).font(.caption).foregroundStyle(.secondary)
+                            Text(Spanish.skillName(m.skill)).font(.nx(.caption)).foregroundStyle(.secondary)
                         }
-                        .font(.callout)
+                        .font(.nx(.callout))
                     }
                 }
             }

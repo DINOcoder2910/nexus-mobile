@@ -30,7 +30,7 @@ struct ClaudeModeChip: View {
         .overlay(alignment: .top) {
             if mine, let note = account.notice, !askKey {
                 Text(note)
-                    .font(.caption)
+                    .font(.nx(.caption))
                     .padding(.horizontal, 10).padding(.vertical, 6)
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
                     .fixedSize()
@@ -59,15 +59,15 @@ struct ClaudeKeyForm: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Add your API key").font(.headline)
+            Text("Add your API key").font(.nx(.headline))
             Text("Claude then uses your key everywhere in Nexus on this iPad. It stays in the iPad's Keychain; only its last 4 characters are shown again.")
-                .font(.callout).foregroundStyle(.secondary)
+                .font(.nx(.callout)).foregroundStyle(.secondary)
             SecureField("sk-ant-…", text: $key)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .textFieldStyle(.roundedBorder)
                 .onSubmit(save)
-            if let problem { Text(problem).font(.caption).foregroundStyle(Theme.late) }
+            if let problem { Text(problem).font(.nx(.caption)).foregroundStyle(Theme.late) }
             HStack {
                 Spacer()
                 Button("Cancel", action: done)

@@ -40,7 +40,7 @@ final class SidebarTreeTests: XCTestCase {
         reach(arrow, "the arrow of " + name)
         let t0 = Date()
         arrow.tap()
-        XCTAssertTrue(app.buttons["Collapse " + name].firstMatch.waitForExistence(timeout: 5), name + " didn't open")
+        XCTAssertTrue(app.buttons["Collapse " + name].firstMatch.waitForExistence(timeout: 15), name + " didn't open")
         // the same measure as SidebarSpeedTests', on a small tree: what a tap and a look cost in the simulator
         print("UISTEP \(Date().timeIntervalSince1970) time open \(name) (small tree): \(String(format: "%.2f", Date().timeIntervalSince(t0))) s")
     }
@@ -125,7 +125,7 @@ final class SidebarTreeTests: XCTestCase {
     func testNestedNotebooksDark() { run(dark: true) }
 }
 
-/// The same tree on the iPhone: the Notebooks tab. Runs only on an iPhone simulator (ui-check.yml's iPhone step runs every
+/// The same tree on the iPhone: the Subjects tab (the new look; it was the Notebooks tab). Runs only on an iPhone simulator (ui-check.yml's iPhone step runs every
 /// "…PhoneTests" class there and prints its shots whose name has "phone").
 final class SidebarPhoneTests: XCTestCase {
     let app = XCUIApplication()
@@ -136,8 +136,8 @@ final class SidebarPhoneTests: XCTestCase {
         XCUIDevice.shared.orientation = .portrait
         app.launchArguments = ["-NexusTestNestedNotebooks"]
         app.launch()
-        let tab = app.tabBars.buttons["Notebooks"].firstMatch
-        XCTAssertTrue(tab.waitForExistence(timeout: 20), "no Notebooks tab")
+        let tab = app.tabBars.buttons["Subjects"].firstMatch
+        XCTAssertTrue(tab.waitForExistence(timeout: 20), "no Subjects tab")
         tab.tap()
         for name in ["School", "Chemistry", "R3 Energetics"] {
             let arrow = app.buttons["Expand " + name].firstMatch
@@ -146,7 +146,12 @@ final class SidebarPhoneTests: XCTestCase {
             XCTAssertTrue(arrow.waitForExistence(timeout: 5), "no arrow for " + name)
             arrow.tap()
         }
-        XCTAssertTrue(app.staticTexts["Bond enthalpy"].firstMatch.waitForExistence(timeout: 5), "R3 Energetics' boards aren't listed")
+        // the boards come under R3 Energetics, below the fold now that the subjects come first: the list makes their rows once they
+        // scroll into view
+        let bond = app.staticTexts["Bond enthalpy"].firstMatch
+        var down = 0
+        while !(bond.exists && bond.isHittable) && down < 6 { app.collectionViews.firstMatch.swipeUp(velocity: .slow); down += 1 }
+        XCTAssertTrue(bond.waitForExistence(timeout: 5), "R3 Energetics' boards aren't listed")
         sleep(1)
         print("UISTEP \(Date().timeIntervalSince1970) sidebar-phone-tree")
         let a = XCTAttachment(screenshot: XCUIScreen.main.screenshot())

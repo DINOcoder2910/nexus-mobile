@@ -488,7 +488,7 @@ struct UploadSheetView: View {
             .onChange(of: model) { _, m in SheetUpload.model = m }
             .safeAreaInset(edge: .bottom) {
                 if let m = message {
-                    Text(m).font(.callout).padding(.horizontal, 14).padding(.vertical, 10)
+                    Text(m).font(.nx(.callout)).padding(.horizontal, 14).padding(.vertical, 10)
                         .background(.regularMaterial, in: Capsule()).padding(.bottom, 8)
                         .task(id: m) { try? await Task.sleep(for: .seconds(4)); if message == m { message = nil } }
                 }
@@ -518,9 +518,9 @@ struct UploadSheetView: View {
             if let it = up.lastFiled, let t = it.target {
                 Section {
                     VStack(alignment: .leading, spacing: 8) {
-                        Label("Filed \(StudySheets.base(t))", systemImage: "checkmark.circle.fill").foregroundStyle(Theme.accent).font(.headline)
+                        Label("Filed \(StudySheets.base(t))", systemImage: "checkmark.circle.fill").foregroundStyle(Theme.accent).font(.nx(.headline))
                         Text(t.replacingOccurrences(of: (up.study?.sheetsRoot ?? "") + "/", with: "").components(separatedBy: "/").dropLast().joined(separator: " › "))
-                            .font(.callout).foregroundStyle(.secondary)
+                            .font(.nx(.callout)).foregroundStyle(.secondary)
                         Button("Undo") { message = up.undo(it, store: store) }.buttonStyle(.bordered)
                             .accessibilityIdentifier("upload-undo")
                     }
@@ -566,7 +566,7 @@ struct UploadSheetView: View {
                 Text("Know what it is? Say so and Claude goes by that, without reading the whole sheet. Leave it blank and Claude reads it.")
             }
             Section {
-                Button { up.sortAll() } label: { Text("Sort it").font(.headline).frame(maxWidth: .infinity) }
+                Button { up.sortAll() } label: { Text("Sort it").font(.nx(.headline)).frame(maxWidth: .infinity) }
                     .buttonStyle(.borderedProminent).controlSize(.large)
                     .listRowBackground(Color.clear).listRowInsets(EdgeInsets())
                     .accessibilityIdentifier("upload-sort")
@@ -581,7 +581,7 @@ private struct DescribeRow: View {
     let go: () -> Void
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Label(it.name, systemImage: "doc").font(.subheadline.weight(.semibold)).lineLimit(1)
+            Label(it.name, systemImage: "doc").font(.nx(.subheadline, .semibold)).lineLimit(1)
             TextField("e.g. Energetics HL test, 40 marks, R1.1 and R1.2, with markscheme", text: $it.note, axis: .vertical)
                 .lineLimit(1...3)
                 .onSubmit(go)
@@ -606,9 +606,9 @@ private struct UploadItemView: View {
         if let step = step {
             VStack(spacing: 14) {
                 ProgressView()
-                Text(step).font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                Text(step).font(.nx(.callout)).foregroundStyle(.secondary).multilineTextAlignment(.center)
                     .accessibilityIdentifier("upload-step")
-                if up.items.count > 1, let i = up.items.firstIndex(where: { $0 === it }) { Text("\(it.name) · \(i + 1) of \(up.items.count)").font(.caption).foregroundStyle(.tertiary) }
+                if up.items.count > 1, let i = up.items.firstIndex(where: { $0 === it }) { Text("\(it.name) · \(i + 1) of \(up.items.count)").font(.nx(.caption)).foregroundStyle(.tertiary) }
             }
             .padding(30)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -650,15 +650,15 @@ private struct UploadItemView: View {
         Form {
             Section {
                 if up.items.count > 1, let i = up.items.firstIndex(where: { $0 === it }) {
-                    Text("\(it.name) · \(i + 1) of \(up.items.count)").font(.caption).foregroundStyle(.secondary)
+                    Text("\(it.name) · \(i + 1) of \(up.items.count)").font(.nx(.caption)).foregroundStyle(.secondary)
                 }
                 if !p.summary.isEmpty { Label(p.summary, systemImage: "sparkles").accessibilityIdentifier("upload-summary") }
-                Text(howText).font(.caption).foregroundStyle(.secondary)
-                if let e = it.error { Label(e, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(Theme.soon) }
-                if let e = it.ocrError { Text("The scanned pages could not be read: \(e).").font(.callout).foregroundStyle(Theme.soon) }
+                Text(howText).font(.nx(.caption)).foregroundStyle(.secondary)
+                if let e = it.error { Label(e, systemImage: "exclamationmark.triangle").font(.nx(.callout)).foregroundStyle(Theme.soon) }
+                if let e = it.ocrError { Text("The scanned pages could not be read: \(e).").font(.nx(.callout)).foregroundStyle(Theme.soon) }
                 if p.unsure {
                     VStack(alignment: .leading, spacing: 8) {
-                        (Text("Claude is not sure. ").bold() + Text(p.reason)).font(.callout)
+                        (Text("Claude is not sure. ").bold() + Text(p.reason)).font(.nx(.callout))
                         if !more.pages.isEmpty {
                             Button { up.readMore(it) } label: {
                                 Label(more.extra > 0 ? "Read \(more.extra) more page\(more.extra == 1 ? "" : "s")" : "Show Claude the page\(more.pages.count == 1 ? "" : "s")", systemImage: "doc.text.magnifyingglass")
@@ -670,7 +670,7 @@ private struct UploadItemView: View {
                 }
                 if !p.codes.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(p.multi ? "Covers several units, so it goes in Multi-Topic Papers:" : "Covers:").font(.caption).foregroundStyle(.secondary)
+                        Text(p.multi ? "Covers several units, so it goes in Multi-Topic Papers:" : "Covers:").font(.nx(.caption)).foregroundStyle(.secondary)
                         FlowRow(spacing: 6) {
                             ForEach(Array((p.sections.isEmpty ? [StudyUpload.Section(name: "", codes: p.codes)] : p.sections).enumerated()), id: \.offset) { _, s in
                                 Chip(text: (s.name.isEmpty ? "" : s.name + " ") + s.codes.joined(separator: ", "), color: Theme.accent)
@@ -687,13 +687,13 @@ private struct UploadItemView: View {
 
             Section("Possible duplicates") {
                 if it.exact.isEmpty && it.near.isEmpty && it.same.isEmpty && p.duplicates.isEmpty {
-                    Text("None found: no file with the same bytes or name, and no sheet Claude or the text check flagged.").font(.callout).foregroundStyle(.secondary)
+                    Text("None found: no file with the same bytes or name, and no sheet Claude or the text check flagged.").font(.nx(.callout)).foregroundStyle(.secondary)
                 }
                 ForEach(it.exact, id: \.self) { x in dup("The same file is already here:", x, "doc.on.doc.fill") }
                 ForEach(it.near, id: \.path) { x in dup("\(x.share)% of its text is in", x.path, "doc.on.doc") }
                 ForEach(it.same.filter { s in !it.near.contains { $0.path == s } }, id: \.self) { x in dup("A file with the same name:", x, "doc.on.doc") }
                 ForEach(p.duplicates, id: \.path) { d in
-                    Label { Text("Claude: may repeat ") + Text(d.path).bold() + Text(d.why.isEmpty ? "" : " (\(d.why))") } icon: { Image(systemName: "sparkles") }.font(.callout)
+                    Label { Text("Claude: may repeat ") + Text(d.path).bold() + Text(d.why.isEmpty ? "" : " (\(d.why))") } icon: { Image(systemName: "sparkles") }.font(.nx(.callout))
                 }
             }
 
@@ -749,13 +749,13 @@ private struct UploadItemView: View {
             Section {
                 if let t = up.target(it.form) {
                     (Text("It goes to ").foregroundStyle(.secondary) + Text(rel(t).components(separatedBy: "/").joined(separator: " › ")).bold())
-                        .font(.callout)
+                        .font(.nx(.callout))
                         .accessibilityIdentifier("upload-where")
                 }
                 Button {
                     if let e = up.file(it, store: store) { message = e } else if let t = it.target { message = "Filed \(StudySheets.base(t))" }
                 } label: {
-                    Text(it.exact.isEmpty ? "File it" : "File it anyway").font(.headline).frame(maxWidth: .infinity)
+                    Text(it.exact.isEmpty ? "File it" : "File it anyway").font(.nx(.headline)).frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent).controlSize(.large)
                 .disabled(!StudyLibrary.shared.canWrite(store))
@@ -769,7 +769,7 @@ private struct UploadItemView: View {
     private func dup(_ text: String, _ path: String, _ icon: String) -> some View {
         Button { open(path) } label: {
             Label { Text(text + " ").foregroundStyle(.primary) + Text(rel(path)).foregroundStyle(Theme.accent) } icon: { Image(systemName: icon) }
-                .font(.callout)
+                .font(.nx(.callout))
         }
     }
 

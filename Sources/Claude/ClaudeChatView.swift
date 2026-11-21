@@ -79,13 +79,13 @@ struct ClaudeChatView: View {
     private func columnHeader(_ c: ClaudeConversation) -> some View {
         HStack(spacing: 12) {
             Label(conversation == "apps" ? "Applications · Claude" : "Claude", systemImage: "sparkles")
-                .font(.headline).labelStyle(.titleAndIcon).foregroundStyle(Theme.claude).lineLimit(1)
+                .font(.nx(.headline)).labelStyle(.titleAndIcon).foregroundStyle(Theme.claude).lineLimit(1)
             Spacer(minLength: 4)
             modelMenu(c)
             ClaudeModeChip(small: true)
             moreMenu(c)
             if let onClose {
-                Button { onClose() } label: { Image(systemName: "xmark.circle.fill").font(.title3).foregroundStyle(.secondary) }
+                Button { onClose() } label: { Image(systemName: "xmark.circle.fill").font(.nx(.title3)).foregroundStyle(.secondary) }
                     .accessibilityLabel("Close").accessibilityIdentifier("claude-close")
             }
         }
@@ -105,7 +105,7 @@ struct ClaudeChatView: View {
                 Text(Self.models.first { $0.id == c.model }?.name ?? c.model)
                 Image(systemName: "chevron.down").imageScale(.small)
             }
-            .font(.callout.weight(.medium))
+            .font(.nx(.callout, .medium))
         }
         .accessibilityIdentifier("claude-model")
     }
@@ -149,7 +149,7 @@ struct ClaudeChatView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         case .lookup:
             Label(item.text, systemImage: "doc.text.magnifyingglass")
-                .font(.caption)
+                .font(.nx(.caption))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         case .change:
@@ -162,7 +162,7 @@ struct ClaudeChatView: View {
                     Button("Try again") { c.retry() }.buttonStyle(.borderless).fontWeight(.semibold)
                 }
             }
-            .font(.callout)
+            .font(.nx(.callout))
             .foregroundStyle(item.retry ? Theme.late : .secondary)
             .accessibilityIdentifier("claude-note")
         }
@@ -174,7 +174,7 @@ struct ClaudeChatView: View {
             if !words.isEmpty { Text(Self.markdown(words)).frame(maxWidth: .infinity, alignment: .leading) }
             HStack(spacing: 8) {
                 ProgressView().controlSize(.small)
-                Text(c.status ?? "Thinking").font(.callout).foregroundStyle(.secondary)
+                Text(c.status ?? "Thinking").font(.nx(.callout)).foregroundStyle(.secondary)
             }
             .accessibilityIdentifier("claude-working")
         }
@@ -185,9 +185,9 @@ struct ClaudeChatView: View {
         let about = c.looking.map { $0.lowercased() == "today" ? "today" : $0 } ?? "your plans and files"
         return VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 6) {
-                Label("Claude", systemImage: "sparkles").font(.title3.weight(.semibold)).foregroundStyle(Theme.claude)
+                Label("Claude", systemImage: "sparkles").font(.nx(.title3, .semibold)).foregroundStyle(Theme.claude)
                 Text("Ask about \(about). Claude reads your data folder and shows each change as a card for you to accept or reject.")
-                    .font(.callout).foregroundStyle(.secondary)
+                    .font(.nx(.callout)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if conversation == "main" {
@@ -210,8 +210,8 @@ struct ClaudeChatView: View {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: cmd.icon).foregroundStyle(Theme.claude).frame(width: 22)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(cmd.title).font(.callout.weight(.semibold)).foregroundStyle(.primary)
-                    Text(cmd.detail).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.leading)
+                    Text(cmd.title).font(.nx(.callout, .semibold)).foregroundStyle(.primary)
+                    Text(cmd.detail).font(.nx(.caption)).foregroundStyle(.secondary).multilineTextAlignment(.leading)
                 }
                 Spacer(minLength: 0)
             }
@@ -236,9 +236,9 @@ struct ClaudeChatView: View {
         return VStack(spacing: 6) {
             if c.pendingCount > 1 && wide {
                 HStack {
-                    Text("\(c.pendingCount) changes wait for you").font(.caption).foregroundStyle(.secondary)
+                    Text("\(c.pendingCount) changes wait for you").font(.nx(.caption)).foregroundStyle(.secondary)
                     Spacer()
-                    Button("Accept all") { c.acceptAll() }.font(.caption.weight(.semibold)).buttonStyle(.borderless)
+                    Button("Accept all") { c.acceptAll() }.font(.nx(.caption, .semibold)).buttonStyle(.borderless)
                 }
             }
             HStack(alignment: .bottom, spacing: 8) {
@@ -248,7 +248,7 @@ struct ClaudeChatView: View {
                             Button { runCommand(cmd, c) } label: { Label(cmd.title, systemImage: cmd.icon) }
                         }
                     } label: {
-                        Image(systemName: "slash.circle").font(.title2).foregroundStyle(Theme.claude)
+                        Image(systemName: "slash.circle").font(.nx(.title2)).foregroundStyle(Theme.claude)
                     }
                     .disabled(c.busy)
                     .accessibilityLabel("Commands")
@@ -263,12 +263,12 @@ struct ClaudeChatView: View {
                     .onSubmit { send(c) }
                     .accessibilityIdentifier("claude-input")
                 if c.busy {
-                    Button { c.stop() } label: { Image(systemName: "stop.circle.fill").font(.title) }
+                    Button { c.stop() } label: { Image(systemName: "stop.circle.fill").font(.nx(.title)) }
                         .tint(Theme.late)
                         .accessibilityLabel("Stop")
                         .accessibilityIdentifier("claude-stop")
                 } else {
-                    Button { send(c) } label: { Image(systemName: "arrow.up.circle.fill").font(.title) }
+                    Button { send(c) } label: { Image(systemName: "arrow.up.circle.fill").font(.nx(.title)) }
                         .tint(Theme.claude)
                         .disabled(c.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !store.snapshot.isDataFolder)
                         .accessibilityLabel("Send")
@@ -314,9 +314,9 @@ struct ChangeCard: View {
             HStack(spacing: 8) {
                 Image(systemName: item.isNew ? "doc.badge.plus" : "pencil.line").foregroundStyle(Theme.claude)
                 Text(item.path ?? "").font(.caption.monospaced().weight(.semibold)).lineLimit(1).truncationMode(.head)
-                if item.isNew { Text("New file").font(.caption2.weight(.semibold)).padding(.horizontal, 6).padding(.vertical, 2).background(Theme.claudeTint, in: Capsule()) }
+                if item.isNew { Text("New file").font(.nx(.caption2, .semibold)).padding(.horizontal, 6).padding(.vertical, 2).background(Theme.claudeTint, in: Capsule()) }
                 Spacer(minLength: 0)
-                if item.auto { Text("Placed").font(.caption2.weight(.semibold)).foregroundStyle(Theme.planned) }
+                if item.auto { Text("Placed").font(.nx(.caption2, .semibold)).foregroundStyle(Theme.planned) }
             }
             .padding(.horizontal, 12).padding(.vertical, 9)
             if item.before != nil || item.after != nil {
@@ -325,7 +325,7 @@ struct ChangeCard: View {
                     ForEach(Array((long && !expanded ? Array(lines.prefix(12)) : lines).enumerated()), id: \.offset) { _, l in line(l) }
                     if long {
                         Button(expanded ? "Show less" : "Show all \(lines.count) lines") { expanded.toggle() }
-                            .font(.caption).buttonStyle(.borderless).padding(.horizontal, 12).padding(.vertical, 6)
+                            .font(.nx(.caption)).buttonStyle(.borderless).padding(.horizontal, 12).padding(.vertical, 6)
                     }
                 }
                 .padding(.vertical, 4)
@@ -345,7 +345,7 @@ struct ChangeCard: View {
         case .same(let s): code(" " + s, .secondary, .clear)
         case .removed(let s): code("−" + s, Theme.late, Theme.late.opacity(0.10))
         case .added(let s): code("+" + s, Theme.planned, Theme.planned.opacity(0.12))
-        case .gap(let n): Text("⋯ \(n) unchanged line\(n == 1 ? "" : "s")").font(.caption2).foregroundStyle(.tertiary).padding(.horizontal, 12).padding(.vertical, 2)
+        case .gap(let n): Text("⋯ \(n) unchanged line\(n == 1 ? "" : "s")").font(.nx(.caption2)).foregroundStyle(.tertiary).padding(.horizontal, 12).padding(.vertical, 2)
         }
     }
 
@@ -372,7 +372,7 @@ struct ChangeCard: View {
                     .accessibilityIdentifier("change-reject")
                 Spacer(minLength: 0)
             }
-            .font(.callout.weight(.medium))
+            .font(.nx(.callout, .medium))
             .controlSize(.small)
         case .accepted:
             HStack(spacing: 10) {
@@ -380,14 +380,14 @@ struct ChangeCard: View {
                 Spacer(minLength: 0)
                 Button("Undo") { conversation.undo(item.id) }.buttonStyle(.borderless).accessibilityIdentifier("change-undo")
             }
-            .font(.callout.weight(.medium))
+            .font(.nx(.callout, .medium))
         case .rejected:
-            Label("Rejected", systemImage: "xmark.circle").font(.callout).foregroundStyle(.secondary)
+            Label("Rejected", systemImage: "xmark.circle").font(.nx(.callout)).foregroundStyle(.secondary)
         case .undone:
-            Label("Put back as it was", systemImage: "arrow.uturn.backward.circle").font(.callout).foregroundStyle(.secondary)
+            Label("Put back as it was", systemImage: "arrow.uturn.backward.circle").font(.nx(.callout)).foregroundStyle(.secondary)
         case .failed, .stale:
             Label(item.problem ?? "Couldn't use this change.", systemImage: "exclamationmark.triangle")
-                .font(.callout).foregroundStyle(Theme.late)
+                .font(.nx(.callout)).foregroundStyle(Theme.late)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -413,7 +413,7 @@ struct EarlierConversations: View {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(f.items.first { $0.kind == .user }?.text ?? "Conversation").lineLimit(2).foregroundStyle(.primary)
                             Text("\(f.updated.formatted(date: .abbreviated, time: .shortened)) · \(f.items.filter { $0.kind == .user }.count) messages")
-                                .font(.caption).foregroundStyle(.secondary)
+                                .font(.nx(.caption)).foregroundStyle(.secondary)
                         }
                     }
                 }

@@ -37,13 +37,13 @@ struct RunningTimerPill: View {
                 TimerDot()
                 Button { if store.task(c.task) != nil { store.openTaskId = c.task } } label: {
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(tracker.title(c, in: store.snapshot)).font(.subheadline.weight(.semibold)).lineLimit(1)
-                        TimerClock(entry: c).font(.caption).foregroundStyle(.secondary)
+                        Text(tracker.title(c, in: store.snapshot)).font(.nx(.subheadline, .semibold)).lineLimit(1)
+                        TimerClock(entry: c).font(.nx(.caption)).foregroundStyle(.secondary)
                     }
                 }
                 .buttonStyle(.plain)
                 Button { tracker.stop(store: store) } label: {
-                    Image(systemName: "stop.fill").font(.subheadline).frame(width: 34, height: 34).background(.thinMaterial, in: Circle())
+                    Image(systemName: "stop.fill").font(.nx(.subheadline)).frame(width: 34, height: 34).background(.thinMaterial, in: Circle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Stop the timer")
@@ -70,8 +70,8 @@ struct SidebarTimerRow: View {
                 }
                 .buttonStyle(.plain)
                 Spacer(minLength: 4)
-                TimerClock(entry: c).font(.callout).foregroundStyle(.secondary)
-                Button { tracker.stop(store: store) } label: { Image(systemName: "stop.circle.fill").font(.title3) }
+                TimerClock(entry: c).font(.nx(.callout)).foregroundStyle(.secondary)
+                Button { tracker.stop(store: store) } label: { Image(systemName: "stop.circle.fill").font(.nx(.title3)) }
                     .buttonStyle(.plain)
                     .foregroundStyle(Theme.accent)
                     .accessibilityLabel("Stop the timer")
@@ -116,23 +116,23 @@ struct TaskTimeSection: View {
                 Spacer()
                 if spent > 0 {
                     Text(TimeLog.spent(spent) + (est.map { " of \(hoursText($0))" } ?? "") + " spent")
-                        .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.trailing)
+                        .font(.nx(.callout)).foregroundStyle(.secondary).multilineTextAlignment(.trailing)
                 } else {
-                    Text("Nothing yet").font(.callout).foregroundStyle(.secondary)
+                    Text("Nothing yet").font(.nx(.callout)).foregroundStyle(.secondary)
                 }
             }
             if spent - own >= 60 {
-                Text("\(TimeLog.spent(spent - own)) on its subtasks").font(.caption).foregroundStyle(.secondary)
+                Text("\(TimeLog.spent(spent - own)) on its subtasks").font(.nx(.caption)).foregroundStyle(.secondary)
             }
             if let other {
-                Text("A timer runs on “\(tracker.title(other, in: s))”: starting this one stops it.").font(.caption).foregroundStyle(.secondary)
+                Text("A timer runs on “\(tracker.title(other, in: s))”: starting this one stops it.").font(.nx(.caption)).foregroundStyle(.secondary)
             }
             ForEach(all.prefix(8)) { e in
                 Button { sheet = .change(e) } label: { SessionLine(entry: e, showTask: e.task != task.id) }
                     .buttonStyle(.plain)
                     .swipeActions { Button(role: .destructive) { tracker.remove(e, store: store) } label: { Label("Remove", systemImage: "trash") } }
             }
-            if all.count > 8 { Text("\(all.count - 8) more on the Time screen").font(.caption).foregroundStyle(.secondary) }
+            if all.count > 8 { Text("\(all.count - 8) more on the Time screen").font(.nx(.caption)).foregroundStyle(.secondary) }
             Button { sheet = .add(task.id, day: store.today) } label: { Label("Add time…", systemImage: "plus.circle") }
                 .sheet(item: $sheet) { m in SessionSheet(mode: m) }
         } header: { Text("Time") }
@@ -160,12 +160,12 @@ struct SessionLine: View {
             }
             Spacer(minLength: 6)
             if entry.running {
-                TimerClock(entry: entry).font(.callout).foregroundStyle(Theme.accent)
+                TimerClock(entry: entry).font(.nx(.callout)).foregroundStyle(Theme.accent)
             } else {
-                Text(TimeLog.spent(entry.seconds())).font(.callout).monospacedDigit()
+                Text(TimeLog.spent(entry.seconds())).font(.nx(.callout)).monospacedDigit()
             }
             if entry.device != TimeTracker.device {
-                Text(TimeLog.deviceName(entry.device)).font(.caption2).foregroundStyle(.secondary)
+                Text(TimeLog.deviceName(entry.device)).font(.nx(.caption2)).foregroundStyle(.secondary)
             }
         }
         .contentShape(Rectangle())
@@ -197,7 +197,7 @@ struct SessionSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    Text(taskTitle).font(.headline)
+                    Text(taskTitle).font(.nx(.headline))
                 }
                 Section {
                     DatePicker("Start", selection: $start, in: ...Date())
@@ -281,7 +281,7 @@ struct TaskPickSheet: View {
                         Circle().fill(store.color(t)).frame(width: 8, height: 8)
                         Text(t.text).lineLimit(1).foregroundStyle(.primary)
                         Spacer()
-                        Text(store.workstreamName(t)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        Text(store.workstreamName(t)).font(.nx(.caption)).foregroundStyle(.secondary).lineLimit(1)
                     }
                 }
             }
@@ -320,7 +320,7 @@ struct TimeView: View {
                     weekBars(days: days, per: per, shown: shown, today: today)
                 }
                 if !tracker.problems.isEmpty {
-                    Section { ForEach(tracker.problems, id: \.self) { Text($0).font(.caption).foregroundStyle(Theme.soon) } }
+                    Section { ForEach(tracker.problems, id: \.self) { Text($0).font(.nx(.caption)).foregroundStyle(Theme.soon) } }
                 }
                 if size == .regular {
                     Section {
@@ -358,7 +358,7 @@ struct TimeView: View {
         let todayS = days.firstIndex(of: today).map { per[$0] } ?? 0
         let thisWeek = days.contains(today)
         return VStack(alignment: .leading, spacing: 4) {
-            Text(thisWeek ? "This week" : "\(Days.label(days[0])) – \(Days.label(days[6]))").font(.title2.weight(.bold))
+            Text(thisWeek ? "This week" : "\(Days.label(days[0])) – \(Days.label(days[6]))").font(.nx(.title2, .bold))
             Text(thisWeek ? "\(TimeLog.spent(todayS).isEmpty ? "0m" : TimeLog.spent(todayS)) today · \(TimeLog.spent(week).isEmpty ? "0m" : TimeLog.spent(week)) this week"
                           : "\(TimeLog.spent(week).isEmpty ? "0m" : TimeLog.spent(week)) that week")
                 .foregroundStyle(.secondary)
@@ -372,15 +372,15 @@ struct TimeView: View {
             TimerDot()
             VStack(alignment: .leading, spacing: 2) {
                 Button { if store.task(c.task) != nil { store.openTaskId = c.task } } label: {
-                    Text(tracker.title(c, in: store.snapshot)).font(.headline).lineLimit(1).foregroundStyle(.primary)
+                    Text(tracker.title(c, in: store.snapshot)).font(.nx(.headline)).lineLimit(1).foregroundStyle(.primary)
                 }
                 .buttonStyle(.plain)
                 Text(store.task(c.task).map { store.workstreamName($0) } ?? "not in the folder any more")
                     + Text(c.device != TimeTracker.device ? " · started on \(TimeLog.deviceWords(c.device))" : "")
             }
-            .font(.caption).foregroundStyle(.secondary)
+            .font(.nx(.caption)).foregroundStyle(.secondary)
             Spacer()
-            TimerClock(entry: c).font(.title2.weight(.semibold))
+            TimerClock(entry: c).font(.nx(.title2, .semibold))
             Button { tracker.stop(store: store) } label: {
                 HStack(spacing: 6) { Image(systemName: "stop.fill").imageScale(.small); Text("Stop") }.lineLimit(1).fixedSize()
             }
@@ -401,9 +401,9 @@ struct TimeView: View {
                                 .frame(height: max(0, CGFloat(per[i] / top) * (Device.isPhone ? 72 : 96)))
                         }
                         .frame(width: Device.isPhone ? 24 : 30, height: Device.isPhone ? 72 : 96)
-                        Text(String(Days.shortDay(d).prefix(Device.isPhone ? 1 : 3))).font(.caption2.weight(d == today ? .bold : .regular))
+                        Text(String(Days.shortDay(d).prefix(Device.isPhone ? 1 : 3))).font(.nx(.caption2, d == today ? .bold : .regular))
                             .foregroundStyle(d == today ? Theme.accent : .secondary)
-                        Text(TimeLog.spent(per[i]).isEmpty ? "–" : TimeLog.spent(per[i])).font(.caption2).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.7)
+                        Text(TimeLog.spent(per[i]).isEmpty ? "–" : TimeLog.spent(per[i])).font(.nx(.caption2)).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.7)
                     }
                     .frame(maxWidth: .infinity)
                 }
@@ -419,14 +419,14 @@ struct TimeView: View {
         let list = TimeLog.sessions(on: shown, all, now: now)
         if size == .regular {
             HStack {
-                Text(shown == today ? "Today" : Days.label(shown)).font(.headline)
+                Text(shown == today ? "Today" : Days.label(shown)).font(.nx(.headline))
                 Spacer()
                 Text(TimeLog.spent(TimeLog.daySeconds(all, shown, now: now))).foregroundStyle(.secondary)
             }
             .padding(.bottom, 4)
         }
         if list.isEmpty {
-            Text(shown > today ? "That day is still to come." : "Nothing tracked that day.").font(.callout).foregroundStyle(.secondary)
+            Text(shown > today ? "That day is still to come." : "Nothing tracked that day.").font(.nx(.callout)).foregroundStyle(.secondary)
         }
         ForEach(list) { e in
             Button { sheet = .change(e) } label: { SessionLine(entry: e, showDay: false) }
@@ -444,9 +444,9 @@ struct TimeView: View {
     private func byWorkstream(days: [String], all: [TimeLog.Entry], now: Date) -> some View {
         let s = store.snapshot
         let groups = TimeLog.grouped(all, days: days, now: now) { e in s.tasks[e.task].map { $0.workstream ?? "" } ?? "__gone" }
-        if size == .regular { Text(days.contains(store.today) ? "This week by workstream" : "That week by workstream").font(.headline).padding(.bottom, 4) }
+        if size == .regular { Text(days.contains(store.today) ? "This week by workstream" : "That week by workstream").font(.nx(.headline)).padding(.bottom, 4) }
         if groups.isEmpty {
-            Text("Nothing tracked yet. Start a timer from a task: hold it for its menu, or open it.").font(.callout).foregroundStyle(.secondary)
+            Text("Nothing tracked yet. Start a timer from a task: hold it for its menu, or open it.").font(.nx(.callout)).foregroundStyle(.secondary)
         }
         let top = groups.first?.seconds ?? 1
         ForEach(groups, id: \.key) { g in
@@ -462,7 +462,7 @@ struct TimeView: View {
                         }
                 }
                 .frame(width: size == .regular ? 120 : 70, height: 6)
-                Text(TimeLog.spent(g.seconds)).font(.callout).monospacedDigit().foregroundStyle(.secondary).frame(minWidth: 56, alignment: .trailing)
+                Text(TimeLog.spent(g.seconds)).font(.nx(.callout)).monospacedDigit().foregroundStyle(.secondary).frame(minWidth: 56, alignment: .trailing)
             }
             .padding(.vertical, 2)
         }

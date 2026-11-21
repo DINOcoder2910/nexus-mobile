@@ -64,7 +64,7 @@ struct TimeGridView: View {
                     }
                     if things.count > room {
                         Button(narrow ? "+\(things.count - room)" : "+\(things.count - room) more") { openDay(day) }
-                            .font(.caption2).buttonStyle(.plain).foregroundStyle(.secondary)
+                            .font(.nx(.caption2)).buttonStyle(.plain).foregroundStyle(.secondary)
                     }
                 }
                 .padding(.horizontal, narrow ? 1 : 2)
@@ -79,7 +79,7 @@ struct TimeGridView: View {
         let isToday = day == today
         let weekday = parts.first.map { String($0) } ?? ""
         let date = Text(parts.count > 1 ? String(parts[1]) : "")
-            .font(.subheadline.weight(.semibold))
+            .font(.nx(.subheadline, .semibold))
             .foregroundStyle(isToday ? Color.white : .primary)
             .frame(minWidth: 26, minHeight: 26)
             .background(isToday ? Theme.accent : Color.clear, in: Circle())
@@ -87,12 +87,12 @@ struct TimeGridView: View {
             if narrow {
                 // the weekday over the date: a seventh of a phone has no room for both on one line
                 VStack(spacing: 2) {
-                    Text(String(weekday.prefix(1))).font(.caption2.weight(.semibold)).foregroundStyle(isToday ? Theme.accent : .secondary)
+                    Text(String(weekday.prefix(1))).font(.nx(.caption2, .semibold)).foregroundStyle(isToday ? Theme.accent : .secondary)
                     date
                 }
             } else {
                 HStack(spacing: 5) {
-                    Text(weekday).font(.caption.weight(.semibold)).foregroundStyle(isToday ? Theme.accent : .secondary)
+                    Text(weekday).font(.nx(.caption, .semibold)).foregroundStyle(isToday ? Theme.accent : .secondary)
                     date
                 }
             }
@@ -118,7 +118,7 @@ struct TimeGridView: View {
         VStack(spacing: 0) {
             ForEach(0..<24, id: \.self) { h in
                 Text(h == 0 ? "" : hourText(h))
-                    .font(.caption2).foregroundStyle(.secondary).monospacedDigit()
+                    .font(.nx(.caption2)).foregroundStyle(.secondary).monospacedDigit()
                     .frame(width: gutter - (narrow ? 3 : 6), height: hourHeight, alignment: .topTrailing)
                     .offset(y: -7)
                     .id("h\(h)")
@@ -197,7 +197,7 @@ struct TimeGridView: View {
                     .lineLimit(tall ? (narrow ? 4 : 3) : 1)
             }
             if tall && !narrow {
-                Text(th.timeText).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                Text(th.timeText).font(.nx(.caption2)).foregroundStyle(.secondary).lineLimit(1)
             }
         }
         .padding(.leading, narrow ? 4 : 6)
@@ -253,7 +253,7 @@ struct MonthGridView: View {
             HStack(spacing: 0) {
                 ForEach(weekdays, id: \.self) { w in
                     Text(compact ? String(w.prefix(1)) : w)
-                        .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        .font(.nx(.caption, .semibold)).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity)
                 }
             }
@@ -285,7 +285,7 @@ struct MonthGridView: View {
         let room = max(0, Int((height - 30) / 16))
         return VStack(alignment: .leading, spacing: 2) {
             Text(String(Int(day.suffix(2)) ?? 0))
-                .font(.caption.weight(isToday ? .bold : .regular))
+                .font(.nx(.caption, isToday ? .bold : .regular))
                 .foregroundStyle(isToday ? Color.white : inMonth ? .primary : .secondary)
                 .frame(minWidth: 22, minHeight: 22)
                 .background(isToday ? Theme.accent : Color.clear, in: Circle())
@@ -298,11 +298,11 @@ struct MonthGridView: View {
                 ForEach(list.prefix(room)) { th in
                     HStack(spacing: 3) {
                         Circle().fill(th.color).frame(width: 6, height: 6)
-                        Text(th.title).font(.caption2).lineLimit(1)
+                        Text(th.title).font(.nx(.caption2)).lineLimit(1)
                     }
                 }
                 if list.count > room && room > 0 {
-                    Text("+\(list.count - room)").font(.caption2).foregroundStyle(.secondary)
+                    Text("+\(list.count - room)").font(.nx(.caption2)).foregroundStyle(.secondary)
                 }
             }
             Spacer(minLength: 0)

@@ -19,9 +19,9 @@ struct BoardsView: View {
                 ForEach(boards) { b in
                     Button { open = b } label: {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(b.name).font(.headline).foregroundStyle(.primary)
+                            Text(b.name).font(.nx(.headline)).foregroundStyle(.primary)
                             Text((b.pdfName ?? "Blank board") + " · " + b.modified.formatted(date: .abbreviated, time: .shortened))
-                                .font(.caption).foregroundStyle(.secondary)
+                                .font(.nx(.caption)).foregroundStyle(.secondary)
                         }
                     }
                 }

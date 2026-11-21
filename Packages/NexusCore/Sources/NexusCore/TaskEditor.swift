@@ -140,6 +140,52 @@ public struct TaskEditor {
         return (Change(file: file, before: before, after: after, message: "Added: \(clean)"), id)
     }
 
+    /// Deletes a task and everything under it (Undo puts it back).
+    public func delete(_ t: NexusTask, in s: Snapshot) throws -> Change {
+        guard t.hasId else { throw Failure.readOnly("This task has no id yet; open the folder in Nexus on the laptop once and it gets one") }
+        guard s.canEdit(t.file) else { throw Failure.readOnly(s.readOnlyReason ?? "\(t.file) does not parse; fix it on the laptop first") }
+        let url = root.appendingPathComponent(t.file)
+        let before = try read(url)
+        let r = try YamlEdit.removeTask(before, id: t.id)
+        let gone = 1 + s.descendants(of: t).count
+        try check(r.text, file: t.file, workstream: t.workstream, expect: { !$0.contains { $0.id == t.id } }, count: countIn(before, t.file) - gone)
+        try write(url, r.text)
+        return Change(file: t.file, before: before, after: r.text, message: "Deleted: \(t.text)")
+    }
+
+    /// Moves a task, with everything under it, to the end of another subject's list (nil: the Inbox). One Undo puts both files back.
+    public func moveTask(_ t: NexusTask, to workstream: String?, in s: Snapshot) throws -> Change {
+        guard t.hasId else { throw Failure.readOnly("This task has no id yet; open the folder in Nexus on the laptop once and it gets one") }
+        let target = workstream.flatMap { s.workstreams[$0]?.tasksFile } ?? "inbox.yaml"
+        let name = workstream.flatMap { s.workstreams[$0]?.name } ?? "Inbox"
+        guard target != t.file || t.parent != nil else { return Change(file: t.file, before: "", after: "", message: "Already in \(name)") }
+        for f in [t.file, target] where !s.canEdit(f) {
+            throw Failure.readOnly(s.readOnlyReason ?? "\(f) does not parse; fix it on the laptop first")
+        }
+        let gone = 1 + s.descendants(of: t).count
+        let fromURL = root.appendingPathComponent(t.file)
+        let before = try read(fromURL)
+        let r = try YamlEdit.removeTask(before, id: t.id)
+        let toURL = root.appendingPathComponent(target)
+        let same = target == t.file
+        let targetBefore = same ? r.text : ((try? read(toURL)) ?? "")
+        let targetAfter = YamlEdit.appendTask(targetBefore, lines: r.lines, from: r.dashIndent)
+        if same {
+            try check(targetAfter, file: t.file, workstream: t.workstream, expect: { $0.contains { $0.id == t.id && $0.parent == nil } }, count: countIn(before, t.file))
+            try write(fromURL, targetAfter)
+            return Change(file: t.file, before: before, after: targetAfter, message: "Out of its parent: \(t.text)")
+        }
+        try check(r.text, file: t.file, workstream: t.workstream, expect: { !$0.contains { $0.id == t.id } }, count: countIn(before, t.file) - gone)
+        try check(targetAfter, file: target, workstream: workstream, expect: { $0.contains { $0.id == t.id } }, count: countIn(targetBefore, target) + gone)
+        let created = !FileManager.default.fileExists(atPath: toURL.path)
+        if created { try? FileManager.default.createDirectory(at: toURL.deletingLastPathComponent(), withIntermediateDirectories: true) }
+        try write(toURL, targetAfter)
+        do { try write(fromURL, r.text) } catch { try? write(toURL, targetBefore); throw error }
+        var other = Change(file: target, before: targetBefore, after: targetAfter, message: "")
+        other.created = created
+        return Change(file: t.file, before: before, after: r.text, message: "Moved to \(name): \(t.text)", also: [other])
+    }
+
     /// Puts a file back as it was before `c`, if it still holds what `c` wrote.
     /// Every file it wrote (`also` too) must still hold what it wrote; they are put back last first.
     public func undo(_ c: Change) throws {

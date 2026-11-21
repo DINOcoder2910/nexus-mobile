@@ -57,9 +57,9 @@ struct PracticeView: View {
             let done = min(idx + (phase == .shown ? 1 : 0), items.count)
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text(deck?.title ?? "").font(.subheadline.weight(.semibold))
+                    Text(deck?.title ?? "").font(.nx(.subheadline, .semibold))
                     Spacer()
-                    Text("\(done) of \(items.count) · \(right) right").font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
+                    Text("\(done) of \(items.count) · \(right) right").font(.nx(.subheadline).monospacedDigit()).foregroundStyle(.secondary)
                         .accessibilityIdentifier("practice-count")
                 }
                 ProgressView(value: Double(done), total: Double(max(items.count, 1))).tint(Theme.accent)
@@ -79,17 +79,17 @@ struct PracticeView: View {
         let levels = StudyUnits.levels.filter { $0.id == "all" || count(k, $0.id) < count(k, "all") }
         let n = count(k, levels.contains { $0.id == level } ? level : "all")
         VStack(alignment: .leading, spacing: 14) {
-            Text(k.title).font(.title2.weight(.semibold))
-            Text("Sort each one: \(StudyUnits.practiceOptions(k).joined(separator: " / "))").font(.headline)
+            Text(k.title).font(.nx(.title2, .semibold))
+            Text("Sort each one: \(StudyUnits.practiceOptions(k).joined(separator: " / "))").font(.nx(.headline))
             if levels.count > 1 {
-                Text("Which").font(.subheadline).foregroundStyle(.secondary)
+                Text("Which").font(.nx(.subheadline)).foregroundStyle(.secondary)
                 let which = Picker("Which", selection: $level) {
                     ForEach(levels, id: \.id) { lv in Text("\(lv.label) (\(count(k, lv.id)))").tag(lv.id) }
                 }
                 .labelsHidden()
                 if size == .regular { which.pickerStyle(.segmented) } else { which.pickerStyle(.inline) }
             }
-            Text("How").font(.subheadline).foregroundStyle(.secondary)
+            Text("How").font(.nx(.subheadline)).foregroundStyle(.secondary)
             Picker("How", selection: $mode) {
                 Text("Choose").tag("options")
                 Text("Type it").tag("type")
@@ -97,14 +97,14 @@ struct PracticeView: View {
             .pickerStyle(.segmented)
             .labelsHidden()
             Button { start(k) } label: {
-                Text("Start: \(n) \(n == 1 ? "item" : "items"), shuffled").font(.headline).frame(maxWidth: .infinity)
+                Text("Start: \(n) \(n == 1 ? "item" : "items"), shuffled").font(.nx(.headline)).frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
             .disabled(n == 0)
             .keyboardShortcut(.return, modifiers: [])
             .accessibilityIdentifier("practice-start")
-            Text("Unscheduled: it does not change when cards are due.").font(.footnote).foregroundStyle(.secondary)
+            Text("Unscheduled: it does not change when cards are due.").font(.nx(.footnote)).foregroundStyle(.secondary)
         }
         .padding(18)
         .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
@@ -128,7 +128,7 @@ struct PracticeView: View {
         if let item = k.practice.first(where: { $0.id == items[idx] }) {
             let opts = StudyUnits.practiceOptions(k)
             VStack(alignment: .leading, spacing: 16) {
-                Text("Which is it? \(opts.joined(separator: " / "))").font(.subheadline).foregroundStyle(.secondary)
+                Text("Which is it? \(opts.joined(separator: " / "))").font(.nx(.subheadline)).foregroundStyle(.secondary)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(item.name.isEmpty ? item.formula : item.name).font(.system(size: 30, weight: .semibold))
                         .accessibilityIdentifier("practice-prompt")
@@ -166,10 +166,10 @@ struct PracticeView: View {
                 Button { if let k = deck { answer(k, o, typedIn: false) } } label: {
                     HStack(spacing: 10) {
                         if size == .regular {
-                            Text("\(i + 1)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                            Text("\(i + 1)").font(.nx(.caption).monospacedDigit()).foregroundStyle(.secondary)
                                 .frame(width: 20, height: 20).background(Color(uiColor: .tertiarySystemFill), in: RoundedRectangle(cornerRadius: 5))
                         }
-                        Text(o).font(.body.weight(.medium)).foregroundStyle(.primary)
+                        Text(o).font(.nx(.body, .medium)).foregroundStyle(.primary)
                         Spacer(minLength: 4)
                         if state == 1 { Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.accent) }
                         if state == -1 { Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.late) }
@@ -194,25 +194,25 @@ struct PracticeView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
                 Image(systemName: ok ? "checkmark.circle.fill" : "xmark.circle.fill").foregroundStyle(ok ? Theme.accent : Theme.late)
-                Text(ok ? "Right." : "Not quite.").font(.headline)
+                Text(ok ? "Right." : "Not quite.").font(.nx(.headline))
                 if !ok && !typed.isEmpty { Text("You wrote \(Text(typed).bold()).").foregroundStyle(.secondary) }
             }
             .accessibilityIdentifier("practice-result")
-            if !ok { Text("It is a \(item.answer).").font(.body.weight(.medium)) }
-            if !item.note.isEmpty { Text(item.note).font(.callout).foregroundStyle(.secondary) }
+            if !ok { Text("It is a \(item.answer).").font(.nx(.body, .medium)) }
+            if !item.note.isEmpty { Text(item.note).font(.nx(.callout)).foregroundStyle(.secondary) }
             if !ok, let rule = StudyUnits.ruleOf(k, item) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("The rule").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                    (Text(rule.front).bold() + Text(" → ") + Text(rule.back)).font(.callout)
-                    if !rule.note.isEmpty { Text(rule.note).font(.caption).foregroundStyle(.secondary) }
-                    if !rule.covers.isEmpty { Text("Covers: " + rule.covers.joined(separator: ", ")).font(.caption).foregroundStyle(.secondary) }
+                    Text("The rule").font(.nx(.caption, .semibold)).foregroundStyle(.secondary)
+                    (Text(rule.front).bold() + Text(" → ") + Text(rule.back)).font(.nx(.callout))
+                    if !rule.note.isEmpty { Text(rule.note).font(.nx(.caption)).foregroundStyle(.secondary) }
+                    if !rule.covers.isEmpty { Text("Covers: " + rule.covers.joined(separator: ", ")).font(.nx(.caption)).foregroundStyle(.secondary) }
                 }
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color(uiColor: .tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10))
             }
             Button { next() } label: {
-                Text(idx + 1 >= items.count ? "See the score" : "Next").font(.headline).frame(maxWidth: .infinity)
+                Text(idx + 1 >= items.count ? "See the score" : "Next").font(.nx(.headline)).frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
@@ -244,7 +244,7 @@ struct PracticeView: View {
         let n = items.count
         let gone = missed.compactMap { id in k.practice.first { $0.id == id } }
         VStack(alignment: .leading, spacing: 14) {
-            Text("\(right) of \(n) right").font(.largeTitle.weight(.semibold)).accessibilityIdentifier("practice-score")
+            Text("\(right) of \(n) right").font(.nx(.largeTitle, .semibold)).accessibilityIdentifier("practice-score")
             if n > 0 {
                 Text("\(Int((Double(right) / Double(n) * 100).rounded()))%" + (gone.isEmpty ? "; none missed." : "; \(gone.count) to look at again."))
                     .foregroundStyle(.secondary)
@@ -255,14 +255,14 @@ struct PracticeView: View {
                         (Text(m.name.isEmpty ? m.formula : m.name).bold()
                          + Text(!m.name.isEmpty && !m.formula.isEmpty ? " \(m.formula)" : "")
                          + Text(" → \(m.answer)").foregroundStyle(.secondary))
-                            .font(.callout)
+                            .font(.nx(.callout))
                     }
                 }
                 .padding(14)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
                 Button { start(k, ids: gone.map(\.id)) } label: {
-                    Text("Practise the missed ones (\(gone.count))").font(.headline).frame(maxWidth: .infinity)
+                    Text("Practise the missed ones (\(gone.count))").font(.nx(.headline)).frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent).controlSize(.large)
                 .accessibilityIdentifier("practice-missed")

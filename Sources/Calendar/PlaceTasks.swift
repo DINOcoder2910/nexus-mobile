@@ -71,7 +71,7 @@ struct PlaceTasksList: View {
                 }
             }
             if all.count > Self.most && find.isEmpty {
-                Text("\(all.count - Self.most) more: type to find one.").font(.callout).foregroundStyle(.secondary)
+                Text("\(all.count - Self.most) more: type to find one.").font(.nx(.callout)).foregroundStyle(.secondary)
             }
         }
         .listStyle(.insetGrouped)
@@ -96,7 +96,7 @@ struct PlaceTasksList: View {
                         if let d = t.due { Text("· due " + Days.relative(d, today: store.today)) }
                         if let e = t.est { Text("· " + e) }
                     }
-                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    .font(.nx(.caption)).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer(minLength: 0)
             }
@@ -104,7 +104,7 @@ struct PlaceTasksList: View {
         }
         .buttonStyle(.plain)
         .draggable(t.id) {
-            Text(t.text).font(.callout).padding(8)
+            Text(t.text).font(.nx(.callout)).padding(8)
                 .background(store.color(t).opacity(0.2), in: RoundedRectangle(cornerRadius: 8))
         }
     }
@@ -130,7 +130,7 @@ private struct PlaceAtTime: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section { Text(task.text).font(.headline) }
+                Section { Text(task.text).font(.nx(.headline)) }
                 DatePicker("Day", selection: $when, displayedComponents: .date)
                 DatePicker("Time", selection: $when, displayedComponents: .hourAndMinute)
             }

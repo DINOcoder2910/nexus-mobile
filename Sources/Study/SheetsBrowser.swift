@@ -65,7 +65,7 @@ struct SheetsBrowser: View {
                     Section {
                         ForEach(g.sheets) { row($0) }
                     } header: {
-                        Text(g.label).font(.subheadline.weight(.semibold)).textCase(nil)
+                        Text(g.label).font(.nx(.subheadline, .semibold)).textCase(nil)
                     }
                 }
             } else {
@@ -105,10 +105,10 @@ struct SheetsBrowser: View {
     private func bar(_ all: [StudySheets.Sheet], shown: Int) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
-                Text("Practice sheets").font(.title3.weight(.semibold))
-                countText(all.count, shown).font(.callout).foregroundStyle(.secondary)
+                Text("Practice sheets").font(.nx(.title3, .semibold))
+                countText(all.count, shown).font(.nx(.callout)).foregroundStyle(.secondary)
                 Spacer()
-                if !filter.isEmpty { Button("Clear filters") { filter = .init() }.font(.callout) }
+                if !filter.isEmpty { Button("Clear filters") { filter = .init() }.font(.nx(.callout)) }
             }
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
@@ -144,7 +144,7 @@ struct SheetsBrowser: View {
                 Text(text).lineLimit(1)
                 Image(systemName: "chevron.down").imageScale(.small)
             }
-            .font(.callout.weight(on ? .semibold : .regular))
+            .font(.nx(.callout, on ? .semibold : .regular))
             .foregroundStyle(on ? Theme.accent : .primary)
             .padding(.horizontal, 10).padding(.vertical, 6)
             .background(on ? Theme.accent.opacity(0.14) : Color(uiColor: .tertiarySystemFill), in: Capsule())
@@ -226,12 +226,12 @@ struct SheetRow: View {
         let files = Self.ordered(s)
         VStack(alignment: .leading, spacing: 6) {
             Button { openFirst() } label: {
-                Text(s.title).font(.body.weight(.medium)).foregroundStyle(.primary).multilineTextAlignment(.leading)
+                Text(s.title).font(.nx(.body, .medium)).foregroundStyle(.primary).multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .buttonStyle(.borderless)
             Text(([s.kind, facts] + (extra.isEmpty ? [] : [extra.joined(separator: ", ")])).filter { !$0.isEmpty }.joined(separator: " · "))
-                .font(.caption).foregroundStyle(.secondary)
+                .font(.nx(.caption)).foregroundStyle(.secondary)
             FlowRow(spacing: 6) {
                 if let e = s.era { Chip(text: e == "2025" ? "2025" : "pre-2025", color: e == "2025" ? Theme.planned : Theme.soon) }
                 Chip(text: s.ms == "only" ? "MS only" : s.ms == "none" ? "no MS" : "MS")
@@ -253,7 +253,7 @@ struct SheetRow: View {
                                 Image(systemName: f.file.role == "ms" ? "checkmark.seal" : f.file.role == "marked" ? "pencil" : "doc").imageScale(.small)
                                 Text(f.label)
                             }
-                            .font(.caption.weight(.medium))
+                            .font(.nx(.caption, .medium))
                             .foregroundStyle(Theme.accent)
                             .lineLimit(1)
                             .padding(.horizontal, 9)
@@ -267,7 +267,7 @@ struct SheetRow: View {
                 }
             }
             if !s.notes.isEmpty {
-                Label(s.notes, systemImage: "info.circle").font(.caption).foregroundStyle(.secondary)
+                Label(s.notes, systemImage: "info.circle").font(.nx(.caption)).foregroundStyle(.secondary)
             }
         }
         .padding(.vertical, 3)

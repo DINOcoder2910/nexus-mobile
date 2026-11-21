@@ -24,7 +24,7 @@ struct ClaudeSettings: View {
                 Button("Add your API key…") { addingKey = true }
             }
             LabeledContent("Spent with the key", value: account.spendText)
-            if let note = account.notice { Text(note).font(.callout).foregroundStyle(.secondary) }
+            if let note = account.notice { Text(note).font(.nx(.callout)).foregroundStyle(.secondary) }
         } header: {
             Text("Claude")
         } footer: {
