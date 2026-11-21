@@ -5,7 +5,10 @@ public struct Planning {
     public let s: Snapshot
     public let today: String
 
-    public init(_ s: Snapshot, today: String = Days.today()) { self.s = s; self.today = today }
+    /// The hour the day starts (a time before it is that night's, so it comes last in a day's order).
+    public let dayStart: Int
+
+    public init(_ s: Snapshot, today: String = Days.today(), dayStart: Int = Days.dayStartHour) { self.s = s; self.today = today; self.dayStart = dayStart }
 
     /// Every task that counts (not done, not Someday, not in a parked workstream), in file order.
     public var open: [NexusTask] { s.order.compactMap { s.tasks[$0] }.filter { !$0.done && s.counts($0) } }
@@ -14,16 +17,23 @@ public struct Planning {
 
     // MARK: days
 
-    /// Open tasks planned on `day`: the ones with a time first, in time order, then the rest in file order.
+    /// What the one order (DayOrder.swift) needs of a task on `day`.
+    func facts(_ t: NexusTask, on day: String) -> DayOrder.Facts {
+        DayOrder.Facts(id: t.id, time: t.time(on: day), due: t.due, file: t.file, pos: t.order)
+    }
+
+    /// Open tasks planned on `day`, in the one order: with a time by time, then your order of that day (`nexus-day-order.yaml`),
+    /// then deadline, then file order. Never by name.
     public func planned(on day: String) -> [NexusTask] {
-        open.filter { $0.plannedDays.contains(day) }.sorted { a, b in
-            switch (a.time(on: day), b.time(on: day)) {
-            case let (x?, y?): return x != y ? x < y : a.order < b.order
-            case (.some, nil): return true
-            case (nil, .some): return false
-            default: return a.order < b.order
-            }
-        }
+        DayOrder.sorted(open.filter { $0.plannedDays.contains(day) }, keys: s.dayOrder[day] ?? [], dayStart: dayStart) { facts($0, on: day) }
+    }
+
+    /// Today's plan, as the laptop's: what is planned for today and what is due today without being planned for it (not a repeat),
+    /// in the one order.
+    public var todayPlan: [NexusTask] {
+        let planned = open.filter { $0.plannedDays.contains(today) }
+        let due = open.filter { $0.due == today && !$0.plannedDays.contains(today) && $0.every == nil && $0.everyRaw == nil }
+        return DayOrder.sorted(planned + due, keys: s.dayOrder[today] ?? [], dayStart: dayStart) { facts($0, on: today) }
     }
 
     /// Open tasks whose deadline is `day`.
@@ -37,7 +47,7 @@ public struct Planning {
     /// Deadlines today or already passed that are not on today's plan, latest first.
     public var dueNow: [NexusTask] {
         open.filter { t in t.due.map { $0 <= today } ?? false && !t.plannedDays.contains(today) && t.every == nil }
-            .sorted { ($0.due ?? "", $0.order) < ($1.due ?? "", $1.order) }
+            .sorted { ($0.due ?? "", $0.file, $0.order) < ($1.due ?? "", $1.file, $1.order) }
     }
 
     /// Repeating tasks that fall today.
@@ -51,7 +61,7 @@ public struct Planning {
 
     /// Key tasks with a deadline, soonest first (late ones included).
     public var keyDates: [NexusTask] {
-        open.filter { $0.key && $0.due != nil }.sorted { ($0.due!, $0.order) < ($1.due!, $1.order) }
+        open.filter { $0.key && $0.due != nil }.sorted { ($0.due!, $0.file, $0.order) < ($1.due!, $1.file, $1.order) }
     }
 
     /// Hours planned on a day (a task's own estimate, else its open subtasks' total).

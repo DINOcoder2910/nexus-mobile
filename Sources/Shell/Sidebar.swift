@@ -100,7 +100,7 @@ struct Sidebar: View {
             }
             Section {
                 row(.home, "Home", "house", count: nil)
-                row(.today, "Today", "sun.max", count: p.planned(on: store.today).count)
+                row(.today, "Today", "sun.max", count: p.todayPlan.count)
                 row(.planner, "Planner", "rectangle.split.3x1", count: nil)
                 row(.tasks, "Tasks", "checklist", count: nil)
                 row(.calendar, "Calendar", "calendar", count: nil)

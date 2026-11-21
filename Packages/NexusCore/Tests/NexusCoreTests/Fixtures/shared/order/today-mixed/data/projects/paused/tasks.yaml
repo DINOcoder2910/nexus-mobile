@@ -1,0 +1,5 @@
+tasks:
+  - id: pa01
+    title: A task in a parked workstream
+    plan: [2026-11-20]
+    due: 2026-11-20

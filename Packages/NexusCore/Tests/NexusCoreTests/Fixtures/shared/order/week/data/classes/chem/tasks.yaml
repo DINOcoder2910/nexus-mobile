@@ -1,0 +1,18 @@
+tasks:
+  - id: cw01
+    title: Titration write-up
+    plan: [2026-11-21, "2026-11-22 16:00"]
+  - id: cw02
+    title: Acids recap
+    plan: ["2026-11-21 10:00"]
+  - id: cw03
+    title: Buffer problems
+    due: 2026-11-25
+    plan: [2026-11-21]
+  - id: cw04
+    title: Answers check
+    due: 2026-11-23
+    plan: [2026-11-21]
+  - id: cw05
+    title: Lab safety quiz
+    plan: ["2026-11-23 09:00"]

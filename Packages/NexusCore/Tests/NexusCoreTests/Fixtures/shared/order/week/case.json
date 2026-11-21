@@ -1,0 +1,14 @@
+{
+  "rule": "order",
+  "about": "The Planner's days ahead: a task planned on two days with a time on one; two tasks at the same time (the deadline breaks the tie); deadlines before tasks with none; file order across the Inbox and a workstream. The order file only has other days (an old one, and a timed id for the 22nd), so nothing of it applies here. Today has nothing.",
+  "today": "2026-11-20",
+  "dayStart": 4,
+  "expect": {
+    "today": [],
+    "days": {
+      "2026-11-21": ["cw02", "cw04", "cw03", "cw01", "iw01"],
+      "2026-11-22": ["iw02", "cw01"],
+      "2026-11-23": ["iw04", "cw05", "iw02"]
+    }
+  }
+}

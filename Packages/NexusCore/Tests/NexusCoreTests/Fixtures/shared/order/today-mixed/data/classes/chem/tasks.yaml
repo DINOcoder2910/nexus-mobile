@@ -1,0 +1,29 @@
+tasks:
+  - id: ch01
+    title: Zinc redox worksheet
+    plan: [2026-11-20]
+  - id: ch02
+    title: Alkane naming practice
+    plan: ["2026-11-20 14:00"]
+  - id: ch03
+    title: Moles quiz revision
+    due: 2026-11-22
+    plan: [2026-11-20]
+  - id: ch04
+    title: Ylide reading
+    plan: [2026-11-20]
+    subtasks:
+      - id: ch05
+        title: Xenon notes
+        plan: [2026-11-20]
+  - id: ch06
+    title: A finished one
+    done: 2026-11-20
+    plan: [2026-11-20]
+  - id: ch07
+    title: Bonding diagrams
+    due: 2026-11-20
+  - id: ch08
+    title: A lab idea for later
+    someday: true
+    plan: [2026-11-20]

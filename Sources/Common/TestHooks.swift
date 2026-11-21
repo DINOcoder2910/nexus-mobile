@@ -12,6 +12,7 @@ enum TestHooks {
         if ProcessInfo.processInfo.arguments.contains("-NexusTestBigBoard") { bigBoard(store); return }
         if ProcessInfo.processInfo.arguments.contains("-NexusTestLinksBoard") { linksBoard(store); return }
         if ProcessInfo.processInfo.arguments.contains("-NexusTestTime") { timeSessions(store); return }
+        if ProcessInfo.processInfo.arguments.contains("-NexusTestDayOrder") { dayOrder(store); return }
         guard ProcessInfo.processInfo.arguments.contains("-NexusTestPdfBoard") else { return }
         if !store.snapshot.isDataFolder { store.makeSample() }
         let dir = "notebooks/PDF zoom"
@@ -198,6 +199,15 @@ enum TestHooks {
             .init(task: "smp8", title: "Redox worksheet", start: at(day + 90), end: at(day + 20)),
             .init(task: "smpb", title: "Try the iPad planner", start: at(110), end: at(95)),
         ])
+        store.reload()
+    }
+
+    /// `-NexusTestDayOrder`: sample data, then today's order as if dragged on the laptop (`nexus-day-order.yaml`): "Try the iPad
+    /// planner" before "Redox worksheet", against their file order (UITests/DayOrderTests).
+    static func dayOrder(_ store: NexusStore) {
+        if !store.snapshot.isDataFolder { store.makeSample() }
+        let text = DayOrder.text([store.today: ["smpb", "smp8"]], today: store.today)
+        try? FolderAccess.write(store.folder.appendingPathComponent(DayOrder.file), text)
         store.reload()
     }
 

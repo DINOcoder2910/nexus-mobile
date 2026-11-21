@@ -58,7 +58,7 @@ struct TodayView: View {
     // MARK: parts
 
     private func header(_ p: Planning) -> some View {
-        let planned = p.planned(on: store.today)
+        let planned = p.todayPlan
         let hours = p.load(on: store.today)
         let open = planned.filter { !$0.done }.count
         // time tracked today on every device (TimeTracker), shown once there is a minute of it
@@ -114,7 +114,8 @@ struct TodayView: View {
 
     private func planCard(_ p: Planning) -> some View {
         let today = store.today
-        let planned = p.planned(on: today)
+        // planned for today and due today, in the one order (DayOrder.swift: time, your order from the laptop, deadline, file order)
+        let planned = p.todayPlan
         let doneToday = p.s.order.compactMap { p.s.tasks[$0] }.filter { $0.done && $0.doneOn == today && $0.plannedDays.contains(today) }
         let repeats = p.repeatsToday
         return Card(title: "Plan", count: planned.count, icon: "sun.max") {
@@ -153,7 +154,7 @@ struct TodayView: View {
     private func sideCards(_ p: Planning) -> some View {
         let today = store.today
         eventsCard(today)
-        let due = p.dueNow
+        let due = p.dueNow.filter { $0.due != today } // (what is due today is on the plan)
         if !due.isEmpty {
             Card(title: "Deadlines", count: due.count, icon: "flag") {
                 ForEach(due) { t in rowDivider(TaskRow(task: t, compact: true)) }
