@@ -4,6 +4,7 @@ Every iPad or iPhone CI or build failure goes here, with its cause and fix, so i
 
 ## Compiling
 
+- **Nov 21: "'+=' is not a prefix unary operator"** (build on 6efed44). `entry +=["", …]`: Swift reads an operator with a space on one side only as prefix or postfix, so `+=[` failed. Fix: a space on both sides of every binary operator (`entry += [`). Before pushing, grep the added lines for an operator with a space on one side only (`git diff -U0 | grep '^+' | grep -P '\S(\+=|==|&&)\s|\s(\+=|==|&&)\S'`).
 - **Nov 21: "'async' call in an autoclosure that does not support concurrency"** (build on 312d996). `guard a || (await f())`: the right side of `||` is an autoclosure, which can't `await`. Fix: await into a variable first (`var ok = true; if !a { ok = await f() }`). Linux can't build the app, so read every new `await` for this before pushing.
 - **Nov 21: "invalid redeclaration of 'RecordingBar'"** (build on 50ebdd2). The new Recordings code named its top bar `RecordingBar`, a name the tutor's board recorder (`Sources/Tutor/BoardRecorder.swift`) already used; the app target is one module, so the clash also broke that file's lines ("requires that 'RecordingBar' conform to 'View'"). Fix: renamed to `RecordingTopBar`. Before pushing a new type, grep `Sources` and `Packages/NexusCore/Sources` for `(struct|class|enum) <Name>\b`: Linux can only build the core, so a clash in the app shows first on the Mac.
 
