@@ -96,8 +96,15 @@ class RecordingsTests: XCTestCase {
         reveal(accept, 12)
         XCTAssertTrue(accept.exists, "no Accept on the meeting")
         accept.tap()
-        XCTAssertTrue(app.staticTexts["Tasks added"].firstMatch.waitForExistence(timeout: 15), "accepting didn't file the tasks")
-        XCTAssertTrue(app.staticTexts["Send Ms Rivera the activities list"].firstMatch.waitForExistence(timeout: 5), "the added task isn't shown")
+        // the filed page replaces the review, and the list may still be scrolled to where Accept was: find its sections
+        let filed = app.staticTexts["Tasks added"].firstMatch
+        _ = app.staticTexts["Summary"].firstMatch.waitForExistence(timeout: 15)
+        sleep(1)
+        reveal(filed, 10)
+        XCTAssertTrue(filed.exists, "accepting didn't file the tasks")
+        let added = app.staticTexts["Send Ms Rivera the activities list"].firstMatch
+        reveal(added, 6)
+        XCTAssertTrue(added.exists, "the added task isn't shown")
         sleep(1)
         shot("rec-6-meeting-filed")
         back()
