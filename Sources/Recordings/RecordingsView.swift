@@ -564,10 +564,13 @@ extension View {
 /// How many recordings wait for review (the sidebar's number), read again only when the folder or a recording changed.
 @MainActor
 enum RecordingsCount {
-    private static var cache: (key: String, n: Int)?
+    private struct Key: Equatable { let folder: String; let loaded: Double; let version: Int }
+    private static var cache: (key: Key, n: Int)?
 
+    /// Runs in the sidebar's body, so the key is plain numbers: a Date put into a string is formatted with the locale, and the
+    /// first such formatter froze the main thread on the CI simulator (ci-lessons, Nov 21).
     static func review(_ store: NexusStore) -> Int? {
-        let key = "\(store.folder.path)|\(store.snapshot.loadedAt)|\(RecordingService.shared.version)"
+        let key = Key(folder: store.folder.path, loaded: store.snapshot.loadedAt.timeIntervalSince1970, version: RecordingService.shared.version)
         if let c = cache, c.key == key { return c.n == 0 ? nil : c.n }
         let n = Recordings.list(store.folder).filter { $0.status == .review }.count
         cache = (key, n)
