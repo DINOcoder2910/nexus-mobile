@@ -265,6 +265,10 @@ final class NexusStore {
     func setRepeat(_ t: NexusTask, _ r: NexusCore.Repeat?) { perform { try $0.setRepeat(t, r, in: $1) } }
     func setTags(_ t: NexusTask, _ tags: [String]) { perform { try $0.setTags(t, tags, in: $1) } }
     func setNote(_ t: NexusTask, _ note: String?) { perform { try $0.setNote(t, note, in: $1) } }
+    /// Deletes a task and everything under it (Undo on the bar puts it back): the task panel's Delete.
+    func delete(_ t: NexusTask) { perform { try $0.delete(t, in: $1) } }
+    /// Moves a task with its subtasks to another subject's list (nil: the Inbox): the task panel's subject menu.
+    func moveTask(_ t: NexusTask, to workstream: String?) { perform { try $0.moveTask(t, to: workstream, in: $1) } }
 
     /// Adds a task to a workstream (nil = the Inbox) or under `parent`. Returns its id. `extras` (a typed repeat, waiting on, #tags)
     /// are written straight after, in the same Undo.
