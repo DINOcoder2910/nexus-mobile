@@ -119,7 +119,7 @@ jobs:
           for t in m:
               for a in t.get("attachments",[]):
                   n=a.get("suggestedHumanReadableName","")
-                  if n.startswith("sidebar") or n.startswith("tutor-") or n.startswith("ideas-") or n.startswith("claude-") or n.startswith("pad-spanish") or n.startswith("pad-study") or n.startswith("time-") or n.startswith("pens-") or n.startswith("scan-") or n.startswith("dayorder-"): print(a["exportedFileName"] + "\t" + n.split("_")[0])' > wanted.txt 2>/dev/null || true
+                  if n.startswith("sidebar") or n.startswith("tutor-") or n.startswith("ideas-") or n.startswith("claude-") or n.startswith("pad-spanish") or n.startswith("pad-study") or n.startswith("time-") or n.startswith("pens-") or n.startswith("scan-") or n.startswith("dayorder-") or n.startswith("rec-"): print(a["exportedFileName"] + "\t" + n.split("_")[0])' > wanted.txt 2>/dev/null || true
           [ -s wanted.txt ] || { echo "no shots to print"; exit 0; }
           while IFS="$(printf '\t')" read -r F N; do
             sips -Z 1400 -s format jpeg -s formatOptions 60 "shots/$F" --out "$N.jpg" >/dev/null || continue
@@ -209,10 +209,15 @@ jobs:
         if: ${{ !cancelled() }}
         # 12 tests took 23 min on Nov 18 and over 40 on a slow runner Nov 19
         timeout-minutes: 55
+        env:
+          HEAD_MSG: ${{ github.event.head_commit.message }}
         run: |
           echo 1 > phone-status.txt
           [ -d DerivedData/Build/Products ] || { echo "the build for testing failed, so no iPhone run"; exit 0; }
           ONLY=$(grep -ho "class [A-Za-z0-9_]*PhoneTests" UITests/*.swift | awk '{print "-only-testing:NexusMobileUITests/" $2}' | sort -u | tr '\n' ' ')
+          # a [ui-only: SomeTests] push runs only that class's iPhone twin (SomePhoneTests) here, when it has one
+          PICK=$(printf '%s' "$HEAD_MSG" | sed -n 's/.*\[ui-only: *\([A-Za-z0-9_]*\)Tests\].*/\1PhoneTests/p' | head -n 1)
+          if [ -n "$PICK" ] && grep -q "class $PICK" UITests/*.swift; then ONLY="-only-testing:NexusMobileUITests/$PICK"; fi
           [ -n "$ONLY" ] || { echo "no iPhone tests"; echo 0 > phone-status.txt; exit 0; }
           echo "running: $ONLY"
           set +e

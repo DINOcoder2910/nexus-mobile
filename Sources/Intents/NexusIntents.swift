@@ -81,6 +81,34 @@ struct OpenIdeasIntent: AppIntent {
     }
 }
 
+/// Starts recording a meeting (Siri: "Record a meeting in Nexus", the Action button): Nexus opens with the recording running; Stop
+/// is on every screen, and the sound is turned into words and prepared by Claude for review when it stops.
+struct StartRecordingIntent: AppIntent {
+    static let title: LocalizedStringResource = "Record a meeting in Nexus"
+    static let description = IntentDescription("Starts recording a meeting in Nexus. It is turned into words on this device and prepared for review when you stop.")
+    static let openAppWhenRun = true
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        AppServices.start()
+        await RecordingService.shared.start(.meeting)
+        return .result()
+    }
+}
+
+/// The quick page (for the iPhone's Action button): Record, Film, New task and Idea in big buttons, then the day's events, tasks and numbers.
+struct OpenQuickPageIntent: AppIntent {
+    static let title: LocalizedStringResource = "Open the Nexus quick page"
+    static let description = IntentDescription("Opens Nexus on its quick page: record, film a class, a new task, an idea, and today at a glance.")
+    static let openAppWhenRun = true
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        WindowRouter.shared.quick = true
+        return .result()
+    }
+}
+
 struct NexusShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(intent: AddToNexusIntent(),
@@ -99,6 +127,12 @@ struct NexusShortcuts: AppShortcutsProvider {
         AppShortcut(intent: OpenIdeasIntent(),
                     phrases: ["Open \(.applicationName) ideas", "Type an idea in \(.applicationName)"],
                     shortTitle: "Ideas", systemImageName: "lightbulb.max")
+        AppShortcut(intent: OpenQuickPageIntent(),
+                    phrases: ["Open the \(.applicationName) quick page", "\(.applicationName) quick page"],
+                    shortTitle: "Quick page", systemImageName: "bolt.circle")
+        AppShortcut(intent: StartRecordingIntent(),
+                    phrases: ["Record a meeting in \(.applicationName)", "Start a \(.applicationName) recording"],
+                    shortTitle: "Record a meeting", systemImageName: "mic.circle")
     }
 }
 

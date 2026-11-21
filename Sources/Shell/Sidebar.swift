@@ -89,6 +89,10 @@ struct Sidebar: View {
                 }
                 row(.ideas, "Ideas", "lightbulb", count: nil)
                 if s.isDataFolder {
+                    row(.recordings, "Recordings", "waveform", count: RecordingsCount.review(store))
+                        .accessibilityIdentifier("sidebar-recordings")
+                }
+                if s.isDataFolder {
                     row(.claude, "Claude", "sparkles", count: ClaudeChatSession.shared.conversation("main").pendingCount)
                         .accessibilityIdentifier("sidebar-claude")
                 }

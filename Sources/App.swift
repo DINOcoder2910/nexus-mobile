@@ -136,6 +136,8 @@ final class WindowRouter {
     /// Ideas is asked for (the "Add an idea" shortcut that opens the app), with the cursor in its add box.
     var ideas = false
     var focusIdeas = false
+    /// The quick page is asked for (the Action button's "Open the Nexus quick page").
+    var quick = false
 }
 
 /// One window: its own store (its task panel, add sheet, Undo and open board), on the shared data folder.
@@ -162,6 +164,8 @@ enum Screen: Hashable {
     case notebook(String)
     /// Applications (the tracker and Research), and a school's page by its workstream id.
     case applications, school(String)
+    /// Recordings: meetings, classes and filmed classes, transcribed here and prepared by Claude for review.
+    case recordings
 }
 
 /// The shell: the sidebar on the left (where you go), the screen on the right, and the task panel, add sheet and undo bar over both.
@@ -187,6 +191,7 @@ struct RootView: View {
     @State private var inboxPath: [Screen] = []
     @State private var notebooksPath: [Screen] = []
     @State private var morePath: [Screen] = []
+    @State private var quickOpen = false
 
     var body: some View {
         @Bindable var store = store
@@ -236,6 +241,10 @@ struct RootView: View {
         .onChange(of: router.openTask) { _, _ in answerRouter() }
         .onChange(of: router.addSheet) { _, _ in answerRouter() }
         .onChange(of: router.ideas) { _, _ in answerRouter() }
+        .onChange(of: router.quick) { _, _ in answerRouter() }
+        // the quick page (the Action button), over everything; recording shows its bar on every screen
+        .fullScreenCover(isPresented: $quickOpen) { QuickPage(close: { quickOpen = false }).environment(store).recordingBar() }
+        .recordingBar()
         .task {
             AppServices.start()
             if router.front == nil { router.front = windowId }
@@ -243,6 +252,8 @@ struct RootView: View {
             answerRouter()
             InkBoardMove.runIfNeeded(store)
             TestHooks.run(store)
+            RecordingDemo.atStart(store)
+            RecordingService.shared.resume()
             // Another writer (sync, the Files app) can change the folder at any time: look every few seconds while open,
             // and tell the other stores (and sync) what changed.
             while !Task.isCancelled {
@@ -325,6 +336,7 @@ struct RootView: View {
         case .home: return "Home"
         case .guide: return "How Nexus works"
         case .files(let path): return path.isEmpty ? "Files (the data folder)" : "Files: \(path)"
+        case .recordings: return "Recordings (recordings/)"
         }
     }
 
@@ -342,7 +354,12 @@ struct RootView: View {
         if router.ideas {
             router.ideas = false
             router.focusIdeas = true
+            quickOpen = false
             screen = .ideas
+        }
+        if router.quick {
+            router.quick = false
+            quickOpen = true
         }
     }
 
@@ -414,6 +431,7 @@ struct RootView: View {
             case .ideas: IdeasView()
             case .time: TimeView()
             case .claude: ClaudeChatView()
+            case .recordings: RecordingsView()
             }
         }
     }
