@@ -688,7 +688,7 @@ public enum Recordings {
         if !c.examples.isEmpty { entry += ["", "Examples used:"] + c.examples.map { "- \($0)" } }
         let lost = moments.filter { $0.kind == "lost" }
         if !lost.isEmpty { entry += ["", "Where I got lost:"] + lost.map { "- \(clock($0.at)): \($0.what.trimmingCharacters(in: .whitespacesAndNewlines))" } }
-        entry +=["", "[The class](\(path)/\(summaryFile))"]
+        entry += ["", "[The class](\(path)/\(summaryFile))"]
         // the entry goes after the head (the part before the first "## ")
         if let r = body.range(of: "\n## ") {
             var above = String(body[..<r.lowerBound])
