@@ -84,8 +84,9 @@ final class SidebarSpeedTests: XCTestCase {
             side.tap()
             sleep(1)
         }
-        let cell = app.cells.containing(.staticText, identifier: "Page 04").firstMatch
-        let selected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "selected == true"), object: cell)
+        // the Recent section can list Page 04 too, above the notebook's row: look for a selected row holding it
+        let cell = app.cells.matching(NSPredicate(format: "selected == true")).containing(.staticText, identifier: "Page 04").firstMatch
+        let selected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == true"), object: cell)
         let ok = XCTWaiter().wait(for: [selected], timeout: 10) == .completed
         let b = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         b.name = "sidebar-many-board-open"

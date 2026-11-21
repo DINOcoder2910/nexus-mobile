@@ -19,6 +19,7 @@ struct TaskDetailView: View {
     @State private var tagText = ""
     @State private var noteText = ""
     @State private var sure = false
+    @State private var pickDue = false
     @FocusState private var focus: Field?
 
     private enum Field { case waiting, note }
@@ -164,7 +165,7 @@ struct TaskDetailView: View {
         let l = Label(label, systemImage: icon).font(.nx(.subheadline)).foregroundStyle(Kit.muted).labelStyle(PanelLabel())
         return Group {
             if narrow {
-                VStack(alignment: .leading, spacing: 8) { l; value() }
+                VStack(alignment: .leading, spacing: 8) { l; value() }.frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 HStack(alignment: .firstTextBaseline, spacing: 12) { l.frame(width: 120, alignment: .leading); value().frame(maxWidth: .infinity, alignment: .leading) }
             }
@@ -211,9 +212,25 @@ struct TaskDetailView: View {
                     Button { store.setDue(t, nil) } label: { Image(systemName: "xmark").font(.system(size: 11, weight: .semibold)).foregroundStyle(Kit.faint) }
                         .buttonStyle(.plain).accessibilityLabel("No deadline")
                 }
-                DatePicker("Deadline", selection: Binding(get: { t.due.flatMap(Days.date) ?? Date() }, set: { store.setDue(t, Days.iso($0)) }),
+                if t.due != nil {
+                    DatePicker("Deadline", selection: Binding(get: { t.due.flatMap(Days.date) ?? Date() }, set: { store.setDue(t, Days.iso($0)) }),
+                               displayedComponents: .date)
+                        .labelsHidden()
+                } else {
+                    // no deadline shows as none, not as today's date in a picker
+                    Text("None").font(.nx(.subheadline)).foregroundStyle(Kit.faint)
+                    Button { withAnimation(Kit.snap) { pickDue.toggle() } } label: {
+                        Label("Pick a day", systemImage: "calendar").font(.nx(.subheadline))
+                    }
+                    .buttonStyle(KitButtonStyle(kind: .tone, small: true))
+                    .accessibilityIdentifier("panel-due-pick")
+                }
+            }
+            if t.due == nil && pickDue {
+                DatePicker("Deadline", selection: Binding(get: { Date() }, set: { store.setDue(t, Days.iso($0)); pickDue = false }),
                            displayedComponents: .date)
-                    .labelsHidden().opacity(t.due == nil ? 0.6 : 1)
+                    .datePickerStyle(.graphical).labelsHidden().frame(maxWidth: 340)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
             input($dueText, t.due == nil ? "fri, 12 nov, next week…" : "Change: fri, 12 nov…", id: "panel-due-in") {
                 guard !dueText.trimmingCharacters(in: .whitespaces).isEmpty else { return }
@@ -342,7 +359,7 @@ struct TaskDetailView: View {
     private func someday(_ t: NexusTask) -> some View {
         HStack(spacing: 10) {
             Toggle("Someday", isOn: Binding(get: { t.ownSomeday }, set: { store.setSomeday(t, $0) }))
-                .labelsHidden().tint(Theme.accent)
+                .labelsHidden().tint(Theme.accent).fixedSize()
                 .accessibilityIdentifier("panel-someday")
             Text(t.ownSomeday ? "Parked: off Today, the Planner and the other lenses" : "Park it out of the way")
                 .font(.nx(.footnote)).foregroundStyle(Kit.faint)

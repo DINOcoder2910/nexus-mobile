@@ -60,13 +60,13 @@ struct PlannerView: View {
         let over = w.overDays
         return VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .center, spacing: 10) {
-                Text(Self.range(first, last)).font(.nx(size: stacked ? 26 : 30, .bold, display: true)).foregroundStyle(Kit.ink)
+                Text(Self.range(first, last)).font(.nx(size: stacked ? 26 : 30, .bold, display: true)).foregroundStyle(Kit.ink).lineLimit(1).minimumScaleFactor(0.8)
                     .accessibilityIdentifier("week-range")
                 HStack(spacing: 2) {
                     Button { withAnimation(Kit.spring) { step(-7) } } label: { Image(systemName: "chevron.left").frame(width: 30, height: 30) }
                         .accessibilityLabel("Week before")
                     Button("Today") { withAnimation(Kit.spring) { start = nil } }
-                        .font(.nx(.subheadline, .medium)).padding(.horizontal, 6)
+                        .font(.nx(.subheadline, .medium)).lineLimit(1).fixedSize().padding(.horizontal, 6)
                     Button { withAnimation(Kit.spring) { step(7) } } label: { Image(systemName: "chevron.right").frame(width: 30, height: 30) }
                         .accessibilityLabel("Week after")
                         .accessibilityIdentifier("week-next")
@@ -76,11 +76,14 @@ struct PlannerView: View {
                 Button { withAnimation(Kit.spring) { bankOpen.toggle() } } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "tray")
-                        Text("Task bank")
+                        // the iPhone keeps it to the tray and the count, so the header stays on one line
+                        if !stacked { Text("Task bank") }
                         Text("\(w.bank.count)").foregroundStyle(Kit.muted)
                     }
+                    .lineLimit(1).fixedSize()
                 }
                 .buttonStyle(KitButtonStyle(kind: bankOpen ? .tone : .plain, small: true))
+                .accessibilityLabel("Task bank")
                 .accessibilityIdentifier("bank-toggle")
             }
             (Text("\(TimeWords.about(w.load)) planned this week. ")

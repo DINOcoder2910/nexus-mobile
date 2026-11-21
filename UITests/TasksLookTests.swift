@@ -54,7 +54,7 @@ class TasksLookTests: XCTestCase {
     func run(dark: Bool) {
         let mode = dark ? "dark" : "light"
         openTasks(dark: dark)
-        XCTAssertTrue(el("lens-all").exists, "no All lens")
+        XCTAssertTrue(el("lens-All").exists, "no All lens")
         XCTAssertTrue(el("tasks-sum").exists, "no summary line")
         XCTAssertTrue(el("task-card").waitForExistence(timeout: 5), "no task card")
         shot("look-tasks-\(mode)")
