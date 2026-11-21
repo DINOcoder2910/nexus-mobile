@@ -1,45 +1,48 @@
 import SwiftUI
 import NexusCore
 
-/// Today: what you planned (times first), repeats that fall today, deadlines that need you, what slipped, and the key dates ahead.
-/// Wide (landscape) it is two columns: the plan on the left, the rest on the right.
+/// Today, as the new laptop app has it (switch-over step 4, Nov 20 2026; nexus `desktop/src/screens/Today.tsx`): Key dates and From
+/// Study at the top, Next up, your list beside the day's hours, then Slipped and a look at tomorrow. The list is in the one day order
+/// (NexusCore DayOrder, synced in `nexus-day-order.yaml`): drag a row onto another to put it there, onto the day to give it a time,
+/// and a timed block back onto the list to take the time off. The sums are NexusCore TodayPlan's, the same as the laptop's.
+/// Wide (the iPad) the parts sit side by side; narrow (the iPhone, the iPad in a third) they stack.
 struct TodayView: View {
+    var go: (Screen) -> Void = { _ in }
     @Environment(NexusStore.self) private var store
     @Environment(CalendarStore.self) private var cal
-    @State private var dropTargeted = false
     @State private var eventSheet: EventSheet?
+    @State private var adding = ""
+    @FocusState private var addFocused: Bool
 
     var body: some View {
-        let p = store.planning
-        GeometryReader { geo in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    header(p)
-                    if !p.keyDates.isEmpty { keyStrip(p) }
-                    if geo.size.width > 860 {
-                        HStack(alignment: .top, spacing: 18) {
-                            VStack(spacing: 18) { planCard(p) }.frame(maxWidth: .infinity)
-                            VStack(spacing: 18) { sideCards(p) }.frame(width: min(420, geo.size.width * 0.4))
-                        }
-                    } else {
-                        planCard(p)
-                        sideCards(p)
+        TimelineView(.periodic(from: .now, by: 60)) { tl in
+            GeometryReader { geo in
+                let wide = geo.size.width > 820
+                let v = day(at: tl.date)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 26) {
+                        header(v, wide: wide)
+                        top(v, wide: wide)
+                        if let n = v.next { NextUpCard(task: n, v: v) }
+                        middle(v, wide: wide)
+                        bottom(v, wide: wide)
+                        problems
                     }
+                    .padding(.horizontal, wide ? 32 : 16)
+                    .padding(.top, 8)
+                    .padding(.bottom, 90)
+                    .frame(maxWidth: 1240)
+                    .frame(maxWidth: .infinity)
                 }
-                .padding(20)
-                .padding(.bottom, 60)
-                .frame(maxWidth: 1200)
-                .frame(maxWidth: .infinity)
+                .refreshable { store.reload() }
             }
-            .refreshable { store.reload() }
         }
-        .background(Color(uiColor: .systemGroupedBackground))
+        .background(Kit.page)
         .navigationTitle("Today")
+        .navigationBarTitleDisplayMode(.inline)
         .eventSheet($eventSheet, store: cal)
+        .task { StudyLibrary.shared.refreshIfChanged(store) }
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button { store.capture = .init(workstream: nil, parent: nil, plan: store.today) } label: { Label("Add for today", systemImage: "plus") }
-            }
             if Device.isPhone && store.snapshot.isDataFolder {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
@@ -55,136 +58,218 @@ struct TodayView: View {
         }
     }
 
-    // MARK: parts
-
-    private func header(_ p: Planning) -> some View {
-        let planned = p.todayPlan
-        let hours = p.load(on: store.today)
-        let open = planned.filter { !$0.done }.count
-        // time tracked today on every device (TimeTracker), shown once there is a minute of it
-        let tracked = TimeLog.daySeconds(TimeTracker.shared.entries, store.today)
-        let words: [String?] = [open == 0 ? "Nothing left on the plan" : "\(open) planned",
-                                hours > 0 ? hoursText(hours) : nil,
-                                p.slipped.isEmpty ? nil : "\(p.slipped.count) slipped",
-                                tracked >= 60 ? "\(TimeLog.spent(tracked)) tracked" : nil]
-        return VStack(alignment: .leading, spacing: 4) {
-            Text(longDate(store.today)).font(.nx(.largeTitle, .bold))
-            Text(words.compactMap { $0 }.joined(separator: " · "))
-                .foregroundStyle(.secondary)
-            if cal.eventsOnPlan, let next = cal.next(today: store.today) {
-                Button { eventSheet = .show(next.event) } label: {
-                    Label(next.start <= Date() ? "Now: \(next.title)" : "Next: \(next.title) at \(next.start.formatted(date: .omitted, time: .shortened))",
-                          systemImage: "calendar")
-                        .font(.nx(.callout, .medium))
-                        .foregroundStyle(next.color)
-                        .lineLimit(1)
-                }
-                .buttonStyle(.plain)
-            }
-            // Plan with Claude (the laptop's on Today): in view on the iPad; on the iPhone it is in the ✦ menu, and its progress and
-            // result show here once started
-            if store.snapshot.isDataFolder && (!Device.isPhone || PlanWithClaude.shared.run != nil) {
-                PlanWithClaudeButton().padding(.top, 8)
-            }
-        }
+    /// The day's sums at `date`: the device's calendars give the events (when Today shows them).
+    private func day(at date: Date) -> TodayPlan.Day {
+        let c = Calendar.current.dateComponents([.hour, .minute], from: date)
+        let now = (c.hour ?? 0) * 60 + (c.minute ?? 0)
+        let spans = { (d: String) in TodayEvents.spans(cal, d).map { TodayPlan.Span($0.start, $0.end) } }
+        return TodayPlan.day(store.planning, now: now, events: spans)
     }
 
-    private func keyStrip(_ p: Planning) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(p.keyDates.prefix(6)) { t in
-                    let n = Days.between(store.today, t.due!)
-                    Button { store.open(t) } label: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(n < 0 ? "\(-n)d late" : n == 0 ? "Today" : n == 1 ? "Tomorrow" : "in \(n) days")
-                                .font(.nx(.caption, .semibold))
-                                .foregroundStyle(n < 0 ? Theme.late : n <= 2 ? Theme.soon : .secondary)
-                            Text("★ " + t.text).font(.nx(.subheadline, .semibold)).lineLimit(2).multilineTextAlignment(.leading)
-                            Text(store.workstreamName(t)).font(.nx(.caption)).foregroundStyle(store.color(t))
+    // MARK: the header
+
+    @ViewBuilder
+    private func header(_ v: TodayPlan.Day, wide: Bool) -> some View {
+        let timedEvents = TodayEvents.spans(cal, v.today).count
+        VStack(alignment: .leading, spacing: 6) {
+            Text(Self.weekday(v.today).uppercased())
+                .font(.nx(.caption, .semibold)).tracking(0.6).foregroundStyle(Kit.muted)
+            HStack(alignment: .firstTextBaseline) {
+                Text(Self.dayMonth(v.today)).font(.nx(size: wide ? 40 : 32, .bold, display: true)).foregroundStyle(Kit.ink)
+                Spacer()
+                if !Device.isPhone && store.snapshot.isDataFolder {
+                    HStack(spacing: 8) {
+                        Button { PlanWithClaude.shared.start(store, calendar: cal) } label: {
+                            Label(PlanWithClaude.shared.running ? "Planning…" : "Plan my day", systemImage: "sparkles")
                         }
-                        .frame(width: 190, alignment: .leading)
-                        .padding(12)
-                        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+                        .buttonStyle(.kitClaude)
+                        .disabled(PlanWithClaude.shared.running || store.snapshot.readOnlyReason != nil)
+                        .accessibilityIdentifier("plan-with-claude")
+                        Button { store.capture = .init(workstream: nil, parent: nil, plan: store.today) } label: { Label("Add", systemImage: "plus") }
+                            .buttonStyle(.kitPrimary)
+                            .accessibilityIdentifier("today-add")
                     }
-                    .buttonStyle(.plain)
                 }
             }
+            summary(v, events: timedEvents)
+                .font(.nx(.body)).foregroundStyle(Kit.ink)
+                .accessibilityIdentifier("today-sum")
+            if PlanWithClaude.shared.run != nil { PlanWithClaudeButton(buttonShown: false).padding(.top, 6) }
         }
     }
 
-    private func planCard(_ p: Planning) -> some View {
-        let today = store.today
-        // planned for today and due today, in the one order (DayOrder.swift: time, your order from the laptop, deadline, file order)
-        let planned = p.todayPlan
-        let doneToday = p.s.order.compactMap { p.s.tasks[$0] }.filter { $0.done && $0.doneOn == today && $0.plannedDays.contains(today) }
-        let repeats = p.repeatsToday
-        return Card(title: "Plan", count: planned.count, icon: "sun.max") {
-            if planned.isEmpty && repeats.isEmpty {
-                Text(doneToday.isEmpty ? "Nothing planned yet. Drag a task here from Slipped, or plan one from Tasks." : "All done for today.")
-                    .font(.nx(.callout)).foregroundStyle(.secondary).padding(.vertical, 8)
-            }
-            ForEach(planned) { t in rowDivider(TaskRow(task: t, day: today)) }
-            if !repeats.isEmpty {
-                Text("Repeats today").font(.nx(.caption, .semibold)).foregroundStyle(.secondary).padding(.top, 6)
-                ForEach(repeats) { t in rowDivider(TaskRow(task: t)) }
-            }
-            if !doneToday.isEmpty {
-                DisclosureGroup("Done today · \(doneToday.count)") {
-                    ForEach(doneToday) { t in TaskRow(task: t, day: today, compact: true) }
+    private func summary(_ v: TodayPlan.Day, events: Int) -> Text {
+        let left = v.list.count
+        let first = left > 0 ? Text("\(left) to do").bold() + Text(v.estLeft > 0 ? ", about \(TimeWords.about(v.estLeft)). " : ". ")
+                             : Text("Nothing left for today. ").bold()
+        return first + Text(v.freeLeft > 0 ? "You have about \(TimeWords.about(v.freeLeft)) free\(events > 0 ? " between classes" : "")."
+                                           : "No free time left today.")
+    }
+
+    // MARK: Key dates and From Study
+
+    @ViewBuilder
+    private func top(_ v: TodayPlan.Day, wide: Bool) -> some View {
+        let keys = VStack(alignment: .leading, spacing: 10) {
+            SectionHead(title: "Key dates", note: "starred, soonest first")
+            if v.keyDates.isEmpty {
+                QuietCard(text: "No starred deadlines. Star a task with a deadline to count down to it here.")
+            } else {
+                HStack(alignment: .top, spacing: 12) {
+                    ForEach(v.keyDates.prefix(2), id: \.task.id) { k in KeyDateCard(k: k) }
                 }
-                .font(.nx(.callout)).foregroundStyle(.secondary).padding(.top, 6)
             }
-            Button { store.capture = .init(workstream: nil, parent: nil, plan: today) } label: {
-                Label("Add a task for today", systemImage: "plus").font(.nx(.callout))
-            }
-            .padding(.top, 6)
         }
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.accent, lineWidth: dropTargeted ? 2 : 0))
-        .dropDestination(for: String.self) { ids, _ in
-            for id in ids {
-                guard let t = store.task(id), !t.plannedDays.contains(today) else { continue }
-                let past = t.plannedDays.filter { $0 < today }.max()
-                store.move(t, from: past, to: today)
+        let items = studyItems()
+        let study = VStack(alignment: .leading, spacing: 10) {
+            SectionHead(title: "From Study")
+            if items.isEmpty {
+                QuietCard(text: "Nothing due from your decks today.")
+            } else {
+                ForEach(items.prefix(2)) { s in StudyDueCard(item: s) { go(.studyPage(s.workstream.id)) } }
             }
-            return true
-        } isTargeted: { dropTargeted = $0 }
+        }
+        if wide {
+            HStack(alignment: .top, spacing: 24) {
+                keys.frame(maxWidth: .infinity, alignment: .leading)
+                study.frame(maxWidth: .infinity, alignment: .leading)
+            }
+        } else {
+            keys
+            study
+        }
+    }
+
+    /// Cards due in each subject's decks (study/review.yaml), as the laptop's From Study.
+    private func studyItems() -> [StudyDue] {
+        let lib = StudyLibrary.shared
+        let now = StudyLibrary.now
+        return lib.studies.compactMap { s in
+            guard !s.workstream.parked else { return nil }
+            var n = 0, decks: [String] = []
+            for f in s.decks {
+                let d = lib.counts(s, f, now: now)?.due ?? 0
+                if d > 0 { n += d; decks.append(f.deck?.title ?? f.fileId) }
+            }
+            return n > 0 ? StudyDue(workstream: s.workstream, count: n, decks: decks) : nil
+        }
+    }
+
+    // MARK: your list and the day
+
+    @ViewBuilder
+    private func middle(_ v: TodayPlan.Day, wide: Bool) -> some View {
+        if wide {
+            HStack(alignment: .top, spacing: 24) {
+                list(v).frame(maxWidth: .infinity, alignment: .leading)
+                DayCard(v: v, eventSheet: $eventSheet).frame(width: 380)
+            }
+        } else {
+            list(v)
+            DayCard(v: v, eventSheet: $eventSheet)
+        }
+    }
+
+    private func list(_ v: TodayPlan.Day) -> some View {
+        let sugg = Dictionary(v.suggestions.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let repeats = store.planning.repeatsToday
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("Today's list").font(.nx(size: 22, .bold, display: true)).foregroundStyle(Kit.ink)
+                Text("\(v.list.count) left · your order").font(.nx(.subheadline)).foregroundStyle(Kit.muted)
+                Spacer(minLength: 0)
+                if !Device.isPhone { Text("drag onto the day to give a time").font(.nx(.footnote)).foregroundStyle(Kit.faint).lineLimit(1) }
+            }
+            .padding(.horizontal, 12)
+            .padding(.bottom, 10)
+            ForEach(v.list) { t in
+                Rectangle().fill(Kit.line).frame(height: 1)
+                TodayRow(task: t, v: v, suggestion: sugg[t.id])
+                    .dropDestination(for: String.self) { ids, _ in drop(ids, before: t, v) }
+            }
+            Rectangle().fill(Kit.line).frame(height: 1)
+            addRow(v)
+            if !repeats.isEmpty {
+                Text("Repeats today").font(.nx(.caption, .semibold)).foregroundStyle(Kit.muted).padding(.horizontal, 12).padding(.top, 12).padding(.bottom, 4)
+                ForEach(repeats) { t in
+                    Rectangle().fill(Kit.line).frame(height: 1)
+                    TodayRow(task: t, v: v, suggestion: nil, repeating: true)
+                }
+            }
+            ForEach(v.done) { t in
+                Rectangle().fill(Kit.line).frame(height: 1)
+                TodayRow(task: t, v: v, suggestion: nil)
+            }
+            Rectangle().fill(Kit.line).frame(height: 1)
+            if v.list.isEmpty && v.done.isEmpty {
+                Text("Nothing planned for today. Plan something from the Planner, or add a task.")
+                    .font(.nx(.callout)).foregroundStyle(Kit.muted).padding(.horizontal, 44).padding(.vertical, 16)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("today-list")
+    }
+
+    private func addRow(_ v: TodayPlan.Day) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "plus").foregroundStyle(Kit.muted).frame(width: 22)
+            TextField("Add a task", text: $adding)
+                .font(.nx(.body))
+                .focused($addFocused)
+                .submitLabel(.done)
+                .onSubmit(add)
+                .accessibilityIdentifier("today-add-task")
+            if !adding.isEmpty { Text("Return to add").font(.nx(.footnote)).foregroundStyle(Kit.faint) }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 13)
+        .contentShape(Rectangle())
+        // a task dropped here goes to the end of your list
+        .dropDestination(for: String.self) { ids, _ in drop(ids, before: nil, v) }
+    }
+
+    private func add() {
+        let t = adding.trimmingCharacters(in: .whitespaces)
+        adding = ""
+        guard !t.isEmpty else { return }
+        store.add(title: t, workstream: nil, plan: [PlanEntry(day: store.today)])
+    }
+
+    /// A task dropped on the list: before `target` (nil: the end) in your order. A timed one loses its time; one from another day
+    /// (Slipped, Tomorrow) is planned today.
+    private func drop(_ ids: [String], before target: NexusTask?, _ v: TodayPlan.Day) -> Bool {
+        guard let id = ids.first, let t = store.task(id), store.canEdit(t), id != target?.id else { return false }
+        let today = v.today
+        if !t.plannedDays.contains(today) {
+            let from = t.plannedDays.filter { $0 < today }.max() ?? (t.plannedDays.contains(Days.add(today, 1)) ? Days.add(today, 1) : nil)
+            store.move(t, from: from, to: today)
+        } else if t.time(on: today) != nil {
+            store.setTime(t, on: today, nil)
+        }
+        var keys = v.list.filter { v.time($0) == nil && $0.id != id }.map(\.id)
+        let at = target.flatMap { tg in keys.firstIndex(of: tg.id) } ?? keys.count
+        keys.insert(id, at: at)
+        withAnimation(Kit.spring) { store.setDayOrder(today, keys) }
+        return true
+    }
+
+    // MARK: Slipped and tomorrow
+
+    @ViewBuilder
+    private func bottom(_ v: TodayPlan.Day, wide: Bool) -> some View {
+        if wide {
+            HStack(alignment: .top, spacing: 24) {
+                SlippedCard(v: v).frame(maxWidth: .infinity, alignment: .leading)
+                TomorrowCard(v: v).frame(maxWidth: .infinity, alignment: .leading)
+            }
+        } else {
+            SlippedCard(v: v)
+            TomorrowCard(v: v)
+        }
     }
 
     @ViewBuilder
-    private func sideCards(_ p: Planning) -> some View {
-        let today = store.today
-        eventsCard(today)
-        let due = p.dueNow.filter { $0.due != today } // (what is due today is on the plan)
-        if !due.isEmpty {
-            Card(title: "Deadlines", count: due.count, icon: "flag") {
-                ForEach(due) { t in rowDivider(TaskRow(task: t, compact: true)) }
-            }
-        }
-        let slipped = p.slipped
-        if !slipped.isEmpty {
-            Card(title: "Slipped", count: slipped.count, icon: "arrow.uturn.backward") {
-                ForEach(slipped) { t in
-                    HStack(alignment: .top) {
-                        TaskRow(task: t, compact: true)
-                        if store.canEdit(t) {
-                            Button("Today") { store.move(t, from: t.plannedDays.max(), to: today) }
-                                .buttonStyle(.bordered).controlSize(.small)
-                        }
-                    }
-                    Divider()
-                }
-                if slipped.count > 1 {
-                    Button("Move all to today") { for t in slipped where store.canEdit(t) { store.move(t, from: t.plannedDays.max(), to: today) } }
-                        .font(.nx(.callout))
-                }
-            }
-        }
-        let tomorrow = p.planned(on: Days.add(today, 1))
-        if !tomorrow.isEmpty {
-            Card(title: "Tomorrow", count: tomorrow.count, icon: "sunrise") {
-                ForEach(tomorrow) { t in rowDivider(TaskRow(task: t, day: Days.add(today, 1), compact: true)) }
-            }
-        }
+    private var problems: some View {
         if store.snapshot.problems.count > 0 {
             Card(title: "Things to check", count: store.snapshot.problems.count, icon: "exclamationmark.triangle") {
                 ForEach(store.snapshot.problems) { pr in
@@ -194,39 +279,33 @@ struct TodayView: View {
         }
     }
 
-    /// The day's events from the device's calendars (the laptop shows them on Today's timeline). Asks once, quietly, if
-    /// Nexus may read them; says nothing more if the answer was no.
-    @ViewBuilder
-    private func eventsCard(_ today: String) -> some View {
-        if cal.eventsOnPlan && cal.canRead {
-            let events = cal.events(on: today)
-            Card(title: "Calendar", count: events.count, icon: "calendar") {
-                if events.isEmpty {
-                    Text("No events today.").font(.nx(.callout)).foregroundStyle(.secondary).padding(.vertical, 4)
-                }
-                ForEach(events) { e in
-                    Button { eventSheet = .show(e.event) } label: { EventLine(thing: CalThing(event: e, day: today)) }
-                        .buttonStyle(.plain)
-                        .opacity(!e.allDay && e.end < Date() ? 0.5 : 1)
-                }
-            }
-        } else if cal.notAsked {
-            Card(title: "Calendar", icon: "calendar") {
-                Text("Show today's events from this \(Device.name)'s calendars here.").font(.nx(.callout)).foregroundStyle(.secondary)
-                Button("Show my calendars") { Task { await cal.requestAccess() } }.font(.nx(.callout))
-            }
+    // MARK: words
+
+    static func weekday(_ iso: String, short: Bool = false) -> String {
+        guard let d = Days.date(iso) else { return iso }
+        let f = DateFormatter(); f.dateFormat = short ? "EEE" : "EEEE"
+        return f.string(from: d)
+    }
+
+    static func dayMonth(_ iso: String) -> String {
+        guard let d = Days.date(iso) else { return iso }
+        let f = DateFormatter(); f.dateFormat = "d MMMM"
+        return f.string(from: d)
+    }
+}
+
+/// The device's calendar events Today and its day card draw (when Today shows events and Nexus may read the calendars).
+enum TodayEvents {
+    static func spans(_ cal: CalendarStore, _ day: String) -> [(start: Int, end: Int, event: CalEvent)] {
+        guard cal.eventsOnPlan && cal.canRead else { return [] }
+        return cal.events(on: day).filter { !$0.allDay }.compactMap { e in
+            DayLayout.clip(start: e.start, end: e.end, day: day).map { ($0.start, max($0.end, $0.start + 15), e) }
         }
     }
 
-    private func rowDivider<V: View>(_ v: V) -> some View {
-        VStack(spacing: 0) { v; Divider().padding(.leading, 32) }
-    }
-
-    private func longDate(_ iso: String) -> String {
-        guard let d = Days.date(iso) else { return iso }
-        let f = DateFormatter()
-        f.dateFormat = "EEEE d MMMM"
-        return f.string(from: d)
+    static func allDay(_ cal: CalendarStore, _ day: String) -> [CalEvent] {
+        guard cal.eventsOnPlan && cal.canRead else { return [] }
+        return cal.events(on: day).filter(\.allDay)
     }
 }
 

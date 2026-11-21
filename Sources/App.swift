@@ -402,7 +402,7 @@ struct RootView: View {
             FolderSetupView()
         } else {
             switch s {
-            case .today: TodayView()
+            case .today: TodayView(go: go)
             case .home: HomeView(go: go)
             case .files(let path): FilesView(path: path, go: go)
             case .guide: GuideView()

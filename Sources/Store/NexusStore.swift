@@ -219,6 +219,43 @@ final class NexusStore {
     func setPlan(_ t: NexusTask, _ plan: [PlanEntry]) { perform { try $0.setPlan(t, plan, in: $1) } }
     /// Moves a planned day (the Planner's drag); `from` nil adds the day.
     func move(_ t: NexusTask, from: String?, to: String) { perform { try $0.move(t, from: from, to: to, in: $1) } }
+    /// Gives a task a time on a day (planning it that day), or takes the time off (nil): Today's day card.
+    func setTime(_ t: NexusTask, on day: String, _ time: String?) {
+        var p = t.plan.filter { $0.day != day }
+        p.append(PlanEntry(day: day, time: time))
+        perform { try $0.setPlan(t, p, in: $1, message: time.map { "At \(Self.clockText($0)): \(t.text)" } ?? "No time: \(t.text)") }
+    }
+
+    /// Plans a task today at a time in one write, taking it off the day it slipped from (`from`; else the latest earlier planned day,
+    /// or tomorrow): a drop on Today's hours, and Slipped's "Put them there".
+    func planToday(_ t: NexusTask, at time: String, from: String? = nil) {
+        let tomorrow = Days.add(today, 1)
+        let off = from ?? t.plannedDays.filter { $0 < today }.max() ?? (t.plannedDays.contains(tomorrow) && !t.plannedDays.contains(today) ? tomorrow : nil)
+        var p = t.plan.filter { $0.day != today && $0.day != off }
+        p.append(PlanEntry(day: today, time: time))
+        perform { try $0.setPlan(t, p, in: $1, message: "At \(Self.clockText(time)) today: \(t.text)") }
+    }
+
+    /// Your own order of a day's untimed tasks (Today's drag), kept in the synced `nexus-day-order.yaml` as on the laptop.
+    func setDayOrder(_ day: String, _ ids: [String]) {
+        guard snapshot.readOnlyReason == nil else { problem = snapshot.readOnlyReason; return }
+        let url = folder.appendingPathComponent(DayOrder.file)
+        let text = DayOrder.text(DayOrder.with(snapshot.dayOrder, day: day, keys: ids), today: today)
+        do {
+            try FolderAccess.write(url, text)
+            reload()
+            didWrite(touched: [DayOrder.file])
+        } catch {
+            problem = "Couldn't save your order: \(error.localizedDescription)"
+        }
+    }
+
+    /// "16:00" as "4:00", as the new look's lists show a time.
+    static func clockText(_ hm: String) -> String {
+        guard let m = DayOrder.minutes(hm) else { return hm }
+        let h = (m / 60) % 12
+        return "\(h == 0 ? 12 : h):" + String(format: "%02d", m % 60)
+    }
     func setDue(_ t: NexusTask, _ day: String?) { perform { try $0.setDue(t, day, in: $1) } }
     func setKey(_ t: NexusTask, _ on: Bool) { perform { try $0.setKey(t, on, in: $1) } }
     func setSomeday(_ t: NexusTask, _ on: Bool) { perform { try $0.setSomeday(t, on, in: $1) } }

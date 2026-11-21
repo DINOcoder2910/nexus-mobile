@@ -78,13 +78,15 @@ final class PlanWithClaude {
 /// The Plan with Claude button with its progress and result line, for Today and Home. `prominent`: the screen's main button (Home).
 struct PlanWithClaudeButton: View {
     var prominent = false
+    /// false: only the progress and result line (Today's header has its own button).
+    var buttonShown = true
     @Environment(NexusStore.self) private var store
     @Environment(CalendarStore.self) private var calendar
     private var plan: PlanWithClaude { .shared }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
+            if buttonShown { HStack(spacing: 8) {
                 Button { plan.start(store, calendar: calendar) } label: {
                     Label(plan.running ? "Planning…" : "Plan with Claude", systemImage: "sparkles")
                         .font(.nx(.callout, .semibold))
@@ -95,7 +97,7 @@ struct PlanWithClaudeButton: View {
                 .accessibilityIdentifier("plan-with-claude")
                 ClaudeModeChip(small: true)
                 if plan.running { ProgressView().controlSize(.small) }
-            }
+            } }
             if let r = plan.run { result(r) }
         }
         .animation(.snappy, value: plan.run?.done)
