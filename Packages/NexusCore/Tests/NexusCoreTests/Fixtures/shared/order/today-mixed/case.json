@@ -1,0 +1,12 @@
+{
+  "rule": "order",
+  "about": "Today with everything at once: times (one after midnight, so last with the day starting at 4), your dragged order (with a timed id and a gone id in it, both ignored), deadlines (a tie broken by file order), file order across two files, a subtask, a task due today but not planned (on Today's plan, not on the day's planned list), and what never shows: done, Someday, a parked workstream and a finished one. The titles are in reverse alphabetical order where it matters, so sorting by name fails.",
+  "today": "2026-11-20",
+  "dayStart": 4,
+  "expect": {
+    "today": ["ze02", "ch02", "ze01", "ze04", "ch01", "ch07", "in02", "ze03", "ch03", "ch04", "ch05", "in01"],
+    "days": {
+      "2026-11-20": ["ze02", "ch02", "ze01", "ze04", "ch01", "in02", "ze03", "ch03", "ch04", "ch05", "in01"]
+    }
+  }
+}

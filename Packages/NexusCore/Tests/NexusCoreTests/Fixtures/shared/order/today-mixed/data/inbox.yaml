@@ -1,0 +1,8 @@
+tasks:
+  - id: in01
+    title: Buy printer paper
+    plan: [2026-11-20]
+  - id: in02
+    title: Answer Kyra
+    due: 2026-11-20
+    plan: [2026-11-20]

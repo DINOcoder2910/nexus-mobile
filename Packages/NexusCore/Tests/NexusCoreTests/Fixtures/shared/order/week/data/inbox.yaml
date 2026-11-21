@@ -1,0 +1,14 @@
+tasks:
+  - id: iw01
+    title: A first inbox thing
+    plan: [2026-11-21]
+  - id: iw02
+    title: Calendar sync check
+    plan: ["2026-11-22 08:00", 2026-11-23]
+  - id: iw03
+    title: Planned in the past
+    plan: [2026-11-19]
+  - id: iw04
+    title: Zoom call notes
+    due: 2026-11-24
+    plan: ["2026-11-23 09:00"]

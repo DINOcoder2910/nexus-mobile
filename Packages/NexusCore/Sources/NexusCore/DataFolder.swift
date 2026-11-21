@@ -18,6 +18,8 @@ public struct Snapshot {
     public var readOnlyReason: String?
     public var isDataFolder = false
     public var loadedAt = Date()
+    /// Your own order of each day's tasks with no time (`nexus-day-order.yaml`, DayOrder.swift): day -> task ids.
+    public var dayOrder: [String: [String]] = [:]
 
     public init(root: URL) { self.root = root }
 
@@ -34,10 +36,11 @@ public struct Snapshot {
     /// The workstreams of a group, in name order like the sidebar.
     public func workstreams(in g: WorkGroup) -> [Workstream] { g.workstreams.compactMap { workstreams[$0] } }
     public var inboxTop: [NexusTask] { (top["inbox.yaml"] ?? []).compactMap { tasks[$0] } }
-    /// A task counts in Today, the Planner and the lenses unless it is Someday or its workstream is parked.
+    /// A task counts in Today, the Planner and the lenses unless it is Someday or its workstream isn't active (parked or done), as on
+    /// the laptop.
     public func counts(_ t: NexusTask) -> Bool {
         if t.someday { return false }
-        if let w = workstream(of: t), w.parked { return false }
+        if let w = workstream(of: t), w.status != "active" { return false }
         return true
     }
     public func canEdit(_ file: String) -> Bool { readOnlyReason == nil && !brokenFiles.contains(file) }
@@ -61,6 +64,7 @@ public enum DataFolder {
         }
         guard let nexus = read("nexus.yaml") else { return s }
         s.isDataFolder = true
+        s.dayOrder = DayOrder.parse(read(DayOrder.file))
         if let cfg = try? TaskFile.settings(nexus) {
             let v = TaskFile.string(cfg["nexus"]).flatMap { Int($0) } ?? 0
             if v < 2 { s.readOnlyReason = "This folder is in the old layout; open it in Nexus on the laptop first." }
