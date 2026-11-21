@@ -83,8 +83,8 @@ class TasksLookTests: XCTestCase {
         // the sample folder is shared by the tests on one simulator, so an earlier test's tasks (Recordings files two) can sit
         // above this card: scroll until it is on screen
         let open = app.staticTexts["Columbia short answers"].firstMatch
-        var tries = 0
-        while !(open.waitForExistence(timeout: 2) && open.isHittable) && tries < 6 { app.swipeUp(velocity: .slow); tries += 1 }
+        var swipes = 0
+        while !(open.waitForExistence(timeout: 2) && open.isHittable) && swipes < 6 { app.swipeUp(velocity: .slow); swipes += 1 }
         XCTAssertTrue(open.exists, "no Columbia card")
         open.tap()
         XCTAssertTrue(el("panel-title").waitForExistence(timeout: 8), "the task panel didn't open")
