@@ -54,7 +54,8 @@ final class RecordingService: NSObject {
             problem = store.snapshot.readOnlyReason ?? "Set up the Nexus folder first (Settings › Data folder)."
             return
         }
-        guard await RecordingService.askMicrophone() else {
+        // the demo records nothing, so it never asks (a system alert the UI tests can't see coming)
+        guard RecordingDemo.on || (await RecordingService.askMicrophone()) else {
             problem = "Nexus needs the microphone to record. Allow it in Settings › Nexus."
             return
         }

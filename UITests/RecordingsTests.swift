@@ -83,11 +83,13 @@ class RecordingsTests: XCTestCase {
         let meeting = app.buttons["rec-row-Counsellor letter with Ms Rivera"].firstMatch
         XCTAssertTrue(meeting.waitForExistence(timeout: 10))
         meeting.tap()
+        // Accept is at the foot of the review: a list only makes the rows on screen, so scroll to it first
         let accept = app.buttons["rec-accept"].firstMatch
-        XCTAssertTrue(accept.waitForExistence(timeout: 15), "no Accept on the meeting")
+        XCTAssertTrue(app.staticTexts["Summary"].firstMatch.waitForExistence(timeout: 15) || accept.waitForExistence(timeout: 5), "the meeting's review didn't open")
         sleep(1)
         shot("rec-5-meeting-review")
-        reveal(accept)
+        reveal(accept, 12)
+        XCTAssertTrue(accept.exists, "no Accept on the meeting")
         accept.tap()
         XCTAssertTrue(app.staticTexts["Tasks added"].firstMatch.waitForExistence(timeout: 15), "accepting didn't file the tasks")
         XCTAssertTrue(app.staticTexts["Send Ms Rivera the activities list"].firstMatch.waitForExistence(timeout: 5), "the added task isn't shown")
