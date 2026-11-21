@@ -85,4 +85,32 @@ final class TodayPlanTests: XCTestCase {
         t.est = "1.5h"; XCTAssertEqual(TodayPlan.minutes(t), 90)
         t.est = nil; XCTAssertEqual(TodayPlan.minutes(t), 0)
     }
+
+    /// The Planner's week from today, as the laptop's `week_view`: planned days, loads against free time, deadlines, lanes, the bank.
+    func testWeek() {
+        let p = Planning(DataFolder.load(dir), today: "2026-11-20")
+        let w = WeekPlan.week(p, start: "2026-11-20", now: 10 * 60, events: events)
+        XCTAssertEqual(w.days.map(\.date).first, "2026-11-20")
+        XCTAssertEqual(w.days.last?.date, "2026-11-26")
+        XCTAssertEqual(w.days[0].planned.map(\.title), ["Redox set", "Lab write-up", "Read ahead"])
+        XCTAssertEqual(w.days[0].load, 180)
+        XCTAssertEqual(w.days[0].free, 30 + 600)
+        // Saturday: no class, Tomorrow's from 19:30 to 20:15
+        XCTAssertEqual(w.days[1].load, 45)
+        XCTAssertEqual(w.days[1].free, (1170 - 480) + (1320 - 1215))
+        XCTAssertEqual(w.days[0].deadlines.map(\.title), ["Due today"])
+        XCTAssertEqual(w.days[6].deadlines.map(\.title), ["Test"])
+        XCTAssertEqual(w.lanes.count, 1)
+        XCTAssertEqual(w.lanes.first?.workstream, "chem")
+        XCTAssertEqual(w.lanes.first?.count, 4)
+        XCTAssertEqual(w.bank.map(\.title), ["Due today", "Was yesterday", "Late one", "Test"])
+        XCTAssertEqual(w.slipped, Set(["a5", "a6"]))
+        XCTAssertEqual(w.load, 225)
+        XCTAssertTrue(w.overDays.isEmpty)
+        // a week that starts before today: the past days hold no plan
+        let back = WeekPlan.week(p, start: "2026-11-18", now: 10 * 60, events: events)
+        XCTAssertTrue(back.days[1].past)
+        XCTAssertTrue(back.days[1].planned.isEmpty)
+    }
+
 }

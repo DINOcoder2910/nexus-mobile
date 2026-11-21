@@ -181,6 +181,77 @@ public enum TodayPlan {
     }
 }
 
+/// The Planner's week, as the new laptop app has it (nexus `desktop/backend/src/plan.rs` `week_view`): each day's load against its free
+/// time, its events' and deadlines' rows, a lane per subject across the week, and the task bank.
+public enum WeekPlan {
+    public struct Day: Equatable {
+        public var date: String
+        /// Planned that day (from today on), in the one order.
+        public var planned: [NexusTask]
+        /// Open tasks whose deadline is that day.
+        public var deadlines: [NexusTask]
+        /// Minutes planned (the tasks' own estimates).
+        public var load: Int
+        /// Minutes free between 8 am and 10 pm (from now, today).
+        public var free: Int
+        public var past: Bool
+        /// Over its free time (not a past day).
+        public var over: Bool { !past && load > free && load > 0 }
+    }
+
+    /// One subject's row across the week (nil: the Inbox).
+    public struct Lane: Equatable {
+        public var workstream: String?
+        public var days: [[NexusTask]]
+        public var count: Int { days.reduce(0) { $0 + $1.count } }
+        public var minutes: Int { days.reduce(0) { $0 + $1.reduce(0) { $0 + TodayPlan.minutes($1) } } }
+    }
+
+    public struct Week: Equatable {
+        public var today: String
+        public var start: String
+        public var days: [Day]
+        public var lanes: [Lane]
+        /// Open tasks with no plan from today on (not repeats, not waits), in file order.
+        public var bank: [NexusTask]
+        /// The bank's tasks that slipped (TodayPlan.slipped).
+        public var slipped: Set<String>
+        public var load: Int { days.reduce(0) { $0 + $1.load } }
+        public var overDays: [Day] { days.filter(\.over) }
+    }
+
+    public static func week(_ p: Planning, start: String, now: Int, events: (String) -> [TodayPlan.Span]) -> Week {
+        let today = p.today
+        var days: [Day] = []
+        var lanes: [String: Lane] = [:]
+        var laneOrder: [String] = []
+        for i in 0..<7 {
+            let d = Days.add(start, i)
+            let rows = d >= today ? p.planned(on: d) : []
+            let busy = TodayPlan.busy(rows, on: d, events: events(d))
+            let free = TodayPlan.gaps(busy, from: d == today ? max(now, TodayPlan.dayFrom) : TodayPlan.dayFrom, to: TodayPlan.dayTo)
+            days.append(Day(date: d, planned: rows, deadlines: p.open.filter { $0.due == d }, load: rows.reduce(0) { $0 + TodayPlan.minutes($1) },
+                            free: free.reduce(0) { $0 + $1.minutes }, past: d < today))
+            for t in rows {
+                let k = t.workstream ?? ""
+                if lanes[k] == nil { laneOrder.append(k); lanes[k] = Lane(workstream: t.workstream, days: Array(repeating: [], count: 7)) }
+                lanes[k]!.days[i].append(t)
+            }
+        }
+        // lanes in the sidebar's order (groups, then their subjects), the Inbox last
+        var rank: [String: Int] = [:]
+        for (n, w) in p.s.groups.flatMap({ p.s.workstreams(in: $0) }).enumerated() where rank[w.id] == nil { rank[w.id] = n }
+        let order = laneOrder.enumerated().sorted { a, b in
+            let ra = a.element.isEmpty ? Int.max : rank[a.element] ?? Int.max - 1
+            let rb = b.element.isEmpty ? Int.max : rank[b.element] ?? Int.max - 1
+            return ra != rb ? ra < rb : a.offset < b.offset
+        }.map(\.element)
+        let slipped = Set(TodayPlan.slipped(p).map(\.task.id))
+        let bank = p.open.filter { t in t.every == nil && t.everyRaw == nil && t.waitingOn == nil && !t.plannedDays.contains { $0 >= today } }
+        return Week(today: today, start: start, days: days, lanes: order.compactMap { lanes[$0] }, bank: bank, slipped: slipped.intersection(bank.map(\.id)))
+    }
+}
+
 extension Planning {
     /// A day's list as Today has it: planned that day, and due that day without being planned for it (not a repeat), open, in the
     /// one order.
