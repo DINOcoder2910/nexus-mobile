@@ -423,7 +423,8 @@ final class FilmCamera: NSObject, AVCaptureFileOutputRecordingDelegate, @uncheck
         guard video else { throw RecError("Nexus needs the camera to film. Allow it in Settings › Nexus.") }
         if !configured {
             session.beginConfiguration()
-            session.sessionPreset = .high
+            // 1080p, sharp enough for the board; .high is 4K on some iPads (an hour would be over the hub's 8 GB a file)
+            session.sessionPreset = session.canSetSessionPreset(.hd1920x1080) ? .hd1920x1080 : .high
             guard let cam = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
                   let camIn = try? AVCaptureDeviceInput(device: cam), session.canAddInput(camIn) else {
                 session.commitConfiguration(); throw RecError("there is no camera")
@@ -432,6 +433,10 @@ final class FilmCamera: NSObject, AVCaptureFileOutputRecordingDelegate, @uncheck
             if let mic = AVCaptureDevice.default(for: .audio), let micIn = try? AVCaptureDeviceInput(device: mic), session.canAddInput(micIn) { session.addInput(micIn) }
             guard session.canAddOutput(output) else { session.commitConfiguration(); throw RecError("the camera can't record") }
             session.addOutput(output)
+            // HEVC: about half the size of H.264 for the same picture (an hour's class is 2–3 GB)
+            if let conn = output.connection(with: .video), output.availableVideoCodecTypes.contains(.hevc) {
+                output.setOutputSettings([AVVideoCodecKey: AVVideoCodecType.hevc], for: conn)
+            }
             session.commitConfiguration()
             configured = true
         }

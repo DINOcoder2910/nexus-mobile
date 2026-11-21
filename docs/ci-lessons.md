@@ -2,6 +2,10 @@
 
 Every iPad or iPhone CI or build failure goes here, with its cause and fix, so it doesn't happen twice. Mac jobs are scarce (README, "Building"): read this before pushing mobile work. Newest first.
 
+## Compiling
+
+- **Nov 21: "invalid redeclaration of 'RecordingBar'"** (build on 50ebdd2). The new Recordings code named its top bar `RecordingBar`, a name the tutor's board recorder (`Sources/Tutor/BoardRecorder.swift`) already used; the app target is one module, so the clash also broke that file's lines ("requires that 'RecordingBar' conform to 'View'"). Fix: renamed to `RecordingTopBar`. Before pushing a new type, grep `Sources` and `Packages/NexusCore/Sources` for `(struct|class|enum) <Name>\b`: Linux can only build the core, so a clash in the app shows first on the Mac.
+
 ## Time limits
 
 - **Nov 19: "The job was not acquired by Runner of type hosted even after multiple attempts"** (ui-check on 0f84b86). GitHub had no Mac free for 15 minutes and failed the run before a single step; nothing in the repo caused it. Fix: re-run the run (Actions › the run › Re-run), don't push to retrigger. Whoever pushed should check the run is actually running, not just queued: this one sat failed overnight because the failure looked like any other.

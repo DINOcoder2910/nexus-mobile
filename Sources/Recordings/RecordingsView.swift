@@ -391,7 +391,7 @@ struct RecordingPage: View {
 }
 
 /// While recording, on every screen: a red pill with the time, Snap and Stop; filming shows the camera full screen instead.
-struct RecordingBar: ViewModifier {
+struct RecordingTopBar: ViewModifier {
     @State private var rec = RecordingService.shared
 
     func body(content: Content) -> some View {
@@ -451,7 +451,7 @@ struct RecordingBar: ViewModifier {
 }
 
 extension View {
-    func recordingBar() -> some View { modifier(RecordingBar()) }
+    func recordingBar() -> some View { modifier(RecordingTopBar()) }
 }
 
 /// How many recordings wait for review (the sidebar's number), read again only when the folder or a recording changed.
