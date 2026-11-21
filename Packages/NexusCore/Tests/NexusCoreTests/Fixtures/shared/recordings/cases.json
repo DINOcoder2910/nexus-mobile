@@ -1,0 +1,92 @@
+{
+  "rule": "recordings",
+  "about": "Recordings (docs/data-format.md \"Recordings\"): a time as a clock, a start time as the summary says it (offset in minutes from UTC), the status from recording.json's state and the files present, what Claude answered read into a proposal (null when it has no title), summary.md, a filed task's note, and a class added to its subject's teaching.md (newest first, under the heading). The laptop's old app has no recordings: the Rust core and NexusCore run these.",
+  "clock": [[0, "0:00"], [59.9, "0:59"], [75, "1:15"], [3600, "1:00:00"], [3725, "1:02:05"]],
+  "stamp": [
+    { "iso": "2026-11-21T09:00:00.000Z", "offset": 330, "stamp": "Sat 21 Nov 2026, 14:30", "day": "2026-11-21" },
+    { "iso": "2026-11-21T20:00:00Z", "offset": 330, "stamp": "Sun 22 Nov 2026, 01:30", "day": "2026-11-22" },
+    { "iso": "2026-03-01T00:30:00.000Z", "offset": -300, "stamp": "Sat 28 Feb 2026, 19:30", "day": "2026-02-28" }
+  ],
+  "status": [
+    { "about": "still recording, whatever is there", "state": "recording", "files": ["transcript", "proposal"], "expect": "recording" },
+    { "state": "transcribing", "files": [], "expect": "transcribing" },
+    { "state": "failed", "files": ["transcript"], "expect": "failed" },
+    { "about": "done but no words: something went wrong", "state": "done", "files": [], "expect": "failed" },
+    { "state": "done", "files": ["transcript"], "expect": "preparing" },
+    { "state": "done", "files": ["transcript", "proposal"], "expect": "review" },
+    { "state": "done", "files": ["transcript", "proposal", "filed"], "expect": "filed" },
+    { "about": "no state is done", "files": ["proposal"], "expect": "review" }
+  ],
+  "reply": [
+    {
+      "about": "in a fence with words around it: trimmed title, empty people and speakers left out, speakers by label, a task with no title and a date that isn't a day left out, a time that isn't HH:MM dropped, times said as mm:ss or seconds (to a tenth)",
+      "text": "Here it is:\n```json\n{ \"title\": \"  Meeting with Ms K about the EE  \", \"subject\": \"econ\", \"people\": [\"Ms K\", \"\"], \"speakers\": {\"S2\": \"You\", \"S1\": \"Ms K\", \"S3\": \"\"}, \"summary\": \"About the **EE**.\", \"decisions\": [\"Draft by the 28th\"], \"tasks\": [{\"title\": \"Send the outline\", \"due\": \"2026-11-27\", \"at\": \"12:04\", \"note\": \"She wants one page\"}, {\"title\": \"  \"}, {\"title\": \"Book a check-in\", \"due\": \"Friday\", \"at\": 75.25, \"take\": false}], \"dates\": [{\"what\": \"EE draft\", \"date\": \"2026-11-28\", \"time\": \"9:00\", \"at\": \"1:02:05\"}, {\"what\": \"Bad\", \"date\": \"28 Nov\"}, {\"what\": \"Meeting\", \"date\": \"2026-12-01\", \"time\": \"9am\"}], \"class\": null, \"model\": \"claude-sonnet-5-5\" }\n```\nDone.",
+      "subjects": ["econ", "chem"],
+      "expect": { "title": "Meeting with Ms K about the EE", "subject": "econ", "people": ["Ms K"], "speakers": { "S1": "Ms K", "S2": "You" }, "summary": "About the **EE**.", "decisions": ["Draft by the 28th"],
+        "tasks": [{ "title": "Send the outline", "due": "2026-11-27", "at": 724, "note": "She wants one page" }, { "title": "Book a check-in", "at": 75.3, "take": false }],
+        "dates": [{ "what": "EE draft", "date": "2026-11-28", "time": "9:00", "at": 3725 }, { "what": "Meeting", "date": "2026-12-01" }],
+        "model": "claude-sonnet-5-5" }
+    },
+    {
+      "about": "a subject not in the list is the Inbox; a class's empty unit left out; its teaching note unticked",
+      "text": "{\"title\": \"Redox\", \"subject\": \"physics\", \"summary\": \"x\", \"class\": {\"unit\": \"\", \"taught\": \"Half-equations\", \"examples\": [\"MnO4-\"], \"teaching\": \"Atoms, O, H, charge\"}, \"takeTeaching\": false}",
+      "subjects": ["chem"],
+      "expect": { "title": "Redox", "subject": null, "people": [], "speakers": {}, "summary": "x", "decisions": [], "tasks": [], "dates": [],
+        "class": { "taught": "Half-equations", "examples": ["MnO4-"], "teaching": "Atoms, O, H, charge" }, "takeTeaching": false }
+    },
+    { "about": "\"inbox\" is the Inbox", "text": "{\"title\": \"A\", \"subject\": \"inbox\"}", "subjects": ["inbox"],
+      "expect": { "title": "A", "subject": null, "people": [], "speakers": {}, "summary": "", "decisions": [], "tasks": [], "dates": [] } },
+    { "about": "no title: nothing to file", "text": "{\"summary\": \"x\"}", "subjects": [], "expect": null },
+    { "about": "no JSON at all", "text": "Sorry, I couldn't hear anything.", "subjects": [], "expect": null }
+  ],
+  "summary": [
+    {
+      "about": "a class with everything: unticked tasks left out, the pictures from recording.json",
+      "meta": { "format": "nexus-recordings/1", "id": "a1b2c3d4", "kind": "class", "title": "Class", "started": "2026-11-21T03:40:00.000Z", "duration": 2940, "device": "iPhone", "state": "done", "audio": "audio.m4a",
+        "pictures": [{ "file": "pictures/0310.jpg", "at": 310 }, { "file": "pictures/1505.jpg", "at": 1505 }] },
+      "offset": 330,
+      "subjectName": "Chemistry HL",
+      "proposal": { "title": "Redox: half-equations", "subject": "chem", "people": ["Mr Hale"], "speakers": {}, "summary": "How to balance half-equations.\n", "decisions": [],
+        "tasks": [{ "title": "Do the sheet, Q1–6", "due": "2026-11-24", "at": 2810 }, { "title": "Skip me", "take": false }],
+        "dates": [{ "what": "Redox quiz", "date": "2026-11-27", "time": "09:10" }],
+        "class": { "unit": "R3.2", "taught": "1. Oxidation states\n2. Half-equations", "examples": ["MnO₄⁻ → Mn²⁺"], "teaching": "Atoms, O, H, charge." } },
+      "expect": "# Redox: half-equations\n\nClass, Sat 21 Nov 2026, 09:10, 49:00 · Chemistry HL\n\nWith: Mr Hale\n\n## Summary\n\nHow to balance half-equations.\n\n## To do\n\n- [ ] Do the sheet, Q1–6 (by 2026-11-24) · 46:50\n\n## Dates\n\n- 2026-11-27 09:10: Redox quiz\n\n## What was taught (R3.2)\n\n1. Oxidation states\n2. Half-equations\n\n## Examples\n\n- MnO₄⁻ → Mn²⁺\n\n## How it was taught\n\nAtoms, O, H, charge.\n\n## Pictures\n\n- 5:10: ![](pictures/0310.jpg)\n- 25:05: ![](pictures/1505.jpg)\n\n[The full transcript](transcript.md)\n"
+    },
+    {
+      "about": "a meeting in the Inbox with only a summary and a decision",
+      "meta": { "format": "nexus-recordings/1", "id": "e5f6g7h8", "kind": "meeting", "title": "Meeting", "started": "2026-11-21T09:00:00Z", "duration": 36, "device": "iPhone", "state": "done", "audio": "audio.m4a", "pictures": [] },
+      "offset": 0,
+      "subjectName": null,
+      "proposal": { "title": "Quick chat", "subject": null, "people": [], "speakers": {}, "summary": "  Nothing much.  ", "decisions": ["Meet again"], "tasks": [], "dates": [] },
+      "expect": "# Quick chat\n\nMeeting, Sat 21 Nov 2026, 09:00, 0:36\n\n## Summary\n\nNothing much.\n\n## Decided\n\n- Meet again\n\n[The full transcript](transcript.md)\n"
+    }
+  ],
+  "taskNote": [
+    { "task": { "title": "Send", "at": 724, "note": "One page" }, "title": "Meeting with Ms K", "path": "recordings/2026-11-21 1430 Meeting",
+      "expect": "One page\nFrom the recording “Meeting with Ms K” at 12:04 (recordings/2026-11-21 1430 Meeting)." },
+    { "task": { "title": "Send" }, "title": "Meeting with Ms K", "path": "recordings/2026-11-21 1430 Meeting",
+      "expect": "From the recording “Meeting with Ms K” (recordings/2026-11-21 1430 Meeting)." }
+  ],
+  "teaching": [
+    {
+      "about": "the first class: the heading is made",
+      "existing": null, "subjectName": "Chemistry HL", "date": "2026-11-21", "title": "Redox", "path": "recordings/2026-11-21 0910 Class",
+      "class": { "unit": "R3.2", "taught": "x", "examples": ["MnO₄⁻"], "teaching": "Atoms first." },
+      "expect": "# How Chemistry HL is taught\n\nWhat each recorded class showed about how it is taught, newest first. The tutor reads this to explain things the way your class does.\n\n## 2026-11-21: Redox (R3.2)\n\nAtoms first.\n\nExamples used:\n- MnO₄⁻\n\n[The class](recordings/2026-11-21 0910 Class/summary.md)\n"
+    },
+    {
+      "about": "the next class goes above the last, one blank line between",
+      "existing": "# How Chemistry HL is taught\n\nWhat each recorded class showed about how it is taught, newest first. The tutor reads this to explain things the way your class does.\n\n## 2026-11-21: Redox (R3.2)\n\nAtoms first.\n\nExamples used:\n- MnO₄⁻\n\n[The class](recordings/2026-11-21 0910 Class/summary.md)\n",
+      "subjectName": "Chemistry HL", "date": "2026-11-24", "title": "Cells", "path": "recordings/2026-11-24 0910 Class",
+      "class": { "taught": "y", "examples": [], "teaching": "" },
+      "expect": "# How Chemistry HL is taught\n\nWhat each recorded class showed about how it is taught, newest first. The tutor reads this to explain things the way your class does.\n\n## 2026-11-24: Cells\n\n(nothing noted)\n\n[The class](recordings/2026-11-24 0910 Class/summary.md)\n\n## 2026-11-21: Redox (R3.2)\n\nAtoms first.\n\nExamples used:\n- MnO₄⁻\n\n[The class](recordings/2026-11-21 0910 Class/summary.md)\n"
+    },
+    {
+      "about": "a file the user wrote with no class yet keeps what they wrote above",
+      "existing": "# Chemistry notes on teaching\n\nMy own words.\n",
+      "subjectName": "Chemistry HL", "date": "2026-11-24", "title": "Cells", "path": "recordings/2026-11-24 0910 Class",
+      "class": { "taught": "y", "examples": [], "teaching": "Uses diagrams." },
+      "expect": "# Chemistry notes on teaching\n\nMy own words.\n\n## 2026-11-24: Cells\n\nUses diagrams.\n\n[The class](recordings/2026-11-24 0910 Class/summary.md)\n"
+    }
+  ]
+}

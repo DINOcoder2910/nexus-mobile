@@ -495,9 +495,9 @@ public enum Recordings {
     // MARK: accepting
 
     /// summary.md, written when the user accepts.
-    public static func summaryMarkdown(meta: Meta, proposal p: Proposal, subjectName: String?) -> String {
+    public static func summaryMarkdown(meta: Meta, proposal p: Proposal, subjectName: String?, zone: TimeZone = .current) -> String {
         var l = ["# \(p.title)", ""]
-        let when = meta.startedDate.map { localStamp($0) } ?? meta.started
+        let when = meta.startedDate.map { localStamp($0, zone: zone) } ?? meta.started
         var facts = ["\(meta.kind.word), \(when), \(clock(meta.duration))"]
         if let s = subjectName { facts.append(s) }
         l.append(facts.joined(separator: " · "))
@@ -541,7 +541,10 @@ public enum Recordings {
         entry += ["", "[The class](\(path)/\(summaryFile))"]
         // the entry goes after the head (the part before the first "## ")
         if let r = body.range(of: "\n## ") {
-            return String(body[..<r.lowerBound]) + "\n\n" + entry.joined(separator: "\n") + "\n" + String(body[r.lowerBound...]) + "\n"
+            var above = String(body[..<r.lowerBound])
+            while above.last?.isWhitespace == true { above.removeLast() }
+            let below = String(body[r.lowerBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            return above + "\n\n" + entry.joined(separator: "\n") + "\n\n" + below + "\n"
         }
         return body + "\n\n" + entry.joined(separator: "\n") + "\n"
     }
@@ -629,10 +632,10 @@ public enum Recordings {
         return f.date(from: iso)
     }
 
-    /// "Sat 21 Nov 2026, 14:30" in the device's time zone.
+    /// "Sat 21 Nov 2026, 14:30" in the device's time zone (fixed English names: the Rust core writes the same).
     public static func localStamp(_ d: Date, zone: TimeZone = .current) -> String {
         let f = DateFormatter()
-        f.locale = Locale(identifier: "en_GB"); f.timeZone = zone; f.dateFormat = "EEE d MMM yyyy, HH:mm"
+        f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = zone; f.dateFormat = "EEE d MMM yyyy, HH:mm"
         return f.string(from: d)
     }
 
