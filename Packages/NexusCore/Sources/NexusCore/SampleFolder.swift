@@ -17,11 +17,13 @@ public enum SampleFolder {
                     due: \(d(2))
                     key: true
                     est: 2h
+                    note: "The questions: [[files/Physics HW sheet.pdf]]"
                     subtasks:
                       - id: smp4
                         title: Q1–5
                         plan: [\(today) 16:00]
                         est: 45m
+                        note: "On [[files/Physics HW sheet.pdf]]"
                       - id: smp5
                         title: Q6–10
                         plan: [\(d(1))]
@@ -110,6 +112,9 @@ public enum SampleFolder {
         ]
         var all = files.mapValues { Data($0.utf8) }
         for (rel, data) in study(today: today) { all[rel] = data }
+        // the sheet the physics homework points at (Next up's file and Write on it)
+        all["classes/physics-hl/files/Physics HW sheet.pdf"] = pdf(["Physics HW sheet: waves", "1. A wave has a frequency of 5 Hz and a wavelength of 2 m. Find its speed.",
+                                                                   "2. Sketch a transverse wave and label its amplitude and wavelength."])
         for (rel, data) in all {
             let url = root.appendingPathComponent(rel)
             try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
