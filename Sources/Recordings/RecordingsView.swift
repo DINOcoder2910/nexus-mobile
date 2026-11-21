@@ -94,14 +94,10 @@ struct RecordButtons: View {
 
     var body: some View {
         if let a = rec.active {
-            HStack {
-                Circle().fill(.red).frame(width: 10, height: 10)
-                Text("\(a.meta.kind.word) · \(Recordings.clock(rec.elapsed))").monospacedDigit().font(big ? .title3.weight(.semibold) : .body.weight(.semibold))
-                Spacer()
-                Button { rec.snap() } label: { Label("Snap", systemImage: "camera") }.buttonStyle(.bordered)
-                Button(role: .destructive) { Task { await rec.stop() } } label: { Label("Stop", systemImage: "stop.fill") }
-                    .buttonStyle(.borderedProminent).tint(.red)
-                    .accessibilityIdentifier("rec-stop")
+            // the buttons keep their words where they fit (the iPad), else show only their pictures (the iPhone), never wrapped
+            ViewThatFits(in: .horizontal) {
+                running(a, words: true)
+                running(a, words: false)
             }
             .padding(.vertical, big ? 8 : 2)
         } else {
@@ -120,6 +116,26 @@ struct RecordButtons: View {
                 }
             }
             .padding(.vertical, 4)
+        }
+    }
+
+    private func running(_ a: RecordingService.Active, words: Bool) -> some View {
+        HStack {
+            Circle().fill(.red).frame(width: 10, height: 10)
+            Text("\(a.meta.kind.word) · \(Recordings.clock(rec.elapsed))").monospacedDigit().lineLimit(1).fixedSize()
+                .font(big ? .title3.weight(.semibold) : .body.weight(.semibold))
+            Spacer(minLength: 8)
+            Button { rec.snap() } label: {
+                if words { Label("Snap", systemImage: "camera").fixedSize() } else { Image(systemName: "camera") }
+            }
+            .buttonStyle(.bordered)
+            .accessibilityLabel("Snap a picture")
+            Button(role: .destructive) { Task { await rec.stop() } } label: {
+                if words { Label("Stop", systemImage: "stop.fill").fixedSize() } else { Image(systemName: "stop.fill") }
+            }
+            .buttonStyle(.borderedProminent).tint(.red)
+            .accessibilityLabel("Stop")
+            .accessibilityIdentifier("rec-stop")
         }
     }
 }
@@ -399,26 +415,50 @@ struct RecordingPage: View {
     }
 }
 
-/// While recording, on every screen: a red pill with the time, Snap and Stop; filming shows the camera full screen instead.
-struct RecordingTopBar: ViewModifier {
+/// While recording sound, on every other screen: a floating pill with the time, Snap and Stop, like the running timer's.
+/// (A bar along the top was tried first: the navigation bars don't move for it, so it sat under their buttons.)
+struct RecordingPill: View {
+    @State private var rec = RecordingService.shared
+
+    var body: some View {
+        if let a = rec.active, !a.filming {
+            HStack(spacing: 10) {
+                Circle().fill(.red).frame(width: 10, height: 10)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Recording \(a.meta.kind.word.lowercased())").font(.subheadline.weight(.semibold)).lineLimit(1)
+                    Text(Recordings.clock(rec.elapsed)).font(.caption).monospacedDigit().foregroundStyle(.secondary)
+                }
+                Button { rec.snap() } label: {
+                    Image(systemName: "camera.fill").font(.subheadline).frame(width: 34, height: 34).background(.thinMaterial, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Snap a picture")
+                Button { Task { await rec.stop() } } label: {
+                    Image(systemName: "stop.fill").font(.subheadline).foregroundStyle(.white).frame(width: 34, height: 34).background(.red, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Stop recording").accessibilityIdentifier("rec-pill-stop")
+            }
+            .padding(.leading, 14).padding(.trailing, 6).padding(.vertical, 6)
+            .background(.regularMaterial, in: Capsule())
+            .shadow(color: .black.opacity(0.15), radius: 8, y: 3)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("rec-pill")
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+    }
+}
+
+/// What recording puts over a window: the camera for Snap, the full-screen camera while filming, problems; on the iPad also
+/// the pill (`pill`; the iPhone puts it in each tab, above the tab bar).
+struct RecordingCovers: ViewModifier {
+    var pill: Bool
     @State private var rec = RecordingService.shared
 
     func body(content: Content) -> some View {
         content
-            .safeAreaInset(edge: .top, spacing: 0) {
-                if let a = rec.active, !a.filming {
-                    HStack(spacing: 10) {
-                        Circle().fill(.red).frame(width: 9, height: 9)
-                        Text("Recording \(a.meta.kind.word.lowercased()) · \(Recordings.clock(rec.elapsed))").font(.subheadline.weight(.semibold)).monospacedDigit()
-                        Spacer()
-                        Button { rec.snap() } label: { Image(systemName: "camera.fill") }.accessibilityLabel("Snap a picture")
-                        Button { Task { await rec.stop() } } label: { Image(systemName: "stop.fill").foregroundStyle(.red) }
-                            .accessibilityLabel("Stop recording").accessibilityIdentifier("rec-bar-stop")
-                    }
-                    .padding(.horizontal, 14).padding(.vertical, 8)
-                    .background(.red.opacity(0.12))
-                    .accessibilityIdentifier("rec-bar")
-                }
+            .overlay(alignment: .bottom) {
+                if pill { RecordingPill().padding(.bottom, 20).animation(.snappy, value: rec.active == nil) }
             }
             .sheet(isPresented: Binding(get: { rec.snapping }, set: { rec.snapping = $0 })) {
                 SnapCamera { img in
@@ -460,7 +500,7 @@ struct RecordingTopBar: ViewModifier {
 }
 
 extension View {
-    func recordingBar() -> some View { modifier(RecordingTopBar()) }
+    func recordingCovers(pill: Bool) -> some View { modifier(RecordingCovers(pill: pill)) }
 }
 
 /// How many recordings wait for review (the sidebar's number), read again only when the folder or a recording changed.

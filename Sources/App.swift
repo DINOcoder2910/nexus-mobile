@@ -243,8 +243,8 @@ struct RootView: View {
         .onChange(of: router.ideas) { _, _ in answerRouter() }
         .onChange(of: router.quick) { _, _ in answerRouter() }
         // the quick page (the Action button), over everything; recording shows its bar on every screen
-        .fullScreenCover(isPresented: $quickOpen) { QuickPage(close: { quickOpen = false }).environment(store).recordingBar() }
-        .recordingBar()
+        .fullScreenCover(isPresented: $quickOpen) { QuickPage(close: { quickOpen = false }).environment(store).recordingCovers(pill: false) }
+        .recordingCovers(pill: !Device.isPhone && screen != .recordings)
         .task {
             AppServices.start()
             if router.front == nil { router.front = windowId }
@@ -502,15 +502,20 @@ struct RootView: View {
                 .animation(.snappy, value: store.toast == nil)
             }
         }
-        // the running timer, over every tab (its task opens on a tap; Stop)
+        // a recording (not on Recordings, which has its own Stop) and the running timer, over every tab (Snap, Stop; the timer's task opens on a tap)
         .overlay(alignment: .bottomLeading) {
-            if store.snapshot.isDataFolder && TimeTracker.shared.current != nil && path.wrappedValue.last != .claude {
-                RunningTimerPill()
-                    .padding(.leading, 16)
-                    .padding(.trailing, 92)
-                    .padding(.bottom, (store.toast == nil ? 22 : 88) + (which == .calendar ? 56 : 0))
-                    .animation(.snappy, value: store.toast == nil)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            let recording = RecordingService.shared.active.map { !$0.filming } == true && path.wrappedValue.last != .recordings
+            let timing = store.snapshot.isDataFolder && TimeTracker.shared.current != nil
+            if (recording || timing) && path.wrappedValue.last != .claude {
+                VStack(alignment: .leading, spacing: 8) {
+                    if recording { RecordingPill() }
+                    if timing { RunningTimerPill().transition(.move(edge: .bottom).combined(with: .opacity)) }
+                }
+                .padding(.leading, 16)
+                .padding(.trailing, 92)
+                .padding(.bottom, (store.toast == nil ? 22 : 88) + (which == .calendar ? 56 : 0))
+                .animation(.snappy, value: store.toast == nil)
+                .animation(.snappy, value: recording)
             }
         }
         .overlay(alignment: .bottom) { UndoBar().animation(.snappy, value: store.toast) }

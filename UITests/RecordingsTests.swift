@@ -4,7 +4,7 @@ import UIKit
 /// Recordings on the iPad (this class) and the iPhone (RecordingsPhoneTests), on sample data with a class and a meeting already
 /// recorded and prepared (-NexusTestRecordings, Sources/Recordings/RecordingDemo.swift: no microphone, speech model or Claude):
 /// the list, a class to review with its teaching notes, accepting a meeting (its tasks land in the subject), recording from the
-/// list with the bar on every screen, and the quick page the Action button opens. "rec-…" / "phone-rec-…" screenshots are printed
+/// list with the pill on other screens, and the quick page the Action button opens. "rec-…" / "phone-rec-…" screenshots are printed
 /// in ui-check's log.
 class RecordingsTests: XCTestCase {
     let app = XCUIApplication()
@@ -104,6 +104,13 @@ class RecordingsTests: XCTestCase {
         XCTAssertTrue(app.buttons["rec-stop"].firstMatch.waitForExistence(timeout: 10), "recording didn't start")
         sleep(1)
         shot("rec-7-recording")
+        // on another screen the pill shows the recording, with its own Stop
+        if phone { app.tabBars.buttons["Today"].tap() } else { app.buttons["Today"].firstMatch.tap() }
+        XCTAssertTrue(app.buttons["rec-pill-stop"].firstMatch.waitForExistence(timeout: 10), "no recording pill on Today")
+        sleep(1)
+        shot("rec-7b-pill")
+        if phone { app.tabBars.buttons["More"].tap() } else { app.buttons["Recordings"].firstMatch.tap() }
+        XCTAssertTrue(app.buttons["rec-stop"].firstMatch.waitForExistence(timeout: 10), "back on Recordings, no Stop")
         app.buttons["rec-stop"].firstMatch.tap()
         XCTAssertTrue(app.buttons["rec-start-meeting"].firstMatch.waitForExistence(timeout: 10), "recording didn't stop")
         let ready = app.staticTexts["Ready to review"].firstMatch
