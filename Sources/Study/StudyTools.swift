@@ -53,7 +53,7 @@ struct StudyToolRows: View {
                     Image(systemName: StudyTools.icon(t.name)).foregroundStyle(Theme.accent).frame(width: 24)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(t.title)
-                        Text(ready ? t.desc : "Comes from the laptop: open Nexus there to send it").font(.caption).foregroundStyle(.secondary)
+                        Text(ready ? t.desc : "Comes from the laptop: open Nexus there to send it").font(.nx(.caption)).foregroundStyle(.secondary)
                     }
                 }
             }

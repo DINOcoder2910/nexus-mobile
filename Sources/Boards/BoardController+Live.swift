@@ -60,6 +60,12 @@ extension BoardController {
     /// Pencil down on the canvas: the laptop shows that this iPad is drawing here.
     func canvasViewDidBeginUsingTool(_ canvasView: PKCanvasView) {
         LivePresence.shared.tell(board: path, what: "drawing")
+        quickRing.writing(true)
+    }
+
+    /// Pencil up: the quick ring comes back a moment later.
+    func canvasViewDidEndUsingTool(_ canvasView: PKCanvasView) {
+        quickRing.writing(false)
     }
 
     /// Typing in a block (the block editor calls this on each change): the laptop shows "Typing on the iPad" on it.

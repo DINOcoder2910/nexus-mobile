@@ -54,43 +54,22 @@ struct CaptureSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    TextField(parent == nil ? "What needs doing?" : "Subtask", text: $title, axis: .vertical)
-                        .font(.title3)
-                        .focused($focused)
-                        .autocorrectionDisabled()
-                        .submitLabel(.done)
-                        .onSubmit(addIt)
-                    if let parent { Label("Under “\(parent.text)”", systemImage: "arrow.turn.down.right").font(.callout).foregroundStyle(.secondary) }
-                    preview
-                }
-                Section {
-                    if parent == nil {
-                        Picker(selection: Binding(get: { effWorkstream }, set: { workstream = $0; workstreamPicked = true })) {
-                            Text("Inbox").tag(String?.none)
-                            ForEach(store.snapshot.groups) { g in
-                                Section(g.label) {
-                                    ForEach(store.snapshot.workstreams(in: g).filter { !$0.finished || $0.id == effWorkstream }) { w in
-                                        Text(w.name).tag(Optional(w.id))
-                                    }
-                                }
-                            }
-                        } label: { Label("Workstream", systemImage: "folder") }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    card
+                    fields
+                    if pickingDue || pickingPlan { picker }
+                    if !added.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Added").font(.nx(.subheadline, .semibold)).foregroundStyle(Kit.muted)
+                            ForEach(added, id: \.self) { Label($0, systemImage: "checkmark").font(.nx(.callout)).foregroundStyle(Kit.muted) }
+                        }
                     }
-                    dayRow("Deadline", icon: "flag", value: Binding(get: { effDue }, set: { due = $0; duePicked = true }), picking: $pickingDue)
-                    dayRow("Planned for", icon: "calendar", value: Binding(get: { effPlan.first?.day }, set: { plan = $0; planPicked = true }),
-                           picking: $pickingPlan)
-                    Toggle(isOn: Binding(get: { effKey }, set: { key = $0; keyPicked = true })) { Label("Key date ★", systemImage: "star") }.tint(Theme.key)
-                    Picker(selection: Binding(get: { effEst }, set: { est = $0; estPicked = true })) {
-                        Text("None").tag(String?.none)
-                        ForEach(estOptions, id: \.self) { Text($0).tag(Optional($0)) }
-                    } label: { Label("Estimate", systemImage: "hourglass") }
                 }
-                if !added.isEmpty {
-                    Section("Added") { ForEach(added, id: \.self) { Label($0, systemImage: "checkmark").foregroundStyle(.secondary) } }
-                }
+                .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 20)
             }
+            .background(Kit.page)
+            .safeAreaInset(edge: .bottom, spacing: 0) { inputBar }
             .navigationTitle(parent == nil ? "New task" : "New subtask")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -105,7 +84,219 @@ struct CaptureSheet: View {
         }
     }
 
-    // MARK: the preview
+    // MARK: the line, and what was read
+
+    /// The line at the bottom, as the laptop's capture bar: a plus, the words, and the round Add.
+    private var inputBar: some View {
+        HStack(alignment: .bottom, spacing: 10) {
+            Image(systemName: "plus").font(.system(size: 15, weight: .medium)).foregroundStyle(Kit.faint).padding(.bottom, 9)
+            TextField(parent == nil ? "What needs doing? “chem lab report by fri 2h; data; graph by mon”" : "Subtask", text: $title, axis: .vertical)
+                .font(.nx(size: 18))
+                .lineLimit(1...4)
+                .focused($focused)
+                .autocorrectionDisabled()
+                .submitLabel(.done)
+                .onSubmit(addIt)
+                .padding(.vertical, 7)
+                .accessibilityIdentifier("capture-field")
+            Button(action: addIt) {
+                Image(systemName: "arrow.up").font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
+                    .frame(width: 38, height: 38)
+                    .background(parsed.kind == .task && parsed.ok ? Theme.accent : Kit.faint, in: Circle())
+            }
+            .buttonStyle(.plain)
+            .disabled(!(parsed.kind == .task && parsed.ok))
+            .accessibilityLabel("Add it")
+        }
+        .padding(.leading, 16).padding(.trailing, 8).padding(.vertical, 8)
+        .background(Kit.page, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Theme.accent.opacity(focused ? 0.55 : 0.2), lineWidth: 1.5))
+        .shadow(color: .black.opacity(0.08), radius: 10, y: 2)
+        .padding(.horizontal, 16).padding(.bottom, 10).padding(.top, 6)
+        .background(Kit.page.opacity(0.94))
+    }
+
+    /// The line with what it set lit up: deadlines and planned days amber, the rest on a tone, a dropped time struck through.
+    private var lit: Text {
+        let chars = Array(title)
+        var spans = parsed.spans.filter { $0.start >= 0 && $0.end <= chars.count && $0.start < $0.end }.sorted { $0.start < $1.start }
+        spans = spans.reduce(into: []) { out, s in if let l = out.last, s.start < l.end { return }; out.append(s) }
+        var out = Text("")
+        var at = 0
+        for s in spans {
+            if s.start > at { out = out + Text(String(chars[at..<s.start])).foregroundColor(Kit.ink) }
+            let w = String(chars[s.start..<s.end])
+            switch s.kind {
+            case .due, .plan, .time: out = out + Text(w).foregroundColor(Theme.soon).fontWeight(.medium)
+            case .dropped: out = out + Text(w).foregroundColor(Kit.faint).strikethrough()
+            case .ws: out = out + Text(w).foregroundColor(Theme.accent).fontWeight(.medium)
+            case .key: out = out + Text(w).foregroundColor(Theme.key).fontWeight(.semibold)
+            case .sub: out = out + Text(w).foregroundColor(Kit.faint)
+            default: out = out + Text(w).foregroundColor(Kit.muted).fontWeight(.medium)
+            }
+            at = s.end
+        }
+        if at < chars.count { out = out + Text(String(chars[at...])).foregroundColor(Kit.ink) }
+        return out
+    }
+
+    /// What will be added: the title, the chips of what it read, its subtasks, the warnings, and where it goes.
+    @ViewBuilder
+    private var card: some View {
+        let main = chips
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(parent.map { "Under “\($0.text)”" } ?? "Add a task").font(.nx(.subheadline)).foregroundStyle(Kit.faint)
+                if parsed.kind == .task && parsed.ok {
+                    (effKey ? Text("★ ").foregroundColor(Theme.key) : Text(""))
+                        + Text(parsed.title).foregroundColor(Kit.ink)
+                }
+            }
+            .font(.nx(size: 18, .semibold))
+            if title.isEmpty {
+                Text("Type a task the way you'd say it: “physics sheet by fri 45m”, “email Ms Chen on mon 4pm”, “lab ★”. A “;” starts a subtask.")
+                    .font(.nx(.callout)).foregroundStyle(Kit.muted)
+            } else {
+                lit.font(.nx(.callout)).padding(.horizontal, 10).padding(.vertical, 7)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Kit.rests, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .accessibilityIdentifier("capture-lit")
+            }
+            if !main.isEmpty {
+                FlowRow(spacing: 6) { ForEach(Array(main.enumerated()), id: \.offset) { _, c in chipView(c) } }
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("capture-chips")
+            }
+            ForEach(Array(parsed.subtasksToAdd.enumerated()), id: \.offset) { _, s in
+                HStack(spacing: 8) {
+                    Circle().strokeBorder(Kit.faint, lineWidth: 1.5).frame(width: 11, height: 11)
+                    Text(s.title).font(.nx(.callout)).foregroundStyle(Kit.ink)
+                    let extra = subChips(s).map(\.text).joined(separator: " · ")
+                    if !extra.isEmpty { Text("· " + extra).font(.nx(.callout)).foregroundStyle(Kit.faint) }
+                }
+            }
+            ForEach(Array(warnings.enumerated()), id: \.offset) { _, w in
+                Label(w, systemImage: "questionmark.circle").font(.nx(.footnote)).foregroundStyle(Theme.soon)
+            }
+            if parent == nil && parsed.kind == .task { goesTo }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Kit.page, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Kit.line))
+        .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
+        .animation(Kit.snap, value: parsed)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("capture-preview")
+    }
+
+    /// What the line said that needs a look.
+    private var warnings: [String] {
+        guard parsed.kind == .task else { return [] }
+        return parsed.flags.compactMap { f in
+            switch f.code {
+            case .timeDropped: return "\(f.text ?? f.time ?? "The time") left out: a deadline is a whole day (use “on” to plan a time)"
+            case .pastDate: return "\(f.text ?? "That date") is before today"
+            case .ambiguous: return "“\(f.text ?? "")” kept as a word: say “by \(f.text ?? "")” for the day"
+            case .noTitle: return nil
+            }
+        }
+    }
+
+    /// "Goes to Chemistry HL  classes/chemistry/tasks.yaml", and the other places it could go.
+    private var goesTo: some View {
+        let ws = effWorkstream
+        let file = store.workstream(ws)?.tasksFile ?? "inbox.yaml"
+        let others = (landed?.alternatives ?? []).filter { $0?.id != ws }.prefix(3)
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) { goesWords(ws, file); Spacer(minLength: 8); alternatives(Array(others)) }
+            VStack(alignment: .leading, spacing: 6) { goesWords(ws, file); alternatives(Array(others)) }
+        }
+        .font(.nx(.footnote))
+    }
+
+    private func goesWords(_ ws: String?, _ file: String) -> some View {
+        (Text("Goes to ").foregroundColor(Kit.muted) + Text(store.workstream(ws)?.name ?? "Inbox").foregroundColor(Kit.ink).fontWeight(.semibold)
+            + Text("  " + file).foregroundColor(Kit.faint))
+            .lineLimit(1)
+            .accessibilityIdentifier("capture-goes")
+    }
+
+    private func alternatives(_ list: [Workstream?]) -> some View {
+        HStack(spacing: 10) {
+            ForEach(Array(list.enumerated()), id: \.offset) { _, w in
+                Button(w?.name ?? "Inbox") { workstream = w?.id; workstreamPicked = true }
+                    .foregroundStyle(Kit.muted).buttonStyle(.plain)
+            }
+        }
+    }
+
+    // MARK: the field buttons
+
+    private var fields: some View {
+        FlowRow(spacing: 8) {
+            if parent == nil {
+                Menu {
+                    Picker("Workstream", selection: Binding(get: { effWorkstream }, set: { workstream = $0; workstreamPicked = true })) {
+                        Text("Inbox").tag(String?.none)
+                        ForEach(store.snapshot.groups) { g in
+                            Section(g.label) {
+                                ForEach(store.snapshot.workstreams(in: g).filter { !$0.finished || $0.id == effWorkstream }) { w in
+                                    Text(w.name).tag(Optional(w.id))
+                                }
+                            }
+                        }
+                    }
+                } label: { fieldLabel(store.workstream(effWorkstream)?.name ?? "Inbox", icon: "folder", on: effWorkstream != nil, dot: store.color(workstream: effWorkstream)) }
+            }
+            dayMenu("Deadline", icon: "flag", value: Binding(get: { effDue }, set: { due = $0; duePicked = true }), picking: $pickingDue, other: $pickingPlan)
+            dayMenu("Planned", icon: "calendar", value: Binding(get: { effPlan.first?.day }, set: { plan = $0; planPicked = true }), picking: $pickingPlan, other: $pickingDue)
+            Button { key = !effKey; keyPicked = true } label: { fieldLabel(effKey ? "★ Key date" : "☆ Key date", icon: nil, on: effKey, tint: Theme.key) }
+                .buttonStyle(.plain)
+            Menu {
+                Picker("Estimate", selection: Binding(get: { effEst }, set: { est = $0; estPicked = true })) {
+                    Text("None").tag(String?.none)
+                    ForEach(estOptions, id: \.self) { Text($0).tag(Optional($0)) }
+                }
+            } label: { fieldLabel(effEst ?? "Estimate", icon: "clock", on: effEst != nil) }
+        }
+    }
+
+    private func fieldLabel(_ text: String, icon: String?, on: Bool, dot: Color? = nil, tint: Color = Theme.accent) -> some View {
+        HStack(spacing: 6) {
+            if let dot, on { SubjectDot(color: dot, size: 7) } else if let icon { Image(systemName: icon).font(.system(size: 12)) }
+            Text(text).lineLimit(1)
+        }
+        .font(.nx(.subheadline, on ? .medium : .regular))
+        .foregroundStyle(on ? (dot ?? tint) : Kit.muted)
+        .padding(.horizontal, 12).frame(height: 32)
+        .background(on ? (dot ?? tint).opacity(0.13) : Kit.rests, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func dayMenu(_ label: String, icon: String, value: Binding<String?>, picking: Binding<Bool>, other: Binding<Bool>) -> some View {
+        let today = store.today
+        return Menu {
+            Button("None") { value.wrappedValue = nil; picking.wrappedValue = false }
+            Button("Today") { value.wrappedValue = today }
+            Button("Tomorrow") { value.wrappedValue = Days.add(today, 1) }
+            Button("Pick a day…") { other.wrappedValue = false; picking.wrappedValue = true; if value.wrappedValue == nil { value.wrappedValue = Days.add(today, 1) } }
+        } label: {
+            fieldLabel(value.wrappedValue.map { label + " " + Days.relative($0, today: today) } ?? label, icon: icon, on: value.wrappedValue != nil,
+                       tint: label == "Deadline" ? Theme.soon : Theme.accent)
+        }
+    }
+
+    @ViewBuilder
+    private var picker: some View {
+        let due = pickingDue
+        let value = due ? Binding(get: { effDue }, set: { self.due = $0; duePicked = true }) : Binding(get: { effPlan.first?.day }, set: { plan = $0; planPicked = true })
+        if let v = value.wrappedValue {
+            DatePicker(due ? "Deadline" : "Planned", selection: Binding(get: { Days.date(v) ?? Date() }, set: { value.wrappedValue = Days.iso($0) }), displayedComponents: .date)
+                .datePickerStyle(.graphical)
+                .padding(10)
+                .background(Kit.rests, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+    }
 
     /// The chips for what the line says, with the buttons' picks in place of the typed values.
     private var chips: [CaptureChip] {
@@ -124,49 +315,35 @@ struct CaptureSheet: View {
         return out
     }
 
-    @ViewBuilder
-    private var preview: some View {
-        let main = chips
-        if !main.isEmpty {
-            chipRow(main)
-            ForEach(Array(parsed.subtasksToAdd.enumerated()), id: \.offset) { _, s in
-                HStack(spacing: 6) {
-                    Image(systemName: "arrow.turn.down.right").imageScale(.small).foregroundStyle(.secondary)
-                    Text(s.title).font(.callout)
-                    chipRow(subChips(s))
-                }
-            }
-        }
-    }
-
     private func subChips(_ s: CaptureSubtask) -> [CaptureChip] {
         var p = CaptureParsed(kind: .task)
         p.ok = s.ok; p.title = s.title; p.facts = s.facts; p.flags = s.flags
         return CaptureParse.chips(p, landing: nil, today: store.today)
     }
 
-    private func chipRow(_ list: [CaptureChip]) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(Array(list.enumerated()), id: \.offset) { _, c in chipView(c) }
-            }
-        }
-    }
-
+    /// A chip as the laptop's preview draws it: the subject outlined in its colour ("from “chem”" when guessed), a deadline amber.
     @ViewBuilder
     private func chipView(_ c: CaptureChip) -> some View {
-        switch c.kind {
-        case .ws: Chip(text: c.text + c.tail, icon: c.workstream == nil ? "tray" : "folder", color: store.color(workstream: c.workstream), strong: true)
-        case .due: Chip(text: c.text, icon: "flag", color: Theme.late)
-        case .dropped: Chip(text: c.text + " left out: deadlines are whole days", icon: "clock", color: .secondary)
-        case .plan: Chip(text: c.text, icon: "calendar", color: Theme.planned)
-        case .est: Chip(text: c.text, icon: "hourglass", color: .secondary)
-        case .key: Chip(text: c.text, color: Theme.key, strong: true)
-        case .every: Chip(text: c.text, icon: "repeat", color: .secondary)
-        case .waiting: Chip(text: c.text, icon: "person", color: .secondary)
-        case .tag: Chip(text: c.text, icon: "number", color: .secondary)
-        case .subs: Chip(text: c.text, icon: "list.bullet.indent", color: .secondary)
+        let tone: Color = {
+            switch c.kind {
+            case .ws: return store.color(workstream: c.workstream)
+            case .due, .key: return c.kind == .key ? Theme.key : Theme.soon
+            case .plan: return Theme.accent
+            default: return Kit.muted
+            }
+        }()
+        HStack(spacing: 5) {
+            if c.kind == .ws { SubjectDot(color: tone, size: 7) }
+            Text(c.kind == .dropped ? c.text + " left out" : c.text).fontWeight(c.kind == .ws ? .semibold : .regular)
+            if !c.tail.isEmpty { Text(c.tail).foregroundStyle(Kit.faint) }
         }
+        .font(.nx(.subheadline))
+        .foregroundStyle(tone)
+        .strikethrough(c.kind == .dropped)
+        .padding(.horizontal, 10).frame(height: 30)
+        .background(c.kind == .ws ? Color.clear : tone.opacity(c.kind == .est || c.kind == .tag || c.kind == .subs || c.kind == .every || c.kind == .waiting || c.kind == .dropped ? 0.10 : 0.13),
+                    in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(c.kind == .ws ? tone : .clear, lineWidth: 1.5))
     }
 
     // MARK: reading the line
@@ -186,25 +363,6 @@ struct CaptureSheet: View {
         if l.how == .tag, l.workstream?.id != oldTag { workstreamPicked = false }
         parsed = p
         landed = l
-    }
-
-    @ViewBuilder
-    private func dayRow(_ label: String, icon: String, value: Binding<String?>, picking: Binding<Bool>) -> some View {
-        let today = store.today
-        HStack {
-            Label(label, systemImage: icon)
-            Spacer()
-            Menu(value.wrappedValue.map { Days.relative($0, today: today) } ?? "None") {
-                Button("None") { value.wrappedValue = nil; picking.wrappedValue = false }
-                Button("Today") { value.wrappedValue = today }
-                Button("Tomorrow") { value.wrappedValue = Days.add(today, 1) }
-                Button("Pick a day…") { picking.wrappedValue = true; if value.wrappedValue == nil { value.wrappedValue = Days.add(today, 1) } }
-            }
-        }
-        if picking.wrappedValue, let v = value.wrappedValue {
-            DatePicker(label, selection: Binding(get: { Days.date(v) ?? Date() }, set: { value.wrappedValue = Days.iso($0) }), displayedComponents: .date)
-                .datePickerStyle(.graphical)
-        }
     }
 
     // MARK: adding

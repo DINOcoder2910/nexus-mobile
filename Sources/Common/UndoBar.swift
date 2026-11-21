@@ -20,7 +20,7 @@ struct UndoBar: View {
                 Button { store.toast = nil } label: { Image(systemName: "xmark").imageScale(.small) }
                     .foregroundStyle(.secondary)
             }
-            .font(.callout)
+            .font(.nx(.callout))
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
             .frame(maxWidth: 560)

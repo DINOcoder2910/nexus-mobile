@@ -95,6 +95,13 @@ public enum StudyUnits {
         return out
     }
 
+    /// The unit being studied now (the new look's "R3.2 · now", outlined in the subject's colour): the first unit after the last
+    /// done one that isn't done yet. Nothing when no unit is done yet, or every unit after the last done one is done.
+    public static func current(_ units: [Unit]) -> String? {
+        guard let last = units.lastIndex(where: { $0.status == "done" }) else { return nil }
+        return units[(last + 1)...].first { $0.status != "done" }?.code
+    }
+
     // MARK: Practice classifying
 
     public static let levels: [(id: String, label: String, has: [String])] = [

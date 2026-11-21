@@ -46,6 +46,7 @@ enum TestHooks {
         }
         if removed { store.boardsChanged(listChanged: true) }
         UserDefaults.standard.removeObject(forKey: "openNotebooks")
+        UserDefaults.standard.removeObject(forKey: "openSubjects") // every subject closed too (NewLookTests opens one)
         UserDefaults.standard.removeObject(forKey: RecentBoards.key)
         let root = store.folder
         guard !FileManager.default.fileExists(atPath: root.appendingPathComponent("notebooks/School").path) else { return }

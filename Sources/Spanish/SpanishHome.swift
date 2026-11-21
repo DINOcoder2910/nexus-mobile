@@ -113,8 +113,8 @@ struct SpanishHomeContent: View {
             HStack {
                 Label(title, systemImage: icon).foregroundStyle(Color.primary)
                 Spacer()
-                Text(note).foregroundStyle(.secondary).font(.callout)
-                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
+                Text(note).foregroundStyle(.secondary).font(.nx(.callout))
+                Image(systemName: "chevron.right").font(.nx(.caption, .semibold)).foregroundStyle(.tertiary)
             }
         }
         .accessibilityIdentifier("spanish-go-\(title)")
@@ -128,9 +128,9 @@ struct SpanishHomeContent: View {
         let st = SpanishCheck.streak(d.entries)
         if wide {
             HStack(alignment: .firstTextBaseline) {
-                Text("Check a sentence").font(.title3.weight(.semibold))
+                Text("Check a sentence").font(.nx(.title3, .semibold))
                 Text(d.entries.isEmpty ? "" : st > 0 ? "\(st) clean \(st == 1 ? "sentence" : "sentences") in a row" : "\(d.entries.count) \(d.entries.count == 1 ? "sentence" : "sentences") checked")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.nx(.caption)).foregroundStyle(.secondary)
                 Spacer()
                 Button { typing = false; withAnimation { historyOpen.toggle() } } label: { Label("History", systemImage: "clock") }
                     .buttonStyle(.bordered).controlSize(.small)
@@ -138,7 +138,7 @@ struct SpanishHomeContent: View {
             }
         } else if !d.entries.isEmpty {
             Text(st > 0 ? "\(st) clean \(st == 1 ? "sentence" : "sentences") in a row" : "\(d.entries.count) \(d.entries.count == 1 ? "sentence" : "sentences") checked")
-                .font(.caption).foregroundStyle(.secondary)
+                .font(.nx(.caption)).foregroundStyle(.secondary)
         }
         TextField("The question it answers (optional)", text: $question)
             .autocorrectionDisabled()
@@ -163,7 +163,7 @@ struct SpanishHomeContent: View {
             SpanishResultView(run: run).padding(.top, 4)
         } else {
             Text("Mistakes are underlined in red, accents in amber, what you did well in green. Tap any word for its meaning.")
-                .font(.footnote).foregroundStyle(.secondary)
+                .font(.nx(.footnote)).foregroundStyle(.secondary)
         }
         if wide && historyOpen {
             Divider()
@@ -186,14 +186,14 @@ struct SpanishHomeContent: View {
     @ViewBuilder
     private func tutor(_ w: Workstream) -> some View {
         HStack(alignment: .firstTextBaseline) {
-            Text("Tutor").font(.title3.weight(.semibold))
-            Text("explains in English, checks what you write, remembers what you have done").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            Text("Tutor").font(.nx(.title3, .semibold))
+            Text("explains in English, checks what you write, remembers what you have done").font(.nx(.caption)).foregroundStyle(.secondary).lineLimit(1)
             Spacer()
             SpanishModelMenu().controlSize(.small)
         }
         tutorRows
         HStack(spacing: 6) {
-            Text("What the tutor knows:").font(.caption).foregroundStyle(.secondary)
+            Text("What the tutor knows:").font(.nx(.caption)).foregroundStyle(.secondary)
             fileButton("your profile", Spanish.P.profile)
             fileButton("the course", Spanish.P.course)
             fileButton("the skills", Spanish.P.skills)
@@ -221,18 +221,18 @@ struct SpanishHomeContent: View {
         }
         if wide { buttons } else { buttons.buttonStyle(.borderless) }
         if d.chats.isEmpty {
-            Text("No chats yet. Each chat is kept as its own file, with a summary the tutor reads next time.").font(.footnote).foregroundStyle(.secondary)
+            Text("No chats yet. Each chat is kept as its own file, with a summary the tutor reads next time.").font(.nx(.footnote)).foregroundStyle(.secondary)
         } else {
             let lim = allChats ? d.chats.count : (wide ? 5 : 3)
             ForEach(d.chats.prefix(lim)) { c in
                 Button { openChat(path: c.path) } label: {
                     VStack(alignment: .leading, spacing: 2) {
                         HStack {
-                            Text(c.title).font(.callout.weight(.medium)).foregroundStyle(Color.primary)
+                            Text(c.title).font(.nx(.callout, .medium)).foregroundStyle(Color.primary)
                             Spacer()
-                            Text(String(c.started.prefix(10))).font(.caption).foregroundStyle(.secondary)
+                            Text(String(c.started.prefix(10))).font(.nx(.caption)).foregroundStyle(.secondary)
                         }
-                        if !c.summary.isEmpty { Text(c.summary).font(.caption).foregroundStyle(.secondary).lineLimit(2) }
+                        if !c.summary.isEmpty { Text(c.summary).font(.nx(.caption)).foregroundStyle(.secondary).lineLimit(2) }
                     }
                     .contentShape(Rectangle())
                 }
@@ -240,7 +240,7 @@ struct SpanishHomeContent: View {
                 .padding(.vertical, wide ? 4 : 0)
             }
             if d.chats.count > lim {
-                Button("Show all \(d.chats.count)") { allChats = true }.font(.callout).buttonStyle(.borderless)
+                Button("Show all \(d.chats.count)") { allChats = true }.font(.nx(.callout)).buttonStyle(.borderless)
             }
         }
     }
@@ -249,7 +249,7 @@ struct SpanishHomeContent: View {
 
     private func fileButton(_ title: String, _ rel: String) -> some View {
         Button(title) { actions.showFile((lib.workstream(workstreamId)?.folder ?? "") + "/" + rel, title.capitalized) }
-            .font(.caption).buttonStyle(.borderless)
+            .font(.nx(.caption)).buttonStyle(.borderless)
     }
 
     // MARK: Writing and Skills (the iPad's right column)
@@ -257,11 +257,11 @@ struct SpanishHomeContent: View {
     @ViewBuilder
     private var writing: some View {
         HStack(alignment: .firstTextBaseline) {
-            Text("Writing").font(.title3.weight(.semibold))
+            Text("Writing").font(.nx(.title3, .semibold))
             Spacer()
             Button { addingPrompt = true } label: { Label("Add a prompt", systemImage: "plus") }.controlSize(.small).buttonStyle(.bordered)
         }
-        Text("IB Paper 1: 70–150 words · A Language /6 · B Message /6 · C Conceptual understanding /3").font(.caption).foregroundStyle(.secondary)
+        Text("IB Paper 1: 70–150 words · A Language /6 · B Message /6 · C Conceptual understanding /3").font(.nx(.caption)).foregroundStyle(.secondary)
         VStack(alignment: .leading, spacing: 10) { SpanishPromptRows(workstreamId: workstreamId) }
             .buttonStyle(.plain)
     }
@@ -271,20 +271,20 @@ struct SpanishHomeContent: View {
         let d = lib.data(workstreamId)
         let sh = SpanishCheck.solidShare(d.stats, d.status)
         HStack(alignment: .firstTextBaseline) {
-            Text("Skills").font(.title3.weight(.semibold))
+            Text("Skills").font(.nx(.title3, .semibold))
             Spacer()
             Button("All skills") { route = .skills }.controlSize(.small).accessibilityIdentifier("spanish-all-skills")
         }
-        Text("\(sh.solid) of \(sh.of) taught skills solid · \(d.entries.count) \(d.entries.count == 1 ? "sentence" : "sentences") checked").font(.caption).foregroundStyle(.secondary)
+        Text("\(sh.solid) of \(sh.of) taught skills solid · \(d.entries.count) \(d.entries.count == 1 ? "sentence" : "sentences") checked").font(.nx(.caption)).foregroundStyle(.secondary)
         let weak = SpanishCheck.weakest(d.stats, 6)
         if weak.isEmpty {
-            Text("Check a few sentences and the skills that need practice show here.").font(.footnote).foregroundStyle(.secondary)
+            Text("Check a few sentences and the skills that need practice show here.").font(.nx(.footnote)).foregroundStyle(.secondary)
         }
         ForEach(weak, id: \.id) { s in
             HStack {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(Spanish.skillName(s.id)).font(.callout)
-                    Text("\(s.stat.accuracy)% · \(SpanishCheck.statWords[s.stat.status] ?? s.stat.status)").font(.caption).foregroundStyle(.secondary)
+                    Text(Spanish.skillName(s.id)).font(.nx(.callout))
+                    Text("\(s.stat.accuracy)% · \(SpanishCheck.statWords[s.stat.status] ?? s.stat.status)").font(.nx(.caption)).foregroundStyle(.secondary)
                 }
                 Spacer()
                 Button(d.status[s.id] == "reteach" ? "Teach me" : "Practise") {
@@ -388,7 +388,7 @@ struct SpanishSkillsPage: View {
         List {
             Section {
                 Text("\(sh.solid) of \(sh.of) taught skills solid · \(d.entries.count) \(d.entries.count == 1 ? "sentence" : "sentences") checked. Tap a skill's status to change what has been taught.")
-                    .font(.footnote).foregroundStyle(.secondary)
+                    .font(.nx(.footnote)).foregroundStyle(.secondary)
             }
             SpanishSkillsList(workstreamId: workstreamId, onPractise: onPractise)
         }

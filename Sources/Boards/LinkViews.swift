@@ -20,10 +20,10 @@ struct LinkPeek: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title).font(.headline).lineLimit(3)
-            if !detail.isEmpty { Text(detail).font(.footnote).foregroundStyle(.secondary).lineLimit(2) }
+            Text(title).font(.nx(.headline)).lineLimit(3)
+            if !detail.isEmpty { Text(detail).font(.nx(.footnote)).foregroundStyle(.secondary).lineLimit(2) }
             if !text.isEmpty {
-                ScrollView { Text(text).font(.callout).frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled) }
+                ScrollView { Text(text).font(.nx(.callout)).frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled) }
                     .frame(maxHeight: 280)
                     .padding(10)
                     .background(Color(white: 0.96), in: RoundedRectangle(cornerRadius: 8))
@@ -76,7 +76,7 @@ struct LinkTargetPicker: View {
                     Button { onPick(kind, e.id) } label: {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(e.title).foregroundStyle(.primary).lineLimit(2)
-                            if !e.detail.isEmpty { Text(e.detail).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
+                            if !e.detail.isEmpty { Text(e.detail).font(.nx(.caption)).foregroundStyle(.secondary).lineLimit(1) }
                         }
                     }
                 }
@@ -163,7 +163,7 @@ struct LinksList: View {
                 Circle().fill(Color(uiColor: InkConvert.color(r.color))).frame(width: 10, height: 10)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(r.near).foregroundStyle(r.missing ? .secondary : .primary).lineLimit(1)
-                    Text("↔ " + r.far).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                    Text("↔ " + r.far).font(.nx(.subheadline)).foregroundStyle(.secondary).lineLimit(1)
                 }
             }
         }

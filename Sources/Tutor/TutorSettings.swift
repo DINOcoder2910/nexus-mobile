@@ -62,7 +62,7 @@ struct VoicePicker: View {
                                     HStack {
                                         VStack(alignment: .leading) {
                                             Text(v.name)
-                                            Text(v.quality).font(.caption).foregroundStyle(v.rank > 1 ? Color.accentColor : .secondary)
+                                            Text(v.quality).font(.nx(.caption)).foregroundStyle(v.rank > 1 ? Color.accentColor : .secondary)
                                         }
                                         Spacer()
                                         if v.id == current { Image(systemName: "checkmark").foregroundStyle(.tint) }

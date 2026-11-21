@@ -78,16 +78,18 @@ final class PlanWithClaude {
 /// The Plan with Claude button with its progress and result line, for Today and Home. `prominent`: the screen's main button (Home).
 struct PlanWithClaudeButton: View {
     var prominent = false
+    /// false: only the progress and result line (Today's header has its own button).
+    var buttonShown = true
     @Environment(NexusStore.self) private var store
     @Environment(CalendarStore.self) private var calendar
     private var plan: PlanWithClaude { .shared }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
+            if buttonShown { HStack(spacing: 8) {
                 Button { plan.start(store, calendar: calendar) } label: {
                     Label(plan.running ? "Planning…" : "Plan with Claude", systemImage: "sparkles")
-                        .font(.callout.weight(.semibold))
+                        .font(.nx(.callout, .semibold))
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(prominent ? Theme.accent : Theme.claude)
@@ -95,7 +97,7 @@ struct PlanWithClaudeButton: View {
                 .accessibilityIdentifier("plan-with-claude")
                 ClaudeModeChip(small: true)
                 if plan.running { ProgressView().controlSize(.small) }
-            }
+            } }
             if let r = plan.run { result(r) }
         }
         .animation(.snappy, value: plan.run?.done)
@@ -105,15 +107,15 @@ struct PlanWithClaudeButton: View {
     private func result(_ r: PlanRun) -> some View {
         let c = ClaudeChatSession.shared.conversation("main")
         if !r.done {
-            Text(c.status ?? "Working on your day").font(.callout).foregroundStyle(.secondary)
+            Text(c.status ?? "Working on your day").font(.nx(.callout)).foregroundStyle(.secondary)
         } else {
             VStack(alignment: .leading, spacing: 4) {
                 if r.undone {
-                    Text("Put back as it was.").font(.callout).foregroundStyle(.secondary)
+                    Text("Put back as it was.").font(.nx(.callout)).foregroundStyle(.secondary)
                 } else if !r.placedTitles.isEmpty {
-                    Text("Placed on today: " + r.placedTitles.joined(separator: ", ") + ".").font(.callout)
+                    Text("Placed on today: " + r.placedTitles.joined(separator: ", ") + ".").font(.nx(.callout))
                 }
-                if let s = r.summary, !r.undone { Text(s).font(.callout).foregroundStyle(r.failed ? Theme.late : .secondary).lineLimit(3) }
+                if let s = r.summary, !r.undone { Text(s).font(.nx(.callout)).foregroundStyle(r.failed ? Theme.late : .secondary).lineLimit(3) }
                 HStack(spacing: 14) {
                     if !r.placedTitles.isEmpty && !r.undone { Button("Undo") { r.undo(c) }.accessibilityIdentifier("plan-undo") }
                     if r.waiting > 0 {
@@ -123,7 +125,7 @@ struct PlanWithClaudeButton: View {
                     }
                     Button("Done") { plan.dismiss() }.foregroundStyle(.secondary)
                 }
-                .font(.callout.weight(.medium))
+                .font(.nx(.callout, .medium))
                 .buttonStyle(.borderless)
             }
             .accessibilityElement(children: .contain)
