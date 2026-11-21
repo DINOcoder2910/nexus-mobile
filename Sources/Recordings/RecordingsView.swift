@@ -46,7 +46,7 @@ struct RecordingsView: View {
                     .foregroundStyle(e.status == .review ? Theme.accent : .secondary)
                     .frame(width: 26)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(e.meta.title).font(.body.weight(e.status == .review ? .semibold : .regular)).lineLimit(1)
+                    Text(shownTitle(e)).font(.body.weight(e.status == .review ? .semibold : .regular)).lineLimit(1)
                     Text(subtitle(e)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer(minLength: 4)
@@ -58,7 +58,16 @@ struct RecordingsView: View {
                 }
             }
         }
-        .accessibilityIdentifier("rec-row-\(e.meta.title)")
+        .accessibilityIdentifier("rec-row-\(shownTitle(e))")
+    }
+
+    /// Waiting for review, a recording goes by the title Claude prepared (as on the laptop); its own title is only "Meeting" or
+    /// "Class" until it is accepted.
+    private func shownTitle(_ e: Recordings.Entry) -> String {
+        guard e.status == .review,
+              let text = try? FolderAccess.read(store.folder.appendingPathComponent(e.path).appendingPathComponent(Recordings.proposalFile)),
+              let v = try? JSONValue.parse(text), let p = Recordings.Proposal(json: v), !p.title.isEmpty else { return e.meta.title }
+        return p.title
     }
 
     private func subtitle(_ e: Recordings.Entry) -> String {
