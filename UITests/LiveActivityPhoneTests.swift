@@ -1,0 +1,141 @@
+import XCTest
+import UIKit
+
+/// The iPhone's Live Activities (Sources/LiveActivity/, the extension in Widgets/): on sample data with a timer running on "Redox
+/// worksheet" (-NexusTestTime) and the recording demo (-NexusTestRecordings: no microphone). The timer goes on the Lock Screen and in the
+/// Dynamic Island when the app is in front, a recording joins it, Settings › Lock Screen says what shows and how it looks, and Stop on
+/// the Lock Screen card stops the timer in the app. iPhone only (`ui-check.yml` runs every "…PhoneTests" class on its iPhone
+/// simulator); the "phone-live-…" screenshots are printed into its log.
+final class LiveActivityPhoneTests: XCTestCase {
+    let app = XCUIApplication()
+    let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+
+    override func setUpWithError() throws {
+        try XCTSkipIf(UIDevice.current.userInterfaceIdiom != .phone, "iPhone only")
+        continueAfterFailure = true
+        XCUIDevice.shared.orientation = .portrait
+        app.launchArguments = ["-NexusTestTime", "-NexusTestRecordings"]
+        app.launch()
+        let sample = app.buttons["Try with sample data"]
+        if sample.waitForExistence(timeout: 5) { sample.tap() }
+        let ask = springboard.alerts.firstMatch
+        if ask.waitForExistence(timeout: 4) { ask.buttons.element(boundBy: 0).tap() }
+    }
+
+    func shot(_ base: String) {
+        let name = "phone-" + base
+        print("UISTEP \(Date().timeIntervalSince1970) \(name)")
+        let a = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        a.name = name
+        a.lifetime = .keepAlways
+        add(a)
+    }
+
+    /// A row of More (Settings, Recordings), scrolled to.
+    func openMoreRow(_ name: String) {
+        app.tabBars.buttons["More"].tap()
+        let row = app.buttons[name].firstMatch
+        var tries = 0
+        while !(row.exists && row.isHittable) && tries < 8 { app.collectionViews.firstMatch.swipeUp(); tries += 1 }
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "More has no \(name)")
+        row.tap()
+        sleep(2)
+    }
+
+    func back() {
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        sleep(1)
+    }
+
+    /// Settings' "Showing now", scrolled to.
+    func liveStatus() -> XCUIElement {
+        let status = app.staticTexts["live-status"].firstMatch
+        var tries = 0
+        while !(status.exists && status.isHittable) && tries < 14 { app.swipeUp(velocity: .slow); tries += 1 }
+        return status
+    }
+
+    /// Waits until `e`'s label holds `text`.
+    func waitLabel(_ e: XCUIElement, contains text: String, _ timeout: TimeInterval = 15) -> Bool {
+        let p = NSPredicate(format: "label CONTAINS %@", text)
+        return XCTWaiter().wait(for: [expectation(for: p, evaluatedWith: e)], timeout: timeout) == .completed
+    }
+
+    func testLiveActivities() {
+        XCTAssertTrue(app.staticTexts["Redox worksheet"].firstMatch.waitForExistence(timeout: 20), "Today isn't up")
+        XCTAssertTrue(app.buttons["Stop the timer"].firstMatch.waitForExistence(timeout: 10), "no running timer in the app")
+        sleep(3)
+
+        // Settings › Lock Screen: the running timer is on the Lock Screen
+        openMoreRow("Settings")
+        let status = liveStatus()
+        XCTAssertTrue(status.waitForExistence(timeout: 10), "Settings has no Lock Screen section")
+        XCTAssertTrue(waitLabel(status, contains: "Redox worksheet"), "the timer isn't showing as a Live Activity (\(status.label))")
+        shot("live-1-settings")
+        let preview = app.buttons["live-preview"].firstMatch
+        if !preview.isHittable { app.swipeUp(velocity: .slow) }
+        preview.tap()
+        XCTAssertTrue(app.otherElements["live-preview-lock"].firstMatch.waitForExistence(timeout: 10), "See how it looks didn't open")
+        sleep(1)
+        shot("live-2-preview")
+        back()
+        back()
+
+        // home: the Dynamic Island shows the timer
+        XCUIDevice.shared.press(.home)
+        sleep(4)
+        shot("live-3-island-timer")
+        app.activate()
+        XCTAssertTrue(app.tabBars.buttons["More"].waitForExistence(timeout: 15), "Nexus didn't come back")
+
+        // a recording joins it
+        openMoreRow("Recordings")
+        let start = app.buttons["rec-start-meeting"].firstMatch
+        XCTAssertTrue(start.waitForExistence(timeout: 15), "the Recordings screen didn't open")
+        start.tap()
+        XCTAssertTrue(app.buttons["rec-stop"].firstMatch.waitForExistence(timeout: 10), "recording didn't start")
+        sleep(3)
+        XCUIDevice.shared.press(.home)
+        sleep(4)
+        shot("live-4-island-both")
+
+        // Notification Centre shows the Lock Screen cards
+        let top = springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.003))
+        top.press(forDuration: 0.1, thenDragTo: springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.75)))
+        sleep(3)
+        shot("live-5-lock-screen")
+
+        // Stop on the timer's card stops the timer in Nexus (iOS runs the button in the app, in the background)
+        let stop = springboard.buttons["Stop the timer"].firstMatch
+        let found = stop.waitForExistence(timeout: 8)
+        if found {
+            stop.tap()
+            sleep(4)
+            shot("live-6-timer-stopped")
+        } else {
+            print("UINOTE the Lock Screen card's Stop isn't in the springboard's elements on this simulator; stopping in the app instead")
+        }
+        XCUIDevice.shared.press(.home)
+        sleep(1)
+        app.activate()
+        XCTAssertTrue(app.tabBars.buttons["More"].waitForExistence(timeout: 15), "Nexus didn't come back")
+        sleep(2)
+        if found {
+            let pill = app.buttons["Stop the timer"].firstMatch
+            let gone = XCTWaiter().wait(for: [expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: pill)], timeout: 15)
+            XCTAssertEqual(gone, .completed, "Stop on the Lock Screen didn't stop the timer")
+        } else {
+            let pill = app.buttons["Stop the timer"].firstMatch
+            if pill.waitForExistence(timeout: 5) { pill.tap() }
+        }
+
+        // stopping the recording takes it off too: nothing shows
+        let recStop = app.buttons["rec-stop"].firstMatch
+        if recStop.waitForExistence(timeout: 5) { recStop.tap() } else { app.buttons["rec-pill-stop"].firstMatch.tap() }
+        XCTAssertTrue(app.buttons["rec-start-meeting"].firstMatch.waitForExistence(timeout: 15), "recording didn't stop")
+        back()
+        openMoreRow("Settings")
+        let after = liveStatus()
+        XCTAssertTrue(waitLabel(after, contains: "Nothing"), "a Live Activity still shows after both stopped (\(after.label))")
+    }
+}

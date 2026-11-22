@@ -44,6 +44,8 @@ struct NexusMobileApp: App {
         case .active:
             AppServices.start()
             AppServices.store.reloadIfChanged()
+            // a timer started on another device, or while Nexus was closed, goes on the Lock Screen now (iOS starts one only in front)
+            LiveActivities.refresh()
             calendar.refreshStatus()
             sync.becameActive()
             Task { await reminders.refreshStatus() }
@@ -229,6 +231,19 @@ struct RootView: View {
                 router.front = windowId
                 store.reloadIfChanged()
                 answerRouter()
+            }
+        }
+        // the Live Activity's links (nexus://task/<id>, nexus://recordings, nexus://snap; NexusLive)
+        .onOpenURL { url in
+            guard url.scheme == "nexus" else { return }
+            switch url.host {
+            case "task":
+                let id = url.pathComponents.dropFirst().joined(separator: "/")
+                if store.task(id) != nil { store.openTaskId = id }
+            case "recordings": screen = .recordings
+            // Snap on a recording's Live Activity: the camera (filming: this moment marked for a picture from the film)
+            case "snap": RecordingService.shared.snap()
+            default: break
             }
         }
         // a Spotlight result: a task, a workstream or a board
