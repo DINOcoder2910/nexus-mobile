@@ -160,10 +160,13 @@ final class LiveActivityPhoneTests: XCTestCase {
         }
 
         // stopping the recording takes it off too: nothing shows
-        let recStop = app.buttons["rec-stop"].firstMatch
-        if recStop.waitForExistence(timeout: 5) { recStop.tap() } else { app.buttons["rec-pill-stop"].firstMatch.tap() }
-        XCTAssertTrue(app.buttons["rec-start-meeting"].firstMatch.waitForExistence(timeout: 15), "recording didn't stop")
-        back()
+        // (More is at its list here: the test went back to it before leaving for the home screen; the iPhone shows the pill on it)
+        let recStop = app.buttons["rec-pill-stop"].firstMatch
+        XCTAssertTrue(recStop.waitForExistence(timeout: 10), "no recording pill to stop")
+        recStop.tap()
+        let stopped = XCTWaiter().wait(for: [expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: recStop)], timeout: 15)
+        XCTAssertEqual(stopped, .completed, "recording didn't stop")
+        sleep(2)
         openMoreRow("Settings")
         let after = liveStatus()
         printLog("at the end")
