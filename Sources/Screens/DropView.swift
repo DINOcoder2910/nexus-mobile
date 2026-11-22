@@ -60,6 +60,8 @@ struct DropView: View {
             }
         }
         .listStyle(.insetGrouped)
+        // the iPhone's round + sits over the list's foot: room for it under the last file
+        .contentMargins(.bottom, Device.isPhone ? 84 : 0, for: .scrollContent)
         .navigationTitle("Drop")
         .toolbar {
             if !items.isEmpty {
