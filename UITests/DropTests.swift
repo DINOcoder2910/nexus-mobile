@@ -88,14 +88,23 @@ class DropTests: XCTestCase {
         reveal(photo)
         shot("drop-2-list")
 
-        // a tap shows it (Quick Look)
+        // a tap shows it (Quick Look). Its controls live in Quick Look's own process, out of XCTest's reach (the Nov 22 run's
+        // hierarchy had no Done while the screenshot showed the photo): look at the screenshot, swipe down to close it.
         photo.tap()
-        let done = app.buttons["Done"].firstMatch
-        XCTAssertTrue(done.waitForExistence(timeout: 30), "the photo didn't open")
-        sleep(1)
+        sleep(4)
         shot("drop-3-look")
-        if done.exists { done.tap() }
-        XCTAssertTrue(app.buttons["drop-photos"].firstMatch.waitForExistence(timeout: 15), "didn't come back to Drop")
+        let addPhotos = app.buttons["drop-photos"].firstMatch
+        // always one swipe: XCTest may count the list as hittable under Quick Look's window (on the list it only refreshes)
+        app.swipeDown(velocity: .fast)
+        sleep(2)
+        var closes = 0
+        while !addPhotos.isHittable && closes < 3 {
+            let done = app.buttons["Done"].firstMatch
+            if done.exists && done.isHittable { done.tap() } else { app.swipeDown(velocity: .fast) }
+            sleep(2)
+            closes += 1
+        }
+        XCTAssertTrue(addPhotos.waitForExistence(timeout: 15) && addPhotos.isHittable, "didn't come back to Drop from the photo")
 
         // hold: Share and Delete; Delete takes it away
         reveal(mine)

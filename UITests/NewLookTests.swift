@@ -27,6 +27,10 @@ final class NewLookTests: XCTestCase {
     func reach(_ e: XCUIElement, _ what: String) {
         var tries = 0
         while !(e.exists && e.isHittable) && tries < 10 { app.collectionViews.firstMatch.swipeUp(velocity: .slow); tries += 1 }
+        // a row that only just scrolled in sits under the sidebar's footer icons, and what opens under it stays below the fold
+        // (Drop's row pushed Chemistry HL there, Nov 22; ci-lessons): lift it clear
+        let bottom = app.windows.firstMatch.frame.maxY
+        if e.exists && e.frame.maxY > bottom - 140 { app.collectionViews.firstMatch.swipeUp(velocity: .slow) }
         XCTAssertTrue(e.waitForExistence(timeout: 5) && e.isHittable, "can't reach " + what)
     }
 
@@ -45,7 +49,10 @@ final class NewLookTests: XCTestCase {
         let arrow = app.buttons["Expand Chemistry HL"].firstMatch
         reach(arrow, "Chemistry HL's arrow")
         arrow.tap()
-        XCTAssertTrue(el("subject-study-chemistry-hl").waitForExistence(timeout: 5), "Chemistry HL didn't open as a folder")
+        let study = el("subject-study-chemistry-hl")
+        // its parts open under it: scroll them in if the folder opened near the foot
+        if !study.waitForExistence(timeout: 5) { app.collectionViews.firstMatch.swipeUp(velocity: .slow) }
+        XCTAssertTrue(study.waitForExistence(timeout: 5), "Chemistry HL didn't open as a folder")
         sleep(1)
         shot("look-sidebar-folder-\(mode)")
         app.buttons["Collapse Chemistry HL"].firstMatch.tap()
