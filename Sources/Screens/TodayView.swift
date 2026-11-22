@@ -298,12 +298,15 @@ struct TodayView: View {
 }
 
 /// The device's calendar events Today and its day card draw (when Today shows events and Nexus may read the calendars).
+/// The same event in two calendars (a school account added twice) is drawn once.
 enum TodayEvents {
     static func spans(_ cal: CalendarStore, _ day: String) -> [(start: Int, end: Int, event: CalEvent)] {
         guard cal.eventsOnPlan && cal.canRead else { return [] }
+        var seen = Set<String>()
         return cal.events(on: day).filter { !$0.allDay }.compactMap { e in
             DayLayout.clip(start: e.start, end: e.end, day: day).map { ($0.start, max($0.end, $0.start + 15), e) }
         }
+        .filter { seen.insert("\($0.0) \($0.1) \($0.2.title)").inserted }
     }
 
     static func allDay(_ cal: CalendarStore, _ day: String) -> [CalEvent] {

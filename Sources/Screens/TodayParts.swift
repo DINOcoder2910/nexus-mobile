@@ -327,10 +327,16 @@ struct DayCard: View {
 
     static let h0 = 8, h1 = 22
     static let px: CGFloat = 40, inset: CGFloat = 8, labels: CGFloat = 46
-    static func y(_ m: Int) -> CGFloat { inset + CGFloat(m - h0 * 60) / 60 * px }
-    static func minute(_ y: CGFloat) -> Int {
-        let m = Double(h0 * 60) + Double(y - inset) / Double(px) * 60
-        return min(max(Int((m / 15).rounded()) * 15, h0 * 60), h1 * 60 - 15)
+    /// The hours shown: 8 am to 10 pm, widened to the whole hour around anything earlier or later (to midnight at most), so no block hangs off the card.
+    static func span(_ spans: [(start: Int, end: Int)]) -> ClosedRange<Int> {
+        let a = spans.map(\.start).min().map { $0 / 60 } ?? h0
+        let b = spans.map(\.end).max().map { ($0 + 59) / 60 } ?? h1
+        return max(0, min(h0, a))...min(24, max(h1, b))
+    }
+    static func y(_ m: Int, from h: Int) -> CGFloat { inset + CGFloat(m - h * 60) / 60 * px }
+    static func minute(_ y: CGFloat, _ hours: ClosedRange<Int>) -> Int {
+        let m = Double(hours.lowerBound * 60) + Double(y - inset) / Double(px) * 60
+        return min(max(Int((m / 15).rounded()) * 15, hours.lowerBound * 60), hours.upperBound * 60 - 15)
     }
 
     private struct Block { var id: String; var start: Int; var end: Int; var kind: Kind }
@@ -399,15 +405,17 @@ struct DayCard: View {
 
     private func hours(_ blocks: [Block], _ free: [TodayPlan.Span]) -> some View {
         let placed = Dictionary(uniqueKeysWithValues: DayLayout.place(blocks.map { DayLayout.Span(id: $0.id, start: $0.start, end: $0.end) }).map { ($0.id, $0) })
-        let height = Self.y(Self.h1 * 60) + 8
+        let hours = Self.span(blocks.map { (start: $0.start, end: min($0.end, 24 * 60)) }), h0 = hours.lowerBound
+        let y = { (m: Int) in Self.y(m, from: h0) }
+        let height = y(hours.upperBound * 60) + 8
         return GeometryReader { g in
             let left = Self.labels + 6, width = g.size.width - left - 2
             ZStack(alignment: .topLeading) {
-                ForEach(Self.h0...Self.h1, id: \.self) { h in
-                    Text("\(h % 12 == 0 ? 12 : h % 12) \(h < 12 ? "am" : "pm")").font(.nx(size: 11)).foregroundStyle(Kit.faint)
-                        .offset(x: 6, y: Self.y(h * 60) - 8)
+                ForEach(hours, id: \.self) { h in
+                    Text("\(h % 12 == 0 ? 12 : h % 12) \(h < 12 || h == 24 ? "am" : "pm")").font(.nx(size: 11)).foregroundStyle(Kit.faint)
+                        .offset(x: 6, y: y(h * 60) - 8)
                     Rectangle().fill(Kit.ink.opacity(0.06)).frame(width: g.size.width - Self.labels, height: 1)
-                        .offset(x: Self.labels, y: Self.y(h * 60))
+                        .offset(x: Self.labels, y: y(h * 60))
                 }
                 ForEach(free, id: \.start) { s in
                     Text(TimeWords.about(s.minutes) + " free").font(.nx(size: 11.5)).foregroundStyle(Kit.faint)
@@ -415,14 +423,14 @@ struct DayCard: View {
                         .frame(width: width, height: blockHeight(s.start, s.end), alignment: .leading)
                         .background(Hatch().stroke(Kit.ink.opacity(0.05), lineWidth: 1).clipShape(RoundedRectangle(cornerRadius: 8)))
                         .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Kit.ink.opacity(0.05)))
-                        .offset(x: left, y: Self.y(s.start) + 1)
+                        .offset(x: left, y: y(s.start) + 1)
                 }
                 ForEach(blocks, id: \.id) { b in
                     let p = placed[b.id]
                     let cols = CGFloat(max(p?.columns ?? 1, 1)), col = CGFloat(p?.column ?? 0)
                     let w = (width - (cols - 1) * 4) / cols
-                    block(b).frame(width: w, height: blockHeight(b.start, b.end), alignment: .topLeading)
-                        .offset(x: left + col * (w + 4), y: Self.y(b.start) + 1)
+                    block(b).frame(width: w, height: blockHeight(b.start, min(b.end, 24 * 60)), alignment: .topLeading)
+                        .offset(x: left + col * (w + 4), y: y(b.start) + 1)
                 }
                 if let m = dropAt {
                     let t = store.task(dragging)
@@ -437,22 +445,22 @@ struct DayCard: View {
                     .background(Kit.page, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Theme.accent, lineWidth: 1.5))
                     .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
-                    .offset(x: left, y: Self.y(m) + 1)
+                    .offset(x: left, y: y(m) + 1)
                     .allowsHitTesting(false)
                 }
-                if v.now >= Self.h0 * 60 && v.now <= Self.h1 * 60 {
+                if v.now >= h0 * 60 && v.now <= hours.upperBound * 60 {
                     ZStack(alignment: .leading) {
                         Rectangle().fill(Theme.accent).frame(height: 2)
                         Circle().fill(Theme.accent).frame(width: 8, height: 8).offset(x: -4)
                     }
                     .frame(width: g.size.width - 44, height: 8)
-                    .offset(x: 44, y: Self.y(v.now) - 4)
+                    .offset(x: 44, y: y(v.now) - 4)
                     .allowsHitTesting(false)
                 }
             }
             .frame(width: g.size.width, height: height, alignment: .topLeading)
             .contentShape(Rectangle())
-            .onDrop(of: [.plainText, .utf8PlainText, .text], delegate: DayDrop(at: $dropAt, dragging: $dragging) { id, m in place(id, at: m) })
+            .onDrop(of: [.plainText, .utf8PlainText, .text], delegate: DayDrop(at: $dropAt, dragging: $dragging, hours: hours) { id, m in place(id, at: m) })
         }
         .frame(height: height)
         .animation(Kit.snap, value: dropAt)
@@ -551,15 +559,16 @@ private struct Hatch: Shape {
 private struct DayDrop: DropDelegate {
     @Binding var at: Int?
     @Binding var dragging: String?
+    var hours: ClosedRange<Int>
     var drop: (String, Int) -> Void
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
-        at = DayCard.minute(info.location.y)
+        at = DayCard.minute(info.location.y, hours)
         return DropProposal(operation: .move)
     }
     func dropExited(info: DropInfo) { at = nil }
     func performDrop(info: DropInfo) -> Bool {
-        let m = DayCard.minute(info.location.y)
+        let m = DayCard.minute(info.location.y, hours)
         at = nil
         guard let p = info.itemProviders(for: [.plainText, .utf8PlainText, .text]).first else { dragging = nil; return false }
         _ = p.loadObject(ofClass: NSString.self) { s, _ in
@@ -665,6 +674,7 @@ struct TomorrowCard: View {
     @Environment(NexusStore.self) private var store
     @Environment(CalendarStore.self) private var cal
     let v: TodayPlan.Day
+    @State private var stripWidth: CGFloat = 0
 
     var body: some View {
         let t = v.tomorrow
@@ -727,7 +737,7 @@ struct TomorrowCard: View {
         .animation(.easeOut(duration: 0.6), value: ratio)
     }
 
-    private struct Mini: Identifiable { var id: String; var a: Int; var b: Int; var event: Bool; var color: Color; var label: String; var level = 0 }
+    private struct Mini: Identifiable { var id: String; var a: Int; var b: Int; var event: Bool; var color: Color; var label: String; var level = 0; var labelX: CGFloat = 0 }
 
     private func strip(_ t: TodayPlan.Tomorrow, _ events: [(start: Int, end: Int, event: CalEvent)]) -> some View {
         let span = Double(TodayPlan.dayTo - TodayPlan.dayFrom)
@@ -740,11 +750,16 @@ struct TomorrowCard: View {
             }
         }
         blocks.sort { $0.a < $1.a }
-        var ends = [-1.0, -1.0]
+        // Each label on the first of two rows where it clears the one before by 8 points, measured in the strip's real width; one that fits neither is left out (its block stays).
+        let w = max(stripWidth - 4, 200), font = UIFontMetrics(forTextStyle: .body).scaledFont(for: UIFont.nx(11.5, .medium))
+        var ends: [CGFloat] = [-.infinity, -.infinity]
         for i in blocks.indices {
-            let from = Double(x(blocks[i].a)) * 100, to = from + Double(blocks[i].label.count) * 0.75 + 2
-            blocks[i].level = from >= ends[0] ? 0 : 1
-            ends[blocks[i].level] = to
+            let lw = ceil((blocks[i].label as NSString).size(withAttributes: [.font: font]).width)
+            let from = min(2 + x(blocks[i].a) * w, w + 4 - lw)
+            guard let row = ends.firstIndex(where: { from >= $0 + 8 }) else { blocks[i].level = -1; continue }
+            blocks[i].level = row
+            blocks[i].labelX = from
+            ends[row] = from + lw
         }
         let two = blocks.contains { $0.level == 1 }
         return VStack(spacing: 6) {
@@ -757,12 +772,16 @@ struct TomorrowCard: View {
                         let bx = 2 + x(b.a) * w, bw = max((x(b.b) - x(b.a)) * w, 0.02 * w) - 3
                         RoundedRectangle(cornerRadius: 6, style: .continuous).fill(b.event ? Kit.selected : b.color.opacity(0.55))
                             .frame(width: bw, height: 22).offset(x: bx, y: 6)
-                        Text(b.label).font(.nx(size: 11.5, .medium)).foregroundStyle(b.event ? Kit.muted : Kit.ink).fixedSize()
-                            .offset(x: bx, y: b.level == 0 ? -22 : -38)
+                        if b.level >= 0 {
+                            Text(b.label).font(.nx(size: 11.5, .medium)).foregroundStyle(b.event ? Kit.muted : Kit.ink).fixedSize()
+                                .offset(x: b.labelX, y: b.level == 0 ? -22 : -38)
+                                .accessibilityIdentifier("tomorrow-label")
+                        }
                     }
                 }
             }
             .frame(height: 34)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { stripWidth = $0 }
             .padding(.top, two ? 52 : 34)
             HStack {
                 ForEach([8, 10, 12, 14, 16, 18, 20, 22], id: \.self) { h in

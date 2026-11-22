@@ -13,6 +13,7 @@ enum TestHooks {
         if ProcessInfo.processInfo.arguments.contains("-NexusTestLinksBoard") { linksBoard(store); return }
         if ProcessInfo.processInfo.arguments.contains("-NexusTestTime") { timeSessions(store); return }
         if ProcessInfo.processInfo.arguments.contains("-NexusTestDayOrder") { dayOrder(store); return }
+        if ProcessInfo.processInfo.arguments.contains("-NexusTestDayEdges") { dayEdges(store); return }
         guard ProcessInfo.processInfo.arguments.contains("-NexusTestPdfBoard") else { return }
         if !store.snapshot.isDataFolder { store.makeSample() }
         let dir = "notebooks/PDF zoom"
@@ -204,6 +205,24 @@ enum TestHooks {
 
     /// `-NexusTestDayOrder`: sample data, then today's order as if dragged on the laptop (`nexus-day-order.yaml`): "Try the iPad
     /// planner" before "Redox worksheet", against their file order (UITests/DayOrderTests).
+    /// `-NexusTestDayEdges`: sample data, then a task tonight at 21:30 for 3 hours (past the day's 10 pm line) and five tasks crowded
+    /// into tomorrow morning, so the day's hours must reach midnight and Tomorrow's strip labels must not overlap (UITests/TodayEdgesTests).
+    static func dayEdges(_ store: NexusStore) {
+        if !store.snapshot.isDataFolder { store.makeSample() }
+        let tomorrow = Days.add(store.today, 1)
+        let adds: [(String, String, String, String)] = [
+            ("Physics IA lock in", store.today, "21:30", "3h"),
+            ("Chemistry practice paper", tomorrow, "08:30", "1h"),
+            ("TOK essay draft", tomorrow, "09:30", "1h"),
+            ("Advisory form", tomorrow, "11:30", "30m"),
+            ("Flex reading", tomorrow, "12:00", "45m"),
+            ("MathAA problem set", tomorrow, "13:00", "1h"),
+        ]
+        for (title, day, time, est) in adds where !store.snapshot.tasks.values.contains(where: { $0.text == title }) {
+            _ = store.add(title: title, workstream: "physics-hl", plan: [PlanEntry(day: day, time: time)], est: est)
+        }
+    }
+
     static func dayOrder(_ store: NexusStore) {
         if !store.snapshot.isDataFolder { store.makeSample() }
         let text = DayOrder.text([store.today: ["smpb", "smp8"]], today: store.today)
