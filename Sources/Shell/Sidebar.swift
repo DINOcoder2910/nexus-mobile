@@ -84,7 +84,7 @@ struct Sidebar: View {
         // the study decks: read with the folder (their due count is the Study row's number)
         .task(id: store.snapshot.loadedAt) { StudyLibrary.shared.refreshIfChanged(store) }
         // the Spanish workstreams (the Spanish row), read with the folder too
-        .task(id: store.snapshot.loadedAt) { SpanishDemo.prepare(store); SpanishLibrary.shared.refreshIfChanged(store) }
+        .task(id: store.snapshot.loadedAt) { SpanishLibrary.shared.refreshIfChanged(store) }
     }
 
     // MARK: the full list

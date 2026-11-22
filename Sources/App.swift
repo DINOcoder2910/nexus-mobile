@@ -242,6 +242,8 @@ struct RootView: View {
         .onChange(of: router.openTask) { _, _ in answerRouter() }
         .onChange(of: router.addSheet) { _, _ in answerRouter() }
         .onChange(of: router.ideas) { _, _ in answerRouter() }
+        // the UI check's Spanish demo, with the folder (here, not in the sidebar: the iPhone shows its sidebar only under More)
+        .task(id: store.snapshot.loadedAt) { SpanishDemo.prepare(store) }
         .task {
             AppServices.start()
             if router.front == nil { router.front = windowId }

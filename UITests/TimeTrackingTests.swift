@@ -61,6 +61,9 @@ class TimeTrackingTests: XCTestCase {
         let inList = app.otherElements["today-list"].staticTexts["Q1–5"].firstMatch
         let lab = inList.exists ? inList : app.staticTexts["Q1–5"].firstMatch
         if lab.waitForExistence(timeout: 5) {
+            // the iPhone's first row can sit under the tab bar and the timer pill: bring it up into the clear first
+            var up = 0
+            while lab.frame.maxY > app.frame.height * 0.7 && up < 4 { app.scrollViews.firstMatch.swipeUp(velocity: .slow); sleep(1); up += 1 }
             lab.press(forDuration: 1.2)
             sleep(1)
             XCTAssertTrue(app.buttons["Start timer"].firstMatch.waitForExistence(timeout: 5), "no Start timer in the menu")

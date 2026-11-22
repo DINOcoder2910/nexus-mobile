@@ -32,8 +32,13 @@ class ChecklistLookTests: XCTestCase {
         app = XCUIApplication()
         app.launchArguments = ["-NexusSpanishDemo"] + (dark ? ["-NexusTestDark"] : [])
         app.launch()
+        // a cold simulator can take a while to draw the first screen, and a tap while it settles can be lost: tap again until
+        // the sample data is up
         let sample = app.buttons["Try with sample data"]
-        if sample.waitForExistence(timeout: 8) { sample.tap() }
+        var taps = 0
+        if sample.waitForExistence(timeout: 20) {
+            while sample.exists && taps < 3 { sample.tap(); taps += 1; _ = el("today-sum").waitForExistence(timeout: 8) }
+        }
         let ask = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.firstMatch
         if ask.waitForExistence(timeout: 4) { ask.buttons.element(boundBy: 0).tap() }
         XCTAssertTrue(el("today-sum").waitForExistence(timeout: 20), "Today isn't up")
