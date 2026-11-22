@@ -325,9 +325,9 @@ struct DayCard: View {
     @State private var dropAt: Int?
     @State private var dragging: String?
 
-    static let h0 = 8, h1 = 22
+    static let h0 = 8, h1 = 24
     static let px: CGFloat = 40, inset: CGFloat = 8, labels: CGFloat = 46
-    /// The hours shown: 8 am to 10 pm, widened to the whole hour around anything earlier or later (to midnight at most), so no block hangs off the card.
+    /// The hours shown: 8 am to the end of the day (midnight), starting at the whole hour before anything earlier, so no block hangs off the card.
     static func span(_ spans: [(start: Int, end: Int)]) -> ClosedRange<Int> {
         let a = spans.map(\.start).min().map { $0 / 60 } ?? h0
         let b = spans.map(\.end).max().map { ($0 + 59) / 60 } ?? h1
@@ -740,7 +740,8 @@ struct TomorrowCard: View {
     private struct Mini: Identifiable { var id: String; var a: Int; var b: Int; var event: Bool; var color: Color; var label: String; var level = 0; var labelX: CGFloat = 0 }
 
     private func strip(_ t: TodayPlan.Tomorrow, _ events: [(start: Int, end: Int, event: CalEvent)]) -> some View {
-        let span = Double(TodayPlan.dayTo - TodayPlan.dayFrom)
+        // 8 am to the end of the day (midnight), as the day's hours
+        let span = Double(24 * 60 - TodayPlan.dayFrom)
         let x = { (m: Int) -> CGFloat in CGFloat(max(0, min(1, Double(m - TodayPlan.dayFrom) / span))) }
         var blocks: [Mini] = events.enumerated().map { Mini(id: "e\($0.offset)", a: $0.element.start, b: $0.element.end, event: true, color: Kit.selected, label: String($0.element.event.title.split(separator: " ").first ?? "")) }
         for r in t.list {
@@ -784,9 +785,9 @@ struct TomorrowCard: View {
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { stripWidth = $0 }
             .padding(.top, two ? 52 : 34)
             HStack {
-                ForEach([8, 10, 12, 14, 16, 18, 20, 22], id: \.self) { h in
+                ForEach([8, 10, 12, 14, 16, 18, 20, 22, 24], id: \.self) { h in
                     Text(h == 8 ? "8am" : "\(h % 12 == 0 ? 12 : h % 12)")
-                    if h != 22 { Spacer(minLength: 0) }
+                    if h != 24 { Spacer(minLength: 0) }
                 }
             }
             .font(.nx(size: 10.5)).foregroundStyle(Kit.faint).padding(.horizontal, 2)

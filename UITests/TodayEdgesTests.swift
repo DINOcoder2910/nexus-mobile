@@ -2,7 +2,7 @@ import XCTest
 import UIKit
 
 /// Today's two edges (Nov 22 2026, from Murtaza's iPad screenshot): a task tonight that runs past 10 pm stays inside the day's hours
-/// (the hours reach midnight instead of the block hanging over Tomorrow), and Tomorrow's strip labels never overlap (measured in the
+/// (the hours run to midnight, the end of the day, instead of the block hanging over Tomorrow), and Tomorrow's strip labels never overlap (measured in the
 /// strip's real width; one that fits neither row is left out). Sample data plus -NexusTestDayEdges (TestHooks.dayEdges): "Physics IA
 /// lock in" at 21:30 for 3h today, five tasks crowded into tomorrow morning. The "edges-…" screenshots are printed in the UI check log.
 class TodayEdgesTests: XCTestCase {
