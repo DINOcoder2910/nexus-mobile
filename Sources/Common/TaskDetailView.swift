@@ -80,6 +80,21 @@ struct TaskDetailView: View {
                     row("Someday", icon: "archivebox") { someday(t) }
                 }
                 .disabled(!editable)
+                let files = store.files(of: t)
+                if !files.isEmpty {
+                    row("Files", icon: "paperclip") {
+                        HStack(spacing: 8) {
+                            TaskFileChips(files: files)
+                            if let pdf = files.first(where: { $0.kind == "pdf" }) {
+                                Button { commitTitle(t); commitFields(t); store.writeOn(pdf: pdf.path) } label: {
+                                    Label("Write on it", systemImage: "pencil.and.scribble")
+                                }
+                                .buttonStyle(KitButtonStyle(kind: .tone, small: true))
+                                .accessibilityIdentifier("panel-write-on")
+                            }
+                        }
+                    }
+                }
                 subtasks(t)
                 VStack(alignment: .leading, spacing: 4) { TaskTimeSection(task: t, editable: editable) }
                     .font(.nx(.callout))
@@ -376,7 +391,7 @@ struct TaskDetailView: View {
                 if !kids.isEmpty { Text("\(kids.filter(\.done).count) of \(kids.count) done").font(.nx(.subheadline)).foregroundStyle(Kit.faint) }
             }
             Rectangle().fill(Kit.line).frame(height: 1)
-            SubtaskList(task: t, adding: .constant(nil))
+            PanelChecklist(task: t)
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("panel-subtasks")

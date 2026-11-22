@@ -186,6 +186,58 @@ public struct TaskEditor {
         return Change(file: t.file, before: before, after: r.text, message: "Moved to \(name): \(t.text)", also: [other])
     }
 
+    /// Puts a task, with everything under it, under `parent` (nil: the top of its file) before `before` (nil: last), in the same
+    /// file: the checklist's nest, bring out and move up / down.
+    public func place(_ t: NexusTask, parent: NexusTask?, before: NexusTask?, in s: Snapshot, message: String) throws -> Change {
+        if let p = parent, p.file != t.file || p.id == t.id || s.ancestors(of: p).contains(where: { $0.id == t.id }) {
+            throw Failure.readOnly("A task can't go under itself or into another file here")
+        }
+        if let b = before, b.file != t.file || b.parent != parent?.id || b.id == t.id { throw Failure.readOnly("That place isn't beside it") }
+        guard t.hasId, parent?.hasId ?? true, before?.hasId ?? true else {
+            throw Failure.readOnly("This task has no id yet; open the folder in Nexus on the laptop once and it gets one")
+        }
+        return try edit(t, in: s, message: message) { text in
+            let r = try YamlEdit.removeTask(text, id: t.id)
+            let after = try YamlEdit.placeTask(r.text, lines: r.lines, from: r.dashIndent, parent: parent?.id, before: before?.id)
+            let parsed = try? TaskFile.parse(after, file: t.file, workstream: t.workstream)
+            guard parsed?.tasks.first(where: { $0.id == t.id })?.parent == parent?.id else { throw Failure.wouldBreak("it didn't land where it should") }
+            return after
+        }
+    }
+
+    /// The tasks beside `t` (its parent's subtasks, or its file's top-level tasks), in file order.
+    public func siblings(_ t: NexusTask, in s: Snapshot) -> [NexusTask] {
+        if let p = t.parent.flatMap({ s.tasks[$0] }) { return s.children(of: p) }
+        return (s.top[t.file] ?? []).compactMap { s.tasks[$0] }
+    }
+
+    /// Nests a task under the one above it (as its last subtask).
+    public func nest(_ t: NexusTask, in s: Snapshot) throws -> Change {
+        let sib = siblings(t, in: s)
+        guard let i = sib.firstIndex(where: { $0.id == t.id }), i > 0 else { throw Failure.readOnly("There is nothing above it to go under") }
+        return try place(t, parent: sib[i - 1], before: nil, in: s, message: "Under \(sib[i - 1].text): \(t.text)")
+    }
+
+    /// Brings a subtask out one level, just after the task it was under.
+    public func unnest(_ t: NexusTask, in s: Snapshot) throws -> Change {
+        guard let p = t.parent.flatMap({ s.tasks[$0] }) else { throw Failure.readOnly("It is already at the top") }
+        let outer = siblings(p, in: s)
+        let next = outer.firstIndex(where: { $0.id == p.id }).flatMap { $0 + 1 < outer.count ? outer[$0 + 1] : nil }
+        return try place(t, parent: p.parent.flatMap { s.tasks[$0] }, before: next, in: s, message: "Out of \(p.text): \(t.text)")
+    }
+
+    /// Moves a task one place up (-1) or down (+1) among the tasks beside it.
+    public func shift(_ t: NexusTask, by step: Int, in s: Snapshot) throws -> Change {
+        let sib = siblings(t, in: s)
+        guard let i = sib.firstIndex(where: { $0.id == t.id }) else { throw Failure.readOnly("It isn't in its list any more") }
+        let j = i + step
+        guard j >= 0, j < sib.count else { throw Failure.readOnly(step < 0 ? "It is already first" : "It is already last") }
+        let parent = t.parent.flatMap { s.tasks[$0] }
+        // up: before the one above; down: before the one two below (or last)
+        let before: NexusTask? = step < 0 ? sib[j] : (j + 1 < sib.count ? sib[j + 1] : nil)
+        return try place(t, parent: parent, before: before, in: s, message: (step < 0 ? "Moved up: " : "Moved down: ") + t.text)
+    }
+
     /// Puts a file back as it was before `c`, if it still holds what `c` wrote.
     /// Every file it wrote (`also` too) must still hold what it wrote; they are put back last first.
     public func undo(_ c: Change) throws {

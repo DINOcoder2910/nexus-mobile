@@ -130,7 +130,10 @@ struct StudyDue: Identifiable {
     var workstream: Workstream
     var count: Int
     var decks: [String]
-    var id: String { workstream.id }
+    /// Spanish oral practice (study/spanish/oral) rather than cards: days since the last oral, nil when there is none yet.
+    var oral = false
+    var lastDays: Int?
+    var id: String { workstream.id + (oral ? "/oral" : "") }
 }
 
 /// "12 cards due · Ions, Acids and bases · about 8 min" with Review, which opens the subject's Study.
@@ -140,8 +143,37 @@ struct StudyDueCard: View {
     var open: () -> Void
 
     var body: some View {
+        if item.oral { oral } else { cards }
+    }
+
+    /// "Oral practice · Spanish · last one 3 days ago": the orals are run on the laptop (its voice models), so this says when the
+    /// last one was and opens the subject's Study.
+    private var oral: some View {
         let color = store.color(workstream: item.workstream.id)
-        HStack(spacing: 12) {
+        let last = item.lastDays.map { $0 == 0 ? "last one today" : "last one \($0) day\($0 == 1 ? "" : "s") ago" } ?? "none yet"
+        return HStack(spacing: 12) {
+            Image(systemName: "mic")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(color)
+                .frame(width: 38, height: 38)
+                .background(color.opacity(0.13), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Oral practice").font(.nx(.body, .medium)).foregroundStyle(Kit.ink)
+                Text((item.workstream.name.split(separator: " ").first.map(String.init) ?? item.workstream.name) + " · " + last + " · on the laptop")
+                    .font(.nx(.caption)).foregroundStyle(Kit.faint).lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            Button("Study", action: open).buttonStyle(KitButtonStyle(kind: .tone, small: true))
+        }
+        .padding(.horizontal, 14).padding(.vertical, 12)
+        .kitSurface(Kit.rests, radius: 16)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("study-oral")
+    }
+
+    private var cards: some View {
+        let color = store.color(workstream: item.workstream.id)
+        return HStack(spacing: 12) {
             Image(systemName: "rectangle.on.rectangle")
                 .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(color)
@@ -175,8 +207,8 @@ struct NextUpCard: View {
         let start = TodayPlan.clock(v.time(task))
         let running = TimeTracker.shared.isRunning(task.id)
         ViewThatFits(in: .horizontal) {
-            HStack(spacing: 16) { words(color, start); Spacer(minLength: 8); actions(start, running) }
-            VStack(alignment: .leading, spacing: 12) { words(color, start); actions(start, running) }
+            HStack(spacing: 16) { words(color, start); Spacer(minLength: 8); HStack(spacing: 10) { actions(start, running) } }
+            VStack(alignment: .leading, spacing: 12) { words(color, start); HStack(spacing: 10) { actions(start, running) } }
         }
         .padding(.horizontal, 20).padding(.vertical, 16)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -202,11 +234,19 @@ struct NextUpCard: View {
                 }
             }
             .font(.nx(.footnote)).foregroundStyle(Kit.muted)
+            let files = store.files(of: task)
+            if !files.isEmpty { TaskFileChips(files: files).padding(.top, 3) }
         }
     }
 
     @ViewBuilder
     private func actions(_ start: Int?, _ running: Bool) -> some View {
+        // a sheet it points at: write on it (its board beside the PDF)
+        if let pdf = store.files(of: task).first(where: { $0.kind == "pdf" }) {
+            Button { store.writeOn(pdf: pdf.path) } label: { Label("Write on it", systemImage: "pencil.and.scribble") }
+                .buttonStyle(.kit)
+                .accessibilityIdentifier("write-on-it")
+        }
         if store.canEdit(task) {
             if running {
                 Button { TimeTracker.shared.toggle(task, store: store) } label: { Label("Stop", systemImage: "stop.fill") }
