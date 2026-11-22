@@ -112,10 +112,11 @@ final class LiveActivityPhoneTests: XCTestCase {
         if found {
             let card = springboard.staticTexts["Redox worksheet"].firstMatch
             var presses = 0
+            // by coordinate: the springboard says a Live Activity's buttons aren't hittable (it draws them from another process)
             while card.exists && presses < 4 {
                 let allow = springboard.buttons["Allow"].firstMatch
-                if allow.exists { allow.tap(); sleep(2) }
-                if stop.exists && stop.isHittable { stop.tap() }
+                if allow.exists { allow.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap(); sleep(2) }
+                if stop.exists { stop.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
                 presses += 1
                 sleep(4)
                 if presses == 1 { shot("live-6-stack-open") }
