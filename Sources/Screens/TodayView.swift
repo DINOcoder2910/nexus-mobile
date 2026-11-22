@@ -129,7 +129,8 @@ struct TodayView: View {
             if items.isEmpty {
                 QuietCard(text: "Nothing due from your decks today.")
             } else {
-                ForEach(items.prefix(2)) { s in StudyDueCard(item: s) { go(.studyPage(s.workstream.id)) } }
+                // up to two subjects' cards, and every oral reminder
+                ForEach(Array(items.filter { !$0.oral }.prefix(2)) + items.filter(\.oral)) { s in StudyDueCard(item: s) { go(.studyPage(s.workstream.id)) } }
             }
         }
         if wide {

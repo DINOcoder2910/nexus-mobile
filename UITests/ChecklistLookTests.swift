@@ -76,8 +76,10 @@ class ChecklistLookTests: XCTestCase {
         launch(dark: dark)
 
         // From Study: the Spanish demo's oral three days ago
+        // the Spanish demo writes the oral just after launch: wait for the card before looking further down
         let oral = el("study-oral")
         var tries = 0
+        _ = oral.waitForExistence(timeout: 15)
         while !(oral.exists && oral.isHittable) && tries < 4 { app.scrollViews.firstMatch.swipeUp(velocity: .slow); tries += 1 }
         XCTAssertTrue(oral.exists, "no Oral practice in From Study")
         XCTAssertTrue(oral.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "3 days ago")).firstMatch.exists, "the oral card doesn't say when the last one was")
