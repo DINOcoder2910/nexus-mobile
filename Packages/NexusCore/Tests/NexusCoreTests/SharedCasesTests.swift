@@ -27,7 +27,7 @@ final class SharedCasesTests: XCTestCase {
 
     /// Every rule folder is one this file runs (a new rule needs a runner here and in the laptop's dev/unit-shared.mjs).
     func testTheRules() {
-        XCTAssertEqual(dirs(shared), ["day-order-file", "order"])
+        XCTAssertEqual(dirs(shared), ["day-order-file", "order", "recordings"])
     }
 
     /// order/<case>: Today's plan and each day's planned tasks, from the case's data folder, in the one order (DayOrder.swift).
@@ -67,5 +67,59 @@ final class SharedCasesTests: XCTestCase {
         }
         let back = DayOrder.parse(DayOrder.text(["2026-11-20": ["b", "a"]], today: "2026-11-20"))
         XCTAssertEqual(back, ["2026-11-20": ["b", "a"]], "what is written reads back the same")
+    }
+
+    /// recordings/cases.json: the recording format (Recordings.swift), the same answers as the new laptop app's Rust core.
+    func testRecordings() throws {
+        let c = try JSONValue.parse(String(contentsOf: shared.appendingPathComponent("recordings/cases.json"), encoding: .utf8))
+        for x in c["clock"]?.array ?? [] {
+            XCTAssertEqual(Recordings.clock(x.array?[0].number ?? -1), x.array?[1].string, "clock")
+        }
+        for x in c["stamp"]?.array ?? [] {
+            let d = try XCTUnwrap(Recordings.date(x["iso"]?.string ?? ""), "iso")
+            let zone = try XCTUnwrap(TimeZone(secondsFromGMT: Int(x["offset"]?.number ?? 0) * 60))
+            XCTAssertEqual(Recordings.localStamp(d, zone: zone), x["stamp"]?.string)
+            XCTAssertEqual(Recordings.localDay(d, zone: zone), x["day"]?.string)
+        }
+        for x in c["status"]?.array ?? [] {
+            var m = Recordings.Meta(id: "x", kind: .meeting, started: Date(), device: "d")
+            m.state = x["state"]?.string ?? "done"
+            let files = (x["files"]?.array ?? []).compactMap(\.string)
+            let got = Recordings.status(m, transcript: files.contains("transcript"), proposal: files.contains("proposal"), filed: files.contains("filed"))
+            XCTAssertEqual(got.rawValue, x["expect"]?.string, "status: \(x["about"]?.string ?? "")")
+        }
+        for x in c["reply"]?.array ?? [] {
+            let subjects = Set((x["subjects"]?.array ?? []).compactMap(\.string))
+            let got = Recordings.parseReply(x["text"]?.string ?? "", subjects: subjects)?.json ?? .null
+            XCTAssertEqual(got.text, (x["expect"] ?? .null).text, "reply: \(x["about"]?.string ?? "")")
+        }
+        for x in c["summary"]?.array ?? [] {
+            let meta = try XCTUnwrap(Recordings.Meta(json: try XCTUnwrap(x["meta"])))
+            let p = try XCTUnwrap(Recordings.Proposal(json: try XCTUnwrap(x["proposal"])))
+            let zone = try XCTUnwrap(TimeZone(secondsFromGMT: Int(x["offset"]?.number ?? 0) * 60))
+            XCTAssertEqual(Recordings.summaryMarkdown(meta: meta, proposal: p, subjectName: x["subjectName"]?.string, zone: zone), x["expect"]?.string,
+                           "summary: \(x["about"]?.string ?? "")")
+        }
+        for x in c["taskNote"]?.array ?? [] {
+            let t = try XCTUnwrap(x["task"])
+            let task = Recordings.ProposedTask(title: t["title"]?.string ?? "", at: t["at"]?.number, note: t["note"]?.string)
+            XCTAssertEqual(Recordings.taskNote(task, title: x["title"]?.string ?? "", path: x["path"]?.string ?? ""), x["expect"]?.string)
+        }
+        for x in c["teaching"]?.array ?? [] {
+            let k = try XCTUnwrap(x["class"])
+            let notes = Recordings.ClassNotes(unit: k["unit"]?.string, taught: k["taught"]?.string ?? "", examples: (k["examples"]?.array ?? []).compactMap(\.string),
+                                              teaching: k["teaching"]?.string ?? "")
+            let moments = (x["moments"]?.array ?? []).map { Recordings.Moment(at: $0["at"]?.number ?? 0, kind: $0["kind"]?.string ?? "", what: $0["what"]?.string ?? "") }
+            let got = Recordings.addTeaching(x["existing"]?.string, subjectName: x["subjectName"]?.string ?? "", date: x["date"]?.string ?? "",
+                                             title: x["title"]?.string ?? "", path: x["path"]?.string ?? "", notes: notes, moments: moments)
+            XCTAssertEqual(got, x["expect"]?.string, "teaching: \(x["about"]?.string ?? "")")
+        }
+        for x in c["autoPins"]?.array ?? [] {
+            let segs = (x["segments"]?.array ?? []).map { Recordings.Segment(start: $0["start"]?.number ?? 0, end: $0["end"]?.number ?? 0, text: $0["text"]?.string ?? "") }
+            let have = (x["existing"]?.array ?? []).compactMap(Recordings.Pin.init(json:))
+            let got = JSONValue.array(Recordings.autoPins(segs, existing: have).map(\.json))
+            XCTAssertEqual(got.text, (x["expect"] ?? .null).text, "autoPins: \(x["about"]?.string ?? "")")
+        }
+        XCTAssertFalse((c["autoPins"]?.array ?? []).isEmpty, "the autoPins cases are read")
     }
 }
