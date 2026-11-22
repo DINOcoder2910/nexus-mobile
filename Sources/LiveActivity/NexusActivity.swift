@@ -13,7 +13,7 @@ struct NexusActivityAttributes: ActivityAttributes, Hashable {
 
     /// What changes while it shows.
     struct ContentState: Codable, Hashable {
-        /// The task's title, or "Recording a class".
+        /// The task's title, or the recording's kind ("Class").
         var title: String
         /// Under the title: the subject and where the timer started, or the pictures and pins so far.
         var detail: String

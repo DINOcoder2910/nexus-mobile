@@ -15,7 +15,7 @@ final class LiveActivities {
     static let shared = LiveActivities()
     static let settingKey = "liveActivities.on"
 
-    /// What shows now, one line each ("Redox worksheet", "Recording a meeting"), for Settings and the tests.
+    /// What shows now, one line each ("Redox worksheet", "Meeting"), for Settings and the tests.
     private(set) var showing: [String] = []
     /// Why one didn't start (the last time it tried).
     private(set) var problem: String?
@@ -109,14 +109,14 @@ final class LiveActivities {
     }
 
     static func recordingState(_ m: Recordings.Meta, began: Date, filming: Bool, store: NexusStore) -> NexusLiveState {
-        let word = m.kind.word.lowercased()
-        let title = (filming ? "Filming a " : "Recording a ") + word
-        var bits: [String] = []
+        // the kind as the title ("Class", "Meeting"); the red badge says it records
+        let title = m.kind.word
+        var bits: [String] = [filming ? "Filming" : "Recording"]
         if let sub = m.subject, let w = store.workstream(sub) { bits.append(w.name) }
         let pics = m.pictures.count, pins = m.pins.count
         if pics > 0 { bits.append(pics == 1 ? "1 picture" : "\(pics) pictures") }
         if pins > 0 { bits.append(pins == 1 ? "1 pin" : "\(pins) pins") }
-        if bits.isEmpty { bits.append("Started " + began.formatted(date: .omitted, time: .shortened)) }
+        if bits.count == 1 { bits.append("since " + began.formatted(date: .omitted, time: .shortened)) }
         return .init(title: title, detail: bits.joined(separator: " · "), since: began, light: "#B3261E", dark: "#FF8A80", icon: m.kind.icon, filming: filming)
     }
 
@@ -198,7 +198,7 @@ struct LiveActivityPreview: View {
                             .environment(\.colorScheme, .dark)
                     }
                 }
-                .padding(14)
+                .padding(8)
                 .background(LinearGradient(colors: [Color(red: 0.16, green: 0.22, blue: 0.36), Color(red: 0.38, green: 0.22, blue: 0.42)], startPoint: .topLeading, endPoint: .bottomTrailing),
                             in: RoundedRectangle(cornerRadius: 28, style: .continuous))
                 // a picture: its buttons would act on the real timer
@@ -223,7 +223,7 @@ struct LiveActivityPreview: View {
                 Text("Hold the Dynamic Island to open it: the title, the clock and the buttons. Tap a timer to open its task, a recording to open Recordings.")
                     .font(.nx(.footnote)).foregroundStyle(.secondary)
             }
-            .padding(20)
+            .padding(.horizontal, 12).padding(.vertical, 20)
         }
         .navigationTitle("Live Activities")
         .navigationBarTitleDisplayMode(.inline)
@@ -235,7 +235,7 @@ struct LiveActivityPreview: View {
         let timer = TimeTracker.shared.current.flatMap { LiveActivities.timerState($0, store: store) }
             ?? .init(title: "Redox worksheet", detail: "Chemistry HL", since: now.addingTimeInterval(-1520), light: "#0F7A49", dark: "#4FD28F")
         let rec = RecordingService.shared.active.map { LiveActivities.recordingState($0.meta, began: $0.began, filming: $0.filming, store: store) }
-            ?? .init(title: "Recording a class", detail: "Chemistry HL · 2 pictures · 1 pin", since: now.addingTimeInterval(-754), light: "#B3261E", dark: "#FF8A80", icon: "graduationcap")
+            ?? .init(title: "Class", detail: "Recording · Chemistry HL · 2 pictures", since: now.addingTimeInterval(-754), light: "#B3261E", dark: "#FF8A80", icon: "graduationcap")
         return [(.timer, timer), (.recording, rec)]
     }
 }

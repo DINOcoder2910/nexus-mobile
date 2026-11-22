@@ -96,7 +96,7 @@ final class LiveActivityPhoneTests: XCTestCase {
         XCTAssertTrue(app.buttons["rec-stop"].firstMatch.waitForExistence(timeout: 10), "recording didn't start")
         sleep(3)
         XCUIDevice.shared.press(.home)
-        sleep(4)
+        sleep(6)
         shot("live-4-island-both")
 
         // Notification Centre shows the Lock Screen cards
@@ -105,13 +105,23 @@ final class LiveActivityPhoneTests: XCTestCase {
         sleep(3)
         shot("live-5-lock-screen")
 
-        // Stop on the timer's card stops the timer in Nexus (iOS runs the button in the app, in the background)
+        // Stop on the timer's card stops the timer in Nexus (iOS runs the button in the app, in the background). The first tap on
+        // two cards opens the stack, and the first press on a Live Activity asks "Allow Live Activities from Nexus?" (Allow).
         let stop = springboard.buttons["Stop the timer"].firstMatch
         let found = stop.waitForExistence(timeout: 8)
         if found {
-            stop.tap()
-            sleep(4)
-            shot("live-6-timer-stopped")
+            let card = springboard.staticTexts["Redox worksheet"].firstMatch
+            var presses = 0
+            while card.exists && presses < 4 {
+                let allow = springboard.buttons["Allow"].firstMatch
+                if allow.exists { allow.tap(); sleep(2) }
+                if stop.exists && stop.isHittable { stop.tap() }
+                presses += 1
+                sleep(4)
+                if presses == 1 { shot("live-6-stack-open") }
+            }
+            shot("live-7-timer-stopped")
+            XCTAssertFalse(card.exists, "the timer's card is still on the Lock Screen after Stop")
         } else {
             print("UINOTE the Lock Screen card's Stop isn't in the springboard's elements on this simulator; stopping in the app instead")
         }
