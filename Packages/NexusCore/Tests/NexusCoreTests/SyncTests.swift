@@ -576,4 +576,53 @@ final class SyncTests: XCTestCase {
         }
         XCTAssertNil(s.bases["notes/mixed.md"])
     }
+
+    // MARK: Drop (DropLog.swift)
+
+    func testDropNotesWhatCameFromWhereAndWhatWentFromHere() async throws {
+        let c = try await agreed()
+        hub.write("Drop/IMG_0042.jpg", "jpeg bytes", device: "Duo")
+        hub.write("notes/elsewhere.md", "not in Drop\n", device: "Duo")
+        try put("Drop/Scan.pdf", "%PDF")
+        let r = synced(try await c.cycle())
+        XCTAssertEqual(read("Drop/IMG_0042.jpg"), "jpeg bytes")
+        XCTAssertEqual(r.dropped.map(\.path).sorted(), ["Drop/IMG_0042.jpg", "Drop/Scan.pdf"])
+        let log = DropLog.read(dir)
+        XCTAssertEqual(log.record(for: "Drop/IMG_0042.jpg")?.from, "Duo")
+        XCTAssertEqual(log.record(for: "Drop/IMG_0042.jpg")?.here, false)
+        XCTAssertEqual(log.record(for: "Drop/Scan.pdf")?.here, true)
+        XCTAssertEqual(log.record(for: "Drop/Scan.pdf")?.from, "iPad")
+        XCTAssertNil(log.record(for: "notes/elsewhere.md"))
+        XCTAssertNil(hub.files[".nexus/drop.json"], "the record never leaves this device")
+        let n = DropFolder.arrivalNotice(r.dropped)
+        XCTAssertEqual(n?.title, "From Duo")
+        XCTAssertEqual(n?.body, "IMG_0042.jpg is in Drop")
+        // nothing new: nothing noted
+        let r2 = synced(try await c.cycle())
+        XCTAssertEqual(r2.dropped, [])
+    }
+
+    func testDropRecordRules() throws {
+        XCTAssertTrue(DropFolder.isDropPath("Drop/a.pdf"))
+        XCTAssertTrue(DropFolder.isDropPath("Drop/x/y.png"))
+        XCTAssertFalse(DropFolder.isDropPath("Drop"))
+        XCTAssertFalse(DropFolder.isDropPath("Drop/"))
+        XCTAssertFalse(DropFolder.isDropPath("drop/a.pdf"))
+        XCTAssertFalse(DropFolder.isDropPath("w/Drop/a.pdf"))
+        let lg = DropLog().noting([DropItem(path: "Drop/a", from: "iPad", at: "1", here: false), DropItem(path: "Drop/b", from: "iPad", at: "2", here: false)])
+            .noting([DropItem(path: "Drop/a", from: "iPhone", at: "3", here: false)])
+        XCTAssertEqual(lg.items.map { "\($0.path):\($0.from)" }, ["Drop/a:iPhone", "Drop/b:iPad"])
+        // the laptop's shape reads here (drop.js writes `hash: null`, the new app `from: ""`)
+        try fm.createDirectory(at: dir.appendingPathComponent(".nexus"), withIntermediateDirectories: true)
+        try Data(#"{"version":1,"items":[{"path":"Drop/x.pdf","hash":null,"from":"","at":"2026-11-22T19:04:02.123Z","here":true},{"path":"elsewhere","at":"1"}]}"#.utf8)
+            .write(to: dir.appendingPathComponent(".nexus/drop.json"))
+        let read = DropLog.read(dir)
+        XCTAssertEqual(read.items.count, 1)
+        XCTAssertEqual(read.items[0].here, true)
+        XCTAssertEqual(DropFolder.date(read.items[0].at)?.timeIntervalSince1970 ?? 0, 1_795_374_242.123, accuracy: 0.002)
+        let two = DropFolder.arrivalNotice([DropItem(path: "Drop/a.pdf", from: "Duo", at: "1", here: false), DropItem(path: "Drop/b.jpg", from: "G14", at: "1", here: false),
+                                             DropItem(path: "Drop/c", from: "iPad", at: "1", here: true)])
+        XCTAssertEqual(two?.title, "From Duo and G14")
+        XCTAssertEqual(two?.body, "2 files are in Drop: a.pdf, b.jpg")
+    }
 }

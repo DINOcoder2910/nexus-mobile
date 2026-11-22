@@ -39,6 +39,8 @@ public struct SyncReport: Equatable, Sendable {
     /// Conflict copies in the folder, from the scan.
     public var conflictCopies: [String] = []
     public var problems: [SyncProblem] = []
+    /// Files in Drop/ sent from here or come from another device in this cycle (DropLog.swift), already noted in the record.
+    public var dropped: [DropItem] = []
 
     public init() {}
 }
@@ -83,10 +85,14 @@ public actor SyncClient {
     private var busy = false
     private var waiters: [CheckedContinuation<Void, Never>] = []
 
-    public init(folder: URL, stateURL: URL, hubUrl: String, transport: SyncTransport) {
+    /// This device's name as the hub knows it (the Drop record says who sent what).
+    public let device: String
+
+    public init(folder: URL, stateURL: URL, hubUrl: String, transport: SyncTransport, device: String = "iPad") {
         self.folder = folder
         self.stateURL = stateURL
         self.transport = transport
+        self.device = device
         let read = SyncState.load(stateURL)
         var s = read ?? SyncState(hubUrl: hubUrl)
         s.hubUrl = hubUrl
@@ -171,6 +177,7 @@ public actor SyncClient {
             // Pull only, until the hub's copy (with its nexus.yaml) is here.
             state.restoring = true
             try await pull(&report, progress)
+            report.dropped = [] // the whole folder coming down, not something sent just now
             if hasNexusYaml() { state.restoring = nil }
             report.conflictCopies = scan().conflictCopies
             return .synced(report)
@@ -199,7 +206,14 @@ public actor SyncClient {
         try await push(deleted, local, &report, progress)
         try await pull(&report, progress)
         report.conflictCopies = scan().conflictCopies
+        noteDrops(report.dropped)
         return .synced(report)
+    }
+
+    /// This device's record of what came and went through Drop/ (never synced); a write that fails costs only the "from" words.
+    private func noteDrops(_ d: [DropItem]) {
+        guard !d.isEmpty else { return }
+        try? DropLog.note(d, in: folder)
     }
 
     /// The long poll: returns when the hub has something newer than the cursor, or after `seconds`.
@@ -340,6 +354,9 @@ public actor SyncClient {
                 continue
             }
             report.pushed.append(p)
+            if r.result == "ok" && state.bases[p] == nil && DropFolder.isDropPath(p) {
+                report.dropped.append(DropItem(path: p, hash: r.hash ?? sent, from: device, at: DropFolder.stamp(), here: true))
+            }
             switch r.result {
             case "ok", "same":
                 state.bases[p] = r.hash ?? sent
@@ -406,7 +423,11 @@ public actor SyncClient {
                     progress?(SyncProgress(remaining: remaining + 1))
                     do {
                         switch try await fetch(p, expecting: here) {
-                        case .wrote(let got): state.bases[p] = got; report.pulled.append(p)
+                        case .wrote(let got):
+                            state.bases[p] = got; report.pulled.append(p)
+                            if DropFolder.isDropPath(p) && (c.device ?? "") != device {
+                                report.dropped.append(DropItem(path: p, hash: got, from: c.device ?? "", at: DropFolder.stamp(), here: false))
+                            }
                         case .changedHere, .goneOnHub: break
                         }
                     } catch SyncError.local(let why) {

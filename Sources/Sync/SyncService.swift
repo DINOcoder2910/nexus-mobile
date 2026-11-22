@@ -43,6 +43,8 @@ final class SyncService {
     private(set) var movedAside: String?
     /// One of the user's choices is being carried out.
     private(set) var working = false
+    /// Goes up whenever a file came into Drop/ or went out from it (the Drop screen and its count look again).
+    private(set) var dropVersion = 0
 
     @ObservationIgnored private weak var store: NexusStore?
     @ObservationIgnored private var client: SyncClient?
@@ -155,7 +157,7 @@ final class SyncService {
         if client == nil || clientKey != full {
             let transport = HTTPSyncTransport(base: url, token: cleanToken, device: cleanDevice, session: Self.session,
                                               appInfo: HTTPSyncTransport.appInfo(build: LivePresence.build))
-            client = SyncClient(folder: store.folder, stateURL: Self.stateURL(key), hubUrl: url.absoluteString, transport: transport)
+            client = SyncClient(folder: store.folder, stateURL: Self.stateURL(key), hubUrl: url.absoluteString, transport: transport, device: cleanDevice)
             presenceTransport = transport
             clientKey = full
             conflictCopies = []
@@ -211,6 +213,13 @@ final class SyncService {
             await work.value
             box.end()
         }
+    }
+
+    /// Files came into Drop/ from another device (or went out from here): say so in a note, and the Drop screen looks again.
+    private func droppedIn(_ d: [DropItem]) {
+        guard !d.isEmpty else { return }
+        dropVersion += 1
+        if let n = DropFolder.arrivalNotice(d) { store?.toast = .init(message: "\(n.title): \(n.body)") }
     }
 
     /// iOS woke the app in the background: one cycle, so reminders see what changed on the laptop.
@@ -301,6 +310,7 @@ final class SyncService {
                     NotificationCenter.default.post(name: NexusStore.readAgain, object: store) // the windows read it too
                     NotificationCenter.default.post(name: LivePresence.pulled, object: r.pulled) // an open board reads them now
                 }
+                droppedIn(r.dropped)
                 return .longPoll
             case .notADataFolder:
                 status = .notDataFolder
