@@ -140,6 +140,8 @@ final class WindowRouter {
     /// Ideas is asked for (the "Add an idea" shortcut that opens the app), with the cursor in its add box.
     var ideas = false
     var focusIdeas = false
+    /// The quick page is asked for (the Action button's "Open the Nexus quick page").
+    var quick = false
 }
 
 /// One window: its own store (its task panel, add sheet, Undo and open board), on the shared data folder.
@@ -166,6 +168,8 @@ enum Screen: Hashable {
     case notebook(String)
     /// Applications (the tracker and Research), and a school's page by its workstream id.
     case applications, school(String)
+    /// Recordings: meetings, classes and filmed classes, transcribed here and prepared by Claude for review.
+    case recordings
     /// A subject's page (a workstream in the new look: its next tasks, notebooks, study and files), and its Study page.
     case subject(String), studyPage(String)
 }
@@ -193,6 +197,7 @@ struct RootView: View {
     @State private var inboxPath: [Screen] = []
     @State private var subjectsPath: [Screen] = []
     @State private var morePath: [Screen] = []
+    @State private var quickOpen = false
 
     var body: some View {
         @Bindable var store = store
@@ -242,6 +247,10 @@ struct RootView: View {
         .onChange(of: router.openTask) { _, _ in answerRouter() }
         .onChange(of: router.addSheet) { _, _ in answerRouter() }
         .onChange(of: router.ideas) { _, _ in answerRouter() }
+        .onChange(of: router.quick) { _, _ in answerRouter() }
+        // the quick page (the Action button), over everything; recording shows its bar on every screen
+        .fullScreenCover(isPresented: $quickOpen) { QuickPage(close: { quickOpen = false }).environment(store).recordingCovers(pill: false) }
+        .recordingCovers(pill: !Device.isPhone && screen != .recordings)
         // the UI check's Spanish demo, with the folder (here, not in the sidebar: the iPhone shows its sidebar only under More)
         .task(id: store.snapshot.loadedAt) { SpanishDemo.prepare(store) }
         .task {
@@ -251,6 +260,8 @@ struct RootView: View {
             answerRouter()
             InkBoardMove.runIfNeeded(store)
             TestHooks.run(store)
+            RecordingDemo.atStart(store)
+            RecordingService.shared.resume()
             // Another writer (sync, the Files app) can change the folder at any time: look every few seconds while open,
             // and tell the other stores (and sync) what changed.
             while !Task.isCancelled {
@@ -333,6 +344,7 @@ struct RootView: View {
         case .home: return "Home"
         case .guide: return "How Nexus works"
         case .files(let path): return path.isEmpty ? "Files (the data folder)" : "Files: \(path)"
+        case .recordings: return "Recordings (recordings/)"
         case .subject(let id): return store.workstream(id).map { "\($0.name)'s page (\($0.folder))" } ?? id
         case .studyPage(let id): return store.workstream(id).map { "\($0.name)'s Study (\($0.folder)/study)" } ?? id
         }
@@ -352,7 +364,12 @@ struct RootView: View {
         if router.ideas {
             router.ideas = false
             router.focusIdeas = true
+            quickOpen = false
             screen = .ideas
+        }
+        if router.quick {
+            router.quick = false
+            quickOpen = true
         }
     }
 
@@ -424,6 +441,7 @@ struct RootView: View {
             case .ideas: IdeasView()
             case .time: TimeView()
             case .claude: ClaudeChatView()
+            case .recordings: RecordingsView()
             case .subject(let id): SubjectPage(workstreamId: id, go: go)
             case .studyPage(let id): StudyPage(workstreamId: id)
             }
@@ -497,15 +515,20 @@ struct RootView: View {
                 .animation(.snappy, value: store.toast == nil)
             }
         }
-        // the running timer, over every tab (its task opens on a tap; Stop)
+        // a recording (not on Recordings, which has its own Stop) and the running timer, over every tab (Snap, Stop; the timer's task opens on a tap)
         .overlay(alignment: .bottomLeading) {
-            if store.snapshot.isDataFolder && TimeTracker.shared.current != nil && path.wrappedValue.last != .claude {
-                RunningTimerPill()
-                    .padding(.leading, 16)
-                    .padding(.trailing, 92)
-                    .padding(.bottom, (store.toast == nil ? 22 : 88) + (which == .calendar ? 56 : 0))
-                    .animation(.snappy, value: store.toast == nil)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            let recording = RecordingService.shared.active.map { !$0.filming } == true && path.wrappedValue.last != .recordings
+            let timing = store.snapshot.isDataFolder && TimeTracker.shared.current != nil
+            if (recording || timing) && path.wrappedValue.last != .claude {
+                VStack(alignment: .leading, spacing: 8) {
+                    if recording { RecordingPill() }
+                    if timing { RunningTimerPill().transition(.move(edge: .bottom).combined(with: .opacity)) }
+                }
+                .padding(.leading, 16)
+                .padding(.trailing, 92)
+                .padding(.bottom, (store.toast == nil ? 22 : 88) + (which == .calendar ? 56 : 0))
+                .animation(.snappy, value: store.toast == nil)
+                .animation(.snappy, value: recording)
             }
         }
         .overlay(alignment: .bottom) { UndoBar().animation(.snappy, value: store.toast) }

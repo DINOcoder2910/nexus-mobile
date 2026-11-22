@@ -111,6 +111,8 @@ struct Sidebar: View {
                     row(.study, "Study", "rectangle.on.rectangle.angled", count: StudyLibrary.shared.dueTotal)
                 }
                 if s.isDataFolder {
+                    row(.recordings, "Recordings", "waveform", count: RecordingsCount.review(store))
+                        .accessibilityIdentifier("sidebar-recordings")
                     row(.inbox, "Inbox", "tray", count: p.openCount(nil))
                     row(.someday, "Someday", "moon.zzz", count: nil)
                 }

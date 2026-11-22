@@ -58,10 +58,10 @@ targets:
         NSLocalNetworkUsageDescription: Nexus syncs your notes with your home hub.
         # the commit this build was made from (the cloud build sets NEXUS_BUILD): told to the hub, so the laptop can say when the iPad is behind
         NexusBuild: $(NEXUS_BUILD)
-        NSCameraUsageDescription: Nexus scans pages into a new board, or a practice sheet into your study folder.
+        NSCameraUsageDescription: Nexus scans pages into a new board or a practice sheet into your study folder, films a class, and snaps the board while recording.
         NSPhotoLibraryUsageDescription: Nexus puts a photo on a new board.
-        NSMicrophoneUsageDescription: Nexus listens while you hold the tutor button, and records a class when you ask it to.
-        NSSpeechRecognitionUsageDescription: Nexus turns what you ask the tutor into words, on the iPad.
+        NSMicrophoneUsageDescription: Nexus listens while you hold the tutor button, and records meetings and classes when you ask it to.
+        NSSpeechRecognitionUsageDescription: Nexus turns what you ask the tutor, and your recordings, into words on this device.
         # a class keeps recording when the screen locks or you switch apps
         UIBackgroundModes:
           - audio
