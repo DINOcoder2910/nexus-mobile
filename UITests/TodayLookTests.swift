@@ -59,9 +59,9 @@ class TodayLookTests: XCTestCase {
         let day = el("day-card")
         reach(day, "the day's hours")
         shot("look-today-day-\(mode)")
-        // the day's hours run to the end of the day, even with nothing planned that late (Nov 22)
-        let midnight = day.staticTexts.matching(NSPredicate(format: "label == %@", "12 am")).firstMatch
-        reach(midnight, "12 am at the foot of the day's hours")
+        // the day's hours run to the end of the app's day (4 am), even with nothing planned that late (Nov 22)
+        let end = day.staticTexts.matching(NSPredicate(format: "label == %@", "4 am")).firstMatch
+        reach(end, "4 am at the foot of the day's hours")
         let slipped = el("slipped")
         reach(slipped, "Slipped")
         reach(el("tomorrow"), "Tomorrow")

@@ -325,25 +325,27 @@ struct DayCard: View {
     @State private var dropAt: Int?
     @State private var dragging: String?
 
-    static let h0 = 8, h1 = 24
+    static let h0 = 8
+    /// The end of the app's day as an hour past midnight (Days.dayStartHour, 4 am: 28), so the hours run until the day ends.
+    static var h1: Int { 24 + Days.dayStartHour }
     static let px: CGFloat = 40, inset: CGFloat = 8, labels: CGFloat = 46
-    /// The hours shown: 8 am to the end of the day (midnight), starting at the whole hour before anything earlier, so no block hangs off the card.
+    /// The hours shown: 8 am to the end of the app's day (4 am), starting at the whole hour before anything earlier, so no block hangs off the card.
     static func span(_ spans: [(start: Int, end: Int)]) -> ClosedRange<Int> {
         let a = spans.map(\.start).min().map { $0 / 60 } ?? h0
-        let b = spans.map(\.end).max().map { ($0 + 59) / 60 } ?? h1
-        return max(0, min(h0, a))...min(24, max(h1, b))
+        return max(0, min(h0, a))...h1
     }
     static func y(_ m: Int, from h: Int) -> CGFloat { inset + CGFloat(m - h * 60) / 60 * px }
     static func minute(_ y: CGFloat, _ hours: ClosedRange<Int>) -> Int {
         let m = Double(hours.lowerBound * 60) + Double(y - inset) / Double(px) * 60
-        return min(max(Int((m / 15).rounded()) * 15, hours.lowerBound * 60), hours.upperBound * 60 - 15)
+        // a task's time is a clock time on its day, so a drop lands before midnight
+        return min(max(Int((m / 15).rounded()) * 15, hours.lowerBound * 60), min(hours.upperBound, 24) * 60 - 15)
     }
 
     private struct Block { var id: String; var start: Int; var end: Int; var kind: Kind }
     private enum Kind { case event(CalEvent), task(NexusTask), suggestion(TodayPlan.Suggestion) }
 
     var body: some View {
-        let allEvents = TodayEvents.spans(cal, v.today)
+        let allEvents = TodayEvents.spans(cal, v.today, past: Days.dayStartHour * 60)
         let events = showEvents ? allEvents : []
         let allDay = TodayEvents.allDay(cal, v.today)
         let timed: [Block] = (v.list + v.done).compactMap { t in
@@ -405,14 +407,14 @@ struct DayCard: View {
 
     private func hours(_ blocks: [Block], _ free: [TodayPlan.Span]) -> some View {
         let placed = Dictionary(uniqueKeysWithValues: DayLayout.place(blocks.map { DayLayout.Span(id: $0.id, start: $0.start, end: $0.end) }).map { ($0.id, $0) })
-        let hours = Self.span(blocks.map { (start: $0.start, end: min($0.end, 24 * 60)) }), h0 = hours.lowerBound
+        let hours = Self.span(blocks.map { (start: $0.start, end: $0.end) }), h0 = hours.lowerBound, last = hours.upperBound * 60
         let y = { (m: Int) in Self.y(m, from: h0) }
         let height = y(hours.upperBound * 60) + 8
         return GeometryReader { g in
             let left = Self.labels + 6, width = g.size.width - left - 2
             ZStack(alignment: .topLeading) {
                 ForEach(hours, id: \.self) { h in
-                    Text("\(h % 12 == 0 ? 12 : h % 12) \(h < 12 || h == 24 ? "am" : "pm")").font(.nx(size: 11)).foregroundStyle(Kit.faint)
+                    Text("\(h % 12 == 0 ? 12 : h % 12) \(h < 12 || h >= 24 ? "am" : "pm")").font(.nx(size: 11)).foregroundStyle(Kit.faint)
                         .offset(x: 6, y: y(h * 60) - 8)
                     Rectangle().fill(Kit.ink.opacity(0.06)).frame(width: g.size.width - Self.labels, height: 1)
                         .offset(x: Self.labels, y: y(h * 60))
@@ -429,7 +431,7 @@ struct DayCard: View {
                     let p = placed[b.id]
                     let cols = CGFloat(max(p?.columns ?? 1, 1)), col = CGFloat(p?.column ?? 0)
                     let w = (width - (cols - 1) * 4) / cols
-                    block(b).frame(width: w, height: blockHeight(b.start, min(b.end, 24 * 60)), alignment: .topLeading)
+                    block(b).frame(width: w, height: blockHeight(b.start, min(b.end, last)), alignment: .topLeading)
                         .offset(x: left + col * (w + 4), y: y(b.start) + 1)
                 }
                 if let m = dropAt {
@@ -448,13 +450,15 @@ struct DayCard: View {
                     .offset(x: left, y: y(m) + 1)
                     .allowsHitTesting(false)
                 }
-                if v.now >= h0 * 60 && v.now <= hours.upperBound * 60 {
+                // after midnight the app's day is still yesterday's (until 4 am): the line sits below 12 am
+                let now = v.now < Days.dayStartHour * 60 && v.today != Days.iso(Date()) ? v.now + 24 * 60 : v.now
+                if now >= h0 * 60 && now <= last {
                     ZStack(alignment: .leading) {
                         Rectangle().fill(Theme.accent).frame(height: 2)
                         Circle().fill(Theme.accent).frame(width: 8, height: 8).offset(x: -4)
                     }
                     .frame(width: g.size.width - 44, height: 8)
-                    .offset(x: 44, y: y(v.now) - 4)
+                    .offset(x: 44, y: y(now) - 4)
                     .allowsHitTesting(false)
                 }
             }
@@ -678,7 +682,7 @@ struct TomorrowCard: View {
 
     var body: some View {
         let t = v.tomorrow
-        let events = TodayEvents.spans(cal, t.date)
+        let events = TodayEvents.spans(cal, t.date, past: Days.dayStartHour * 60)
         let ratio = t.free > 0 ? Double(t.planned) / Double(t.free) : t.planned > 0 ? 1 : 0
         let mood = t.planned == 0 && events.isEmpty ? "A clear day." : ratio < 0.5 ? "A lighter day." : ratio < 0.9 ? "A steady day." : "A full day."
         let said = events.prefix(2).map { "\($0.event.title) at \(TimeWords.clockAp($0.start))" }
@@ -740,8 +744,8 @@ struct TomorrowCard: View {
     private struct Mini: Identifiable { var id: String; var a: Int; var b: Int; var event: Bool; var color: Color; var label: String; var level = 0; var labelX: CGFloat = 0 }
 
     private func strip(_ t: TodayPlan.Tomorrow, _ events: [(start: Int, end: Int, event: CalEvent)]) -> some View {
-        // 8 am to the end of the day (midnight), as the day's hours
-        let span = Double(24 * 60 - TodayPlan.dayFrom)
+        // 8 am to the end of the app's day (4 am), as the day's hours
+        let span = Double(DayCard.h1 * 60 - TodayPlan.dayFrom)
         let x = { (m: Int) -> CGFloat in CGFloat(max(0, min(1, Double(m - TodayPlan.dayFrom) / span))) }
         var blocks: [Mini] = events.enumerated().map { Mini(id: "e\($0.offset)", a: $0.element.start, b: $0.element.end, event: true, color: Kit.selected, label: String($0.element.event.title.split(separator: " ").first ?? "")) }
         for r in t.list {
@@ -785,9 +789,9 @@ struct TomorrowCard: View {
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { stripWidth = $0 }
             .padding(.top, two ? 52 : 34)
             HStack {
-                ForEach([8, 10, 12, 14, 16, 18, 20, 22, 24], id: \.self) { h in
+                ForEach(Array(stride(from: 8, through: DayCard.h1, by: 4)), id: \.self) { h in
                     Text(h == 8 ? "8am" : "\(h % 12 == 0 ? 12 : h % 12)")
-                    if h != 24 { Spacer(minLength: 0) }
+                    if h + 4 <= DayCard.h1 { Spacer(minLength: 0) }
                 }
             }
             .font(.nx(size: 10.5)).foregroundStyle(Kit.faint).padding(.horizontal, 2)

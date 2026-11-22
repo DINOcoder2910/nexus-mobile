@@ -300,11 +300,22 @@ struct TodayView: View {
 /// The device's calendar events Today and its day card draw (when Today shows events and Nexus may read the calendars).
 /// The same event in two calendars (a school account added twice) is drawn once.
 enum TodayEvents {
-    static func spans(_ cal: CalendarStore, _ day: String) -> [(start: Int, end: Int, event: CalEvent)] {
+    /// `past`: minutes after midnight the day runs on (Today's hours go to the app's 4 am end of day), so the next morning's early
+    /// events show below 12 am, as minutes past 24:00.
+    static func spans(_ cal: CalendarStore, _ day: String, past: Int = 0) -> [(start: Int, end: Int, event: CalEvent)] {
         guard cal.eventsOnPlan && cal.canRead else { return [] }
         var seen = Set<String>()
-        return cal.events(on: day).filter { !$0.allDay }.compactMap { e in
-            DayLayout.clip(start: e.start, end: e.end, day: day).map { ($0.start, max($0.end, $0.start + 15), e) }
+        var ids = Set<String>()
+        let next = Days.add(day, 1)
+        let all = (cal.events(on: day) + (past > 0 ? cal.events(on: next) : [])).filter { !$0.allDay && ids.insert($0.id).inserted }
+        return all.compactMap { e -> (start: Int, end: Int, event: CalEvent)? in
+            if past > 0, let d0 = Days.date(day) {
+                let a = Int((e.start.timeIntervalSince(d0) / 60).rounded(.down)), b = Int((e.end.timeIntervalSince(d0) / 60).rounded(.up))
+                let s = max(a, 0), t = min(b, 24 * 60 + past)
+                guard s < t || (a == b && a >= 0 && a < 24 * 60 + past) else { return nil }
+                return (s, max(t, s + 15), e)
+            }
+            return DayLayout.clip(start: e.start, end: e.end, day: day).map { ($0.start, max($0.end, $0.start + 15), e) }
         }
         .filter { seen.insert("\($0.0) \($0.1) \($0.2.title)").inserted }
     }
