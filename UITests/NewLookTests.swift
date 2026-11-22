@@ -49,10 +49,10 @@ final class NewLookTests: XCTestCase {
         let arrow = app.buttons["Expand Chemistry HL"].firstMatch
         reach(arrow, "Chemistry HL's arrow")
         arrow.tap()
-        let study = el("subject-study-chemistry-hl")
+        let folderStudy = el("subject-study-chemistry-hl")
         // its parts open under it: scroll them in if the folder opened near the foot
-        if !study.waitForExistence(timeout: 5) { app.collectionViews.firstMatch.swipeUp(velocity: .slow) }
-        XCTAssertTrue(study.waitForExistence(timeout: 5), "Chemistry HL didn't open as a folder")
+        if !folderStudy.waitForExistence(timeout: 5) { app.collectionViews.firstMatch.swipeUp(velocity: .slow) }
+        XCTAssertTrue(folderStudy.waitForExistence(timeout: 5), "Chemistry HL didn't open as a folder")
         sleep(1)
         shot("look-sidebar-folder-\(mode)")
         app.buttons["Collapse Chemistry HL"].firstMatch.tap()
