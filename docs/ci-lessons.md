@@ -46,4 +46,5 @@ Every iPad or iPhone CI or build failure goes here, with its cause and fix, so i
 
 ## Workflows
 
+- **Nov 22: phone-check's iPad job failed on PR #49 with `StudyPadTests: no molecules row`**, as on every phone-check run since Nov 20 (runs 26-29, other PRs too): its Study test still looks for the Molecules row PR #42 took out of the sidebar. phone-check starts whenever a `UITests/*PhoneTests.swift` or `*PadTests.swift` file changes, beside ui-check, which already runs both devices. Not the pushing PR's failure; the fix is to retire phone-check.yml (one Mac job per check, below) or bring StudyPadTests up to the new way in, never to skip the test.
 - **One Mac job per check.** `phone-check.yml` (a separate iPhone + iPad matrix) came back to main with the Applications PR; its jobs queue beside ui-check's and were cancelled on Nov 19 after waiting for a runner. ui-check already runs both devices.
