@@ -53,7 +53,7 @@ struct HomeView: View {
 
     private func header(_ p: Planning, wide: Bool) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(Self.kicker(store.today)).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.accent)
+            Text(Self.kicker(store.today)).font(.nx(.subheadline, .semibold)).foregroundStyle(Theme.accent)
             Text(Self.greeting(Date())).font(wide ? .system(size: 40, weight: .bold) : .largeTitle.weight(.bold))
             Text(Self.hero(p)).font(wide ? .title3 : .body).foregroundStyle(.secondary)
         }
@@ -141,11 +141,11 @@ struct HomeView: View {
                             .foregroundStyle(f.n > 0 && f.id == "slipped" ? Theme.late : .primary)
                             .frame(minWidth: 44, alignment: .trailing)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(f.label).font(.body.weight(.medium))
-                            Text(f.sub).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                            Text(f.label).font(.nx(.body, .medium))
+                            Text(f.sub).font(.nx(.caption)).foregroundStyle(.secondary).lineLimit(2)
                         }
                         Spacer(minLength: 0)
-                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                        Image(systemName: "chevron.right").font(.nx(.caption)).foregroundStyle(.tertiary)
                     }
                     .padding(.vertical, 6)
                     .contentShape(Rectangle())
@@ -164,7 +164,7 @@ struct HomeView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("\(f.n)").font(.system(size: 26, weight: .semibold, design: .rounded)).monospacedDigit()
                             .foregroundStyle(f.n > 0 && f.id == "slipped" ? Theme.late : .primary)
-                        Text(f.label).font(.caption.weight(.medium)).foregroundStyle(.secondary).lineLimit(1)
+                        Text(f.label).font(.nx(.caption, .medium)).foregroundStyle(.secondary).lineLimit(1)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(12)
@@ -186,10 +186,10 @@ struct HomeView: View {
                     Button { store.open(t) } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(n < 0 ? "\(-n)d late" : n == 0 ? "Today" : n == 1 ? "Tomorrow" : "in \(n) days")
-                                .font(.caption.weight(.semibold))
+                                .font(.nx(.caption, .semibold))
                                 .foregroundStyle(n < 0 ? Theme.late : n <= 2 ? Theme.soon : .secondary)
-                            Text("★ " + t.text).font(.subheadline.weight(.semibold)).lineLimit(2).multilineTextAlignment(.leading)
-                            Text(store.workstreamName(t)).font(.caption).foregroundStyle(store.color(t))
+                            Text("★ " + t.text).font(.nx(.subheadline, .semibold)).lineLimit(2).multilineTextAlignment(.leading)
+                            Text(store.workstreamName(t)).font(.nx(.caption)).foregroundStyle(store.color(t))
                         }
                         .frame(width: 180, alignment: .leading)
                         .padding(12)
@@ -217,13 +217,13 @@ struct HomeView: View {
             }
             if rows.count > 7 {
                 Button(showAll ? "Show fewer" : "Show \(rows.count - shown.count) more") { withAnimation(.snappy) { showAll.toggle() } }
-                    .font(.callout)
+                    .font(.nx(.callout))
             }
             addField
             HStack {
-                Button("Open Inbox") { go(.inbox) }.font(.callout.weight(.medium))
+                Button("Open Inbox") { go(.inbox) }.font(.nx(.callout, .medium))
                 Spacer()
-                FileInboxButton().font(.callout.weight(.medium)).buttonStyle(.borderless)
+                FileInboxButton().font(.nx(.callout, .medium)).buttonStyle(.borderless)
             }
             .padding(.top, 4)
         }
@@ -232,7 +232,7 @@ struct HomeView: View {
     /// The Inbox empty on the iPad: one quiet line where the card would be (the laptop hides it; a wide screen keeps its shape).
     private var quietInbox: some View {
         Card(title: "Inbox", icon: "tray") {
-            Text("Nothing to file.").font(.callout).foregroundStyle(.secondary)
+            Text("Nothing to file.").font(.nx(.callout)).foregroundStyle(.secondary)
             addField
         }
     }

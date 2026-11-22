@@ -1,0 +1,4 @@
+tasks:
+  - id: fi01
+    title: A task in a finished workstream
+    plan: [2026-11-20]

@@ -24,7 +24,8 @@ final class IdeasTests: XCTestCase {
     }
 
     func openIdeasFromSidebar() {
-        let row = app.staticTexts["Ideas"].firstMatch
+        // the iPad has Ideas as an icon at the sidebar's foot (the new look)
+        let row = app.buttons["sidebar-Ideas"].firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 15), "no Ideas row in the sidebar")
         row.tap()
         XCTAssertTrue(app.staticTexts["New · 2"].firstMatch.waitForExistence(timeout: 15), "the seeded ideas didn't show")
@@ -49,13 +50,9 @@ final class IdeasTests: XCTestCase {
             let hide = app.keyboards.buttons["Hide keyboard"]
             if hide.exists { hide.tap() } else { app.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: 0.12)).tap() }
         }
-        // Settings is the sidebar's last row, below Notebooks: scroll the sidebar (the left tenth of the screen) down to it
-        let settings = app.staticTexts["Settings"].firstMatch
-        for _ in 0..<10 where !(settings.exists && settings.isHittable) {
-            let from = app.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.8))
-            from.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.25)))
-        }
-        XCTAssertTrue(settings.isHittable, "no Settings row in the sidebar")
+        // Settings is an icon at the sidebar's foot (the new look)
+        let settings = app.buttons["sidebar-Settings"].firstMatch
+        XCTAssertTrue(settings.waitForExistence(timeout: 10) && settings.isHittable, "no Settings icon at the sidebar's foot")
         settings.tap()
         let credits = app.staticTexts["Anthropic API credits"].firstMatch
         _ = credits.waitForExistence(timeout: 10)

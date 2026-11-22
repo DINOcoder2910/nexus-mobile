@@ -14,7 +14,7 @@ struct ReminderSettingsView: View {
                 Button("Notifications are off for Nexus in iOS Settings. Turn them on") {
                     if let url = URL(string: UIApplication.openNotificationSettingsURLString) { openURL(url) }
                 }
-                .font(.callout)
+                .font(.nx(.callout))
             }
             if reminders.settings.on {
                 Toggle("Deadlines", isOn: $r.settings.deadlines)

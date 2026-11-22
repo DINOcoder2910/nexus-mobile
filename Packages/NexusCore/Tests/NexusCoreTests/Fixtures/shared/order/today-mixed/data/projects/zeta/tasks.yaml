@@ -1,0 +1,14 @@
+tasks:
+  - id: ze01
+    title: Abstract draft
+    plan: ["2026-11-20 01:30"]
+  - id: ze02
+    title: Yearbook photos
+    plan: ["2026-11-20 09:00"]
+  - id: ze03
+    title: Email the coordinator
+    due: 2026-11-21
+    plan: [2026-11-20]
+  - id: ze04
+    title: Archive the old files
+    plan: [2026-11-20]

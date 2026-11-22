@@ -59,9 +59,9 @@ struct GuideView: View {
         List {
             ForEach(Self.parts) { p in
                 Section {
-                    Text(.init(p.text)).font(.callout).fixedSize(horizontal: false, vertical: true)
+                    Text(.init(p.text)).font(.nx(.callout)).fixedSize(horizontal: false, vertical: true)
                 } header: {
-                    Label(p.title, systemImage: p.icon).font(.subheadline.weight(.semibold))
+                    Label(p.title, systemImage: p.icon).font(.nx(.subheadline, .semibold))
                 }
             }
         }

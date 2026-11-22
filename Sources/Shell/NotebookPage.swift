@@ -1,7 +1,6 @@
 import SwiftUI
 import UIKit
 import PhotosUI
-import VisionKit
 import NexusCore
 
 /// A notebook's page: the path at the top, the notebooks inside it, then its boards as cards (the board's picture, thumb.png, its name
@@ -16,7 +15,6 @@ struct NotebookPage: View {
     @State private var pickingPDF = false
     @State private var pickingPhoto = false
     @State private var photo: PhotosPickerItem?
-    @State private var scanning = false
     @State private var sharing: SharedFile?
 
     var body: some View {
@@ -51,13 +49,6 @@ struct NotebookPage: View {
                 }
             }
         }
-        .fullScreenCover(isPresented: $scanning) {
-            ScannerView { pages in
-                scanning = false
-                if !pages.isEmpty { actions.newBoard(fromScan: pages, in: path, store) }
-            }
-            .ignoresSafeArea()
-        }
         .sheet(item: $sharing) { f in ShareSheet(url: f.url) }
     }
 
@@ -66,12 +57,20 @@ struct NotebookPage: View {
             Button { actions.ask(.board, in: path) } label: { Label("Blank board", systemImage: "scribble") }
             Button { HangWatch.note("notebook: From a PDF picker asked"); pickingPDF = true } label: { Label("From a PDF…", systemImage: "doc.richtext") }
             Button { pickingPhoto = true } label: { Label("From a photo…", systemImage: "photo") }
-            if VNDocumentCameraViewController.isSupported {
-                Button { scanning = true } label: { Label("From a scan…", systemImage: "doc.viewfinder") }
+            if ScanCamera.isSupported {
+                Button { scan() } label: { Label("From a scan…", systemImage: "doc.viewfinder") }
             }
             Divider()
             Button { actions.ask(.notebook, in: path) } label: { Label("New notebook", systemImage: "folder.badge.plus") }
         } label: { Label("New", systemImage: "plus") }
+    }
+
+    /// New › From a scan…: the same camera as a board's Scan a handout… (HandoutScan.swift), over whatever is showing.
+    private func scan() {
+        let (actions, path, store) = (actions, path, store)
+        ScanCamera.present(from: nil) { pages in
+            if !pages.isEmpty { actions.newBoard(fromScan: pages, in: path, store) }
+        }
     }
 
     @ViewBuilder
@@ -79,12 +78,12 @@ struct NotebookPage: View {
         VStack(alignment: .leading, spacing: 18) {
             crumbs
             if !nb.notebooks.isEmpty {
-                Text("Notebooks").font(.headline)
+                Text("Notebooks").font(.nx(.headline))
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 14)], spacing: 14) {
                     ForEach(nb.notebooks) { sub in NotebookCard(nb: sub, color: color, actions: actions, open: { go(.notebook(sub.path)) }) }
                 }
             }
-            Text("Boards").font(.headline)
+            Text("Boards").font(.nx(.headline))
             if nb.boards.isEmpty {
                 Text("No boards here yet. New › Blank board starts one.").foregroundStyle(.secondary)
             } else {
@@ -102,7 +101,7 @@ struct NotebookPage: View {
         let parts = path.split(separator: "/").map(String.init)
         return HStack(spacing: 6) {
             ForEach(parts.indices, id: \.self) { i in
-                if i > 0 { Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary) }
+                if i > 0 { Image(systemName: "chevron.right").font(.nx(.caption2)).foregroundStyle(.tertiary) }
                 let p = parts[0...i].joined(separator: "/")
                 let name = i == 0 ? "Notebooks" : parts[i]
                 if i == 0 || i == parts.count - 1 {
@@ -112,7 +111,7 @@ struct NotebookPage: View {
                 }
             }
         }
-        .font(.subheadline)
+        .font(.nx(.subheadline))
     }
 
     private func share(_ b: Notebook.BoardRef) {
@@ -138,12 +137,12 @@ struct NotebookCard: View {
         Button(action: open) {
             HStack(spacing: 12) {
                 Image(systemName: "book.closed.fill")
-                    .font(.title2)
+                    .font(.nx(.title2))
                     .foregroundStyle(color.map { Color(uiColor: InkConvert.color($0)) } ?? Color.accentColor)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(nb.name).font(.subheadline.weight(.medium)).lineLimit(1)
+                    Text(nb.name).font(.nx(.subheadline, .medium)).lineLimit(1)
                     let n = nb.allBoards.count
-                    Text(n == 1 ? "1 board" : "\(n) boards").font(.caption).foregroundStyle(.secondary)
+                    Text(n == 1 ? "1 board" : "\(n) boards").font(.nx(.caption)).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
             }
@@ -174,15 +173,15 @@ struct BoardCard: View {
                     if let thumb {
                         Image(uiImage: thumb).resizable().scaledToFill()
                     } else {
-                        Image(systemName: "scribble").font(.largeTitle).foregroundStyle(.quaternary)
+                        Image(systemName: "scribble").font(.nx(.largeTitle)).foregroundStyle(.quaternary)
                     }
                 }
                 .aspectRatio(4 / 3, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(uiColor: .separator)))
-                Text(b.name).font(.subheadline.weight(.medium)).lineLimit(1)
+                Text(b.name).font(.nx(.subheadline, .medium)).lineLimit(1)
                 Text(edited.map { "Edited " + $0.formatted(.relative(presentation: .named)) } ?? " ")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.nx(.caption)).foregroundStyle(.secondary)
             }
             .contentShape(Rectangle())
         }
@@ -231,25 +230,3 @@ struct ShareSheet: UIViewControllerRepresentable {
     func updateUIViewController(_ vc: UIActivityViewController, context: Context) {}
 }
 
-/// The document camera: scanned pages, or none when cancelled.
-struct ScannerView: UIViewControllerRepresentable {
-    let done: ([UIImage]) -> Void
-
-    func makeCoordinator() -> Coordinator { Coordinator(done: done) }
-    func makeUIViewController(context: Context) -> VNDocumentCameraViewController {
-        let vc = VNDocumentCameraViewController()
-        vc.delegate = context.coordinator
-        return vc
-    }
-    func updateUIViewController(_ vc: VNDocumentCameraViewController, context: Context) {}
-
-    final class Coordinator: NSObject, VNDocumentCameraViewControllerDelegate {
-        let done: ([UIImage]) -> Void
-        init(done: @escaping ([UIImage]) -> Void) { self.done = done }
-        func documentCameraViewController(_ controller: VNDocumentCameraViewController, didFinishWith scan: VNDocumentCameraScan) {
-            done((0..<scan.pageCount).map { scan.imageOfPage(at: $0) })
-        }
-        func documentCameraViewControllerDidCancel(_ controller: VNDocumentCameraViewController) { done([]) }
-        func documentCameraViewController(_ controller: VNDocumentCameraViewController, didFailWithError error: Error) { done([]) }
-    }
-}

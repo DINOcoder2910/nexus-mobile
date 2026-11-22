@@ -1,0 +1,4 @@
+# Your own order of each day's tasks with no time, as you dragged them in Today: the task ids, one line a day.
+# Nexus writes this file on every device and drops a day older than two weeks.
+2026-11-19: [cw01, iw03]
+2026-11-22: [iw02]

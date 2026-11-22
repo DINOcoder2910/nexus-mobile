@@ -77,7 +77,7 @@ struct ReadAloudBar: View {
             HStack(spacing: 12) {
                 Image(systemName: "speaker.wave.2.fill").foregroundStyle(.tint)
                 Text(around).lineLimit(2).frame(maxWidth: 520, alignment: .leading)
-                Button { reader.stop() } label: { Image(systemName: "stop.circle.fill").font(.title2) }.accessibilityLabel("Stop reading")
+                Button { reader.stop() } label: { Image(systemName: "stop.circle.fill").font(.nx(.title2)) }.accessibilityLabel("Stop reading")
             }
             .padding(.horizontal, 14).padding(.vertical, 10)
             .background(.regularMaterial, in: Capsule())

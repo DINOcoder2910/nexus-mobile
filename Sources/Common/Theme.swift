@@ -46,11 +46,12 @@ struct Chip: View {
             if let icon { Image(systemName: icon).imageScale(.small) }
             Text(text)
         }
-        .font(.caption.weight(strong ? .semibold : .regular))
+        .font(.nx(.caption, strong ? .semibold : .regular))
         .foregroundStyle(color)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 2)
-        .background(color.opacity(0.12), in: Capsule())
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        // the kit's chip: a tone of its own colour, radius 8, no line
+        .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: Kit.chipRadius, style: .continuous))
         .lineLimit(1)
     }
 }
@@ -64,7 +65,8 @@ struct SectionTitle: View {
             Text(title)
             if let count { Text("\(count)").foregroundStyle(.secondary) }
         }
-        .font(.subheadline.weight(.semibold))
+        .font(.nx(.headline, .semibold))
+        .foregroundStyle(Kit.ink)
         .textCase(nil)
     }
 }
@@ -77,8 +79,8 @@ struct EmptyNote: View {
     var body: some View {
         VStack(spacing: 8) {
             Image(systemName: icon).font(.system(size: 34)).foregroundStyle(.tertiary)
-            Text(title).font(.headline).foregroundStyle(.secondary)
-            if let detail { Text(detail).font(.callout).foregroundStyle(.tertiary).multilineTextAlignment(.center) }
+            Text(title).font(.nx(.headline)).foregroundStyle(.secondary)
+            if let detail { Text(detail).font(.nx(.callout)).foregroundStyle(.tertiary).multilineTextAlignment(.center) }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 40)

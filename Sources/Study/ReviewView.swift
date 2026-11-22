@@ -32,8 +32,8 @@ struct ReviewView: View {
                 }
                 ToolbarItem(placement: .principal) {
                     VStack(spacing: 0) {
-                        Text(session.deck.title).font(.headline).lineLimit(1)
-                        Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        Text(session.deck.title).font(.nx(.headline)).lineLimit(1)
+                        Text(subtitle).font(.nx(.caption)).foregroundStyle(.secondary).lineLimit(1)
                     }
                 }
                 ToolbarItem(placement: .primaryAction) {
@@ -66,7 +66,7 @@ struct ReviewView: View {
         ScrollView {
             VStack(spacing: 20) {
                 Text("\(session.done) done · \(session.queue.count + 1) to go")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.nx(.caption)).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Text(side?.prompt ?? "")
                     .font(.system(.largeTitle, design: .rounded).weight(.semibold))
@@ -98,7 +98,7 @@ struct ReviewView: View {
                 TextField("Type the answer", text: $typed)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
-                    .font(.title3)
+                    .font(.nx(.title3))
                     .focused($typing)
                     .submitLabel(.done)
                     .onSubmit(submit)
@@ -110,9 +110,9 @@ struct ReviewView: View {
         } else if let r = session.result {
             let v = verdict(r)
             VStack(spacing: 6) {
-                Label(v.0, systemImage: v.2).font(.headline).foregroundStyle(v.1)
+                Label(v.0, systemImage: v.2).font(.nx(.headline)).foregroundStyle(v.1)
                 if r != .right, !session.typed.isEmpty {
-                    Text("You wrote: \(session.typed)").font(.callout).foregroundStyle(.secondary)
+                    Text("You wrote: \(session.typed)").font(.nx(.callout)).foregroundStyle(.secondary)
                 }
             }
         }
@@ -137,7 +137,7 @@ struct ReviewView: View {
                         HStack(spacing: 12) {
                             Text("\(i + 1)").font(.caption.monospacedDigit().weight(.semibold)).foregroundStyle(.secondary)
                                 .frame(width: 22, height: 22).background(Color.secondary.opacity(0.12), in: Circle())
-                            Text(o).font(.title3).multilineTextAlignment(.leading)
+                            Text(o).font(.nx(.title3)).multilineTextAlignment(.leading)
                             Spacer(minLength: 0)
                             if shown && isRight { Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.planned) }
                             else if shown && isPicked { Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.late) }
@@ -166,9 +166,9 @@ struct ReviewView: View {
                     .textSelection(.enabled)
             }
             if let card = session.card {
-                if !card.note.isEmpty { Text(card.note).font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center) }
-                if !card.example.isEmpty { Text(card.example).font(.callout.italic()).foregroundStyle(.secondary).multilineTextAlignment(.center) }
-                if !card.covers.isEmpty { Text(card.covers.joined(separator: ", ")).font(.caption).foregroundStyle(.tertiary) }
+                if !card.note.isEmpty { Text(card.note).font(.nx(.callout)).foregroundStyle(.secondary).multilineTextAlignment(.center) }
+                if !card.example.isEmpty { Text(card.example).font(.nx(.callout).italic()).foregroundStyle(.secondary).multilineTextAlignment(.center) }
+                if !card.covers.isEmpty { Text(card.covers.joined(separator: ", ")).font(.nx(.caption)).foregroundStyle(.tertiary) }
             }
         }
         .frame(maxWidth: .infinity)
@@ -180,14 +180,14 @@ struct ReviewView: View {
         VStack(spacing: 8) {
             if session.phase == .ask {
                 if session.mode == .flip {
-                    Button { session.reveal() } label: { Text("Show answer").font(.headline).frame(maxWidth: .infinity, minHeight: 34) }
+                    Button { session.reveal() } label: { Text("Show answer").font(.nx(.headline)).frame(maxWidth: .infinity, minHeight: 34) }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.large)
                         .keyboardShortcut(.space, modifiers: [])
                 } else if session.mode == .type {
-                    Button("I don't know: show the answer") { submit() }.font(.callout)
+                    Button("I don't know: show the answer") { submit() }.font(.nx(.callout))
                 } else {
-                    Text("Pick one").font(.callout).foregroundStyle(.secondary)
+                    Text("Pick one").font(.nx(.callout)).foregroundStyle(.secondary)
                 }
             } else {
                 let previews = session.preview(StudyLibrary.now)
@@ -197,8 +197,8 @@ struct ReviewView: View {
                         let on = p.grade.g == suggested
                         Button { grade(p.grade.g) } label: {
                             VStack(spacing: 2) {
-                                Text(p.grade.label).font(.subheadline.weight(.semibold))
-                                Text(p.inText).font(.caption2).opacity(0.8)
+                                Text(p.grade.label).font(.nx(.subheadline, .semibold))
+                                Text(p.inText).font(.nx(.caption2)).opacity(0.8)
                             }
                             .frame(maxWidth: .infinity, minHeight: 44)
                         }
@@ -232,10 +232,10 @@ struct ReviewView: View {
         return VStack(spacing: 14) {
             Spacer()
             Image(systemName: "checkmark.seal.fill").font(.system(size: 52)).foregroundStyle(Theme.accent)
-            Text(s.practise ? "Practice done" : "Session done").font(.title.weight(.semibold))
+            Text(s.practise ? "Practice done" : "Session done").font(.nx(.title, .semibold))
             Text("\(s.done) \(s.done == 1 ? "card" : "cards") reviewed, \(s.right) right the first time.")
                 .foregroundStyle(.secondary)
-            if !next.isEmpty { Text(next).font(.callout).foregroundStyle(.secondary) }
+            if !next.isEmpty { Text(next).font(.nx(.callout)).foregroundStyle(.secondary) }
             HStack(spacing: 12) {
                 if !s.practise && (left.due > 0 || left.new > 0) {
                     Button("Review more") { close(true) }.buttonStyle(.bordered).controlSize(.large)

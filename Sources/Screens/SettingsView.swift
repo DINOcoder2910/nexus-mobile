@@ -67,12 +67,14 @@ struct SettingsView: View {
 
             TutorSettings()
 
+            RecordingSettings()
+
             if !s.problems.isEmpty {
                 Section("Things to check") {
                     ForEach(s.problems) { p in
                         VStack(alignment: .leading) {
                             Text(p.file).font(.callout.monospaced())
-                            Text(p.message).font(.caption).foregroundStyle(.secondary)
+                            Text(p.message).font(.nx(.caption)).foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -101,7 +103,7 @@ struct FolderSetupView: View {
     var body: some View {
         VStack(spacing: 22) {
             Image(systemName: "folder.badge.questionmark").font(.system(size: 54)).foregroundStyle(.secondary)
-            Text("No data folder yet").font(.title.weight(.semibold))
+            Text("No data folder yet").font(.nx(.title, .semibold))
             Text("Nexus reads your plain files: the same data folder as on the laptop. Turn on **Sync** in Settings to download it from your hub, put a copy in **\(Device.defaultFolder)** with the Files app, pick a folder from Files, or try it with sample data first.")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
@@ -111,7 +113,7 @@ struct FolderSetupView: View {
                 Button("Use a folder from Files…") { picking = true }.buttonStyle(.bordered)
                 Button("Look again") { store.reload() }.buttonStyle(.bordered)
             }
-            Text("Looking in: \(store.folderName)").font(.caption).foregroundStyle(.tertiary)
+            Text("Looking in: \(store.folderName)").font(.nx(.caption)).foregroundStyle(.tertiary)
         }
         .padding(40)
         .frame(maxWidth: .infinity, maxHeight: .infinity)

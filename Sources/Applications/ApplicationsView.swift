@@ -96,11 +96,11 @@ struct CapLine: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(model.cap.text).font(.headline)
+                Text(model.cap.text).font(.nx(.headline))
                 if model.cap.over { Chip(text: "over the cap", icon: "exclamationmark.triangle", color: Theme.late, strong: true) }
                 else if model.cap.atMax { Chip(text: "at the cap", color: Theme.soon) }
                 Spacer()
-                Text("\(model.considering.count) considering").font(.subheadline).foregroundStyle(.secondary)
+                Text("\(model.considering.count) considering").font(.nx(.subheadline)).foregroundStyle(.secondary)
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -108,9 +108,9 @@ struct CapLine: View {
                         Button { go(.school(s.id)) } label: {
                             HStack(spacing: 6) {
                                 Circle().fill(store.schoolColor(s.id)).frame(width: 8, height: 8)
-                                Text(s.short).font(.subheadline.weight(.medium))
-                                if let r = s.round { Text(s.roundLabel(r)).font(.caption).foregroundStyle(.secondary) }
-                                if s.applied != nil { Image(systemName: "paperplane.fill").font(.caption2).foregroundStyle(Theme.planned) }
+                                Text(s.short).font(.nx(.subheadline, .medium))
+                                if let r = s.round { Text(s.roundLabel(r)).font(.nx(.caption)).foregroundStyle(.secondary) }
+                                if s.applied != nil { Image(systemName: "paperplane.fill").font(.nx(.caption2)).foregroundStyle(Theme.planned) }
                             }
                             .padding(.horizontal, 10).padding(.vertical, 6)
                             .background(Color(uiColor: .secondarySystemGroupedBackground), in: Capsule())
@@ -143,7 +143,7 @@ struct RunwayStrip: View {
                 }
                 .padding(.vertical, 2)
             }
-            Text("\(Apps.dur(model.runway.openHours)) of open work").font(.caption).foregroundStyle(.secondary)
+            Text("\(Apps.dur(model.runway.openHours)) of open work").font(.nx(.caption)).foregroundStyle(.secondary)
         }
         .sheet(item: $open) { g in GateSheet(gate: g, model: model, go: go) }
     }
@@ -154,14 +154,14 @@ struct RunwayStrip: View {
         return Button { open = g } label: {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 4) {
-                    Text(g.date.map { Apps.short($0) } ?? "No date yet").font(.headline)
-                    if g.binding { Image(systemName: "lock.fill").font(.caption2).foregroundStyle(Theme.late) }
+                    Text(g.date.map { Apps.short($0) } ?? "No date yet").font(.nx(.headline))
+                    if g.binding { Image(systemName: "lock.fill").font(.nx(.caption2)).foregroundStyle(Theme.late) }
                 }
                 if g.date != nil {
                     Text(late ? "passed" : g.days == 0 ? "today" : "\(g.days) day\(g.days == 1 ? "" : "s")")
-                        .font(.caption).foregroundStyle(late ? Theme.late : tight ? Theme.soon : .secondary)
+                        .font(.nx(.caption)).foregroundStyle(late ? Theme.late : tight ? Theme.soon : .secondary)
                 }
-                Text(g.label.isEmpty ? (g.soft ? "Your own date" : "") : g.label).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                Text(g.label.isEmpty ? (g.soft ? "Your own date" : "") : g.label).font(.nx(.caption)).foregroundStyle(.secondary).lineLimit(2)
                 HStack(spacing: 4) {
                     Chip(text: "\(g.items.count) to do", color: .secondary)
                     if g.hours > 0 { Chip(text: Apps.dur(g.hours), color: tight ? Theme.soon : .secondary) }
@@ -231,22 +231,22 @@ struct EssayBoard: View {
                 SectionTitle(title: "Essays", count: model.essays.count)
                 Spacer()
                 ForEach(Apps.systems.filter { sys in model.applying.contains { $0.system == sys.id } }, id: \.id) { sys in
-                    Button { picking = sys } label: { Label("\(sys.short) questions", systemImage: "checklist") }.font(.subheadline)
+                    Button { picking = sys } label: { Label("\(sys.short) questions", systemImage: "checklist") }.font(.nx(.subheadline))
                 }
             }
             if model.board.isEmpty {
-                Text("No essays yet. A school's prompts become essays when it starts applying; add your own on its page.").font(.subheadline).foregroundStyle(.secondary)
+                Text("No essays yet. A school's prompts become essays when it starts applying; add your own on its page.").font(.nx(.subheadline)).foregroundStyle(.secondary)
             }
             ForEach(model.board) { row in
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
-                        Text(row.fam.name).font(.subheadline.weight(.semibold))
-                        Text("\(row.count) essay\(row.count == 1 ? "" : "s")").font(.caption).foregroundStyle(.secondary)
+                        Text(row.fam.name).font(.nx(.subheadline, .semibold))
+                        Text("\(row.count) essay\(row.count == 1 ? "" : "s")").font(.nx(.caption)).foregroundStyle(.secondary)
                         Spacer()
                     }
                     EssayLine(essay: row.master, model: model, master: true, cut: "", go: go)
                     ForEach(row.ladder, id: \.essay.id) { r in EssayLine(essay: r.essay, model: model, master: false, cut: r.cut, go: go) }
-                    if !row.fam.tip.isEmpty { Text(row.fam.tip).font(.caption).foregroundStyle(.secondary) }
+                    if !row.fam.tip.isEmpty { Text(row.fam.tip).font(.nx(.caption)).foregroundStyle(.secondary) }
                 }
                 .padding(12)
                 .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
@@ -273,12 +273,12 @@ struct EssayLine: View {
             Circle().fill(store.schoolColor(essay.general ? "common-app" : essay.school)).frame(width: 8, height: 8).padding(.top, 6)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(essay.general ? essay.generalName : model.school(essay.school)?.short ?? essay.school).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    Text(essay.general ? essay.generalName : model.school(essay.school)?.short ?? essay.school).font(.nx(.caption, .semibold)).foregroundStyle(.secondary)
                     if master { Chip(text: "master", color: Theme.accent, strong: true) }
                     if !cut.isEmpty { Chip(text: cut, color: .secondary) }
-                    if !essay.limitText.isEmpty { Text(essay.limitText).font(.caption).foregroundStyle(.secondary) }
+                    if !essay.limitText.isEmpty { Text(essay.limitText).font(.nx(.caption)).foregroundStyle(.secondary) }
                 }
-                Text(essay.title).font(.subheadline).lineLimit(3)
+                Text(essay.title).font(.nx(.subheadline)).lineLimit(3)
             }
             Spacer(minLength: 0)
             if !essay.doc.isEmpty, let u = URL(string: essay.doc) {
@@ -333,8 +333,8 @@ struct SystemPicksSheet: View {
                                 HStack(alignment: .top) {
                                     Image(systemName: picked.contains(q.id) ? "checkmark.circle.fill" : "circle").foregroundStyle(picked.contains(q.id) ? Theme.accent : .secondary)
                                     VStack(alignment: .leading, spacing: 3) {
-                                        Text(q.short).font(.subheadline.weight(.semibold))
-                                        Text(q.title).font(.caption).foregroundStyle(.secondary)
+                                        Text(q.short).font(.nx(.subheadline, .semibold))
+                                        Text(q.title).font(.nx(.caption)).foregroundStyle(.secondary)
                                     }
                                 }
                             }
@@ -377,21 +377,21 @@ struct WriteOrder: View {
         VStack(alignment: .leading, spacing: 10) {
             SectionTitle(title: "Write order", count: model.ordered.count)
             if model.ordered.isEmpty {
-                Text("No open work with a date or an estimate.").font(.subheadline).foregroundStyle(.secondary)
+                Text("No open work with a date or an estimate.").font(.nx(.subheadline)).foregroundStyle(.secondary)
             } else {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Stepper(value: Binding(get: { sg.hoursPerDay }, set: { hours = max(0.25, $0) }), in: 0.25...12, step: 0.25) {
-                            Text("\(Apps.dur(sg.hoursPerDay)) a day").font(.subheadline.weight(.semibold))
+                            Text("\(Apps.dur(sg.hoursPerDay)) a day").font(.nx(.subheadline, .semibold))
                         }
                     }
                     if let p = model.pace {
-                        Text("To finish what is due \(Apps.short(p.forDate)) you need about \(Apps.dur(p.hoursPerDay)) a day.").font(.caption).foregroundStyle(.secondary)
+                        Text("To finish what is due \(Apps.short(p.forDate)) you need about \(Apps.dur(p.hoursPerDay)) a day.").font(.nx(.caption)).foregroundStyle(.secondary)
                     }
                     let days = sg.schedule.days
                     if let first = days.first, let last = days.last {
                         Text("\(sg.schedule.byItem.count) pieces over \(days.count) day\(days.count == 1 ? "" : "s"), \(Apps.short(first)) to \(Apps.short(last)).\(sg.schedule.late.isEmpty ? "" : " \(sg.schedule.late.count) would finish late.")")
-                            .font(.caption).foregroundStyle(sg.schedule.late.isEmpty ? Color.secondary : Theme.soon)
+                            .font(.nx(.caption)).foregroundStyle(sg.schedule.late.isEmpty ? Color.secondary : Theme.soon)
                     }
                     Button {
                         AppsData.shared.edit(store) { e, m in try e.acceptSchedule(m, schedule: sg.schedule, hoursPerDay: sg.hoursPerDay, snapshot: store.snapshot) }
@@ -407,16 +407,16 @@ struct WriteOrder: View {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(list.enumerated()), id: \.element.id) { i, it in
                         HStack(alignment: .top, spacing: 10) {
-                            Text("\(i + 1)").font(.caption.monospacedDigit()).foregroundStyle(.secondary).frame(width: 18, alignment: .trailing)
+                            Text("\(i + 1)").font(.nx(.caption).monospacedDigit()).foregroundStyle(.secondary).frame(width: 18, alignment: .trailing)
                             Circle().fill(store.schoolColor(it.school)).frame(width: 8, height: 8).padding(.top, 5)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(it.title).font(.subheadline).lineLimit(2)
-                                Text(it.why).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                                Text(it.title).font(.nx(.subheadline)).lineLimit(2)
+                                Text(it.why).font(.nx(.caption)).foregroundStyle(.secondary).lineLimit(2)
                             }
                             Spacer(minLength: 0)
                             VStack(alignment: .trailing, spacing: 2) {
-                                if let d = it.due { Text(Apps.short(d)).font(.caption).foregroundStyle(it.overdue ? Theme.late : .secondary) }
-                                if it.hours > 0 { Text(Apps.dur(it.hours)).font(.caption).foregroundStyle(.secondary) }
+                                if let d = it.due { Text(Apps.short(d)).font(.nx(.caption)).foregroundStyle(it.overdue ? Theme.late : .secondary) }
+                                if it.hours > 0 { Text(Apps.dur(it.hours)).font(.nx(.caption)).foregroundStyle(.secondary) }
                             }
                         }
                         .padding(.vertical, 7)
@@ -428,7 +428,7 @@ struct WriteOrder: View {
                 .padding(.horizontal, 12)
                 .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
                 if model.ordered.count > 8 {
-                    Button(showAll ? "Show fewer" : "Show all \(model.ordered.count)") { showAll.toggle() }.font(.subheadline)
+                    Button(showAll ? "Show fewer" : "Show all \(model.ordered.count)") { showAll.toggle() }.font(.nx(.subheadline))
                 }
             }
         }

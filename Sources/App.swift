@@ -13,6 +13,8 @@ struct NexusMobileApp: App {
     @Environment(\.scenePhase) private var phase
 
     init() {
+        // the kit's type (Gabarito and Onest), before the first window draws
+        KitFonts.register()
         WebRender.warmUp()
         // Applications' Ask Claude opens the Claude chat on its own conversation, with what the page shows
         AppsData.askHandler = { looking, ctx in ClaudeChatSession.open(conversation: "apps", looking: looking, context: { ctx }) }
@@ -27,6 +29,8 @@ struct NexusMobileApp: App {
                 .environment(reminders)
                 .environment(router)
                 .tint(Theme.accent)
+                // text that names no style of its own is the kit's body type
+                .font(.nx(.body))
         }
         .onChange(of: phase) { _, now in appPhase(now) }
         // iOS wakes the app now and then: sync once, read the folder, and give iOS the reminders again
@@ -136,6 +140,8 @@ final class WindowRouter {
     /// Ideas is asked for (the "Add an idea" shortcut that opens the app), with the cursor in its add box.
     var ideas = false
     var focusIdeas = false
+    /// The quick page is asked for (the Action button's "Open the Nexus quick page").
+    var quick = false
 }
 
 /// One window: its own store (its task panel, add sheet, Undo and open board), on the shared data folder.
@@ -162,6 +168,10 @@ enum Screen: Hashable {
     case notebook(String)
     /// Applications (the tracker and Research), and a school's page by its workstream id.
     case applications, school(String)
+    /// Recordings: meetings, classes and filmed classes, transcribed here and prepared by Claude for review.
+    case recordings
+    /// A subject's page (a workstream in the new look: its next tasks, notebooks, study and files), and its Study page.
+    case subject(String), studyPage(String)
 }
 
 /// The shell: the sidebar on the left (where you go), the screen on the right, and the task panel, add sheet and undo bar over both.
@@ -185,8 +195,9 @@ struct RootView: View {
     @State private var todayPath: [Screen] = []
     @State private var calendarPath: [Screen] = []
     @State private var inboxPath: [Screen] = []
-    @State private var notebooksPath: [Screen] = []
+    @State private var subjectsPath: [Screen] = []
     @State private var morePath: [Screen] = []
+    @State private var quickOpen = false
 
     var body: some View {
         @Bindable var store = store
@@ -236,6 +247,10 @@ struct RootView: View {
         .onChange(of: router.openTask) { _, _ in answerRouter() }
         .onChange(of: router.addSheet) { _, _ in answerRouter() }
         .onChange(of: router.ideas) { _, _ in answerRouter() }
+        .onChange(of: router.quick) { _, _ in answerRouter() }
+        // the quick page (the Action button), over everything; recording shows its bar on every screen
+        .fullScreenCover(isPresented: $quickOpen) { QuickPage(close: { quickOpen = false }).environment(store).recordingCovers(pill: false) }
+        .recordingCovers(pill: !Device.isPhone && screen != .recordings)
         .task {
             AppServices.start()
             if router.front == nil { router.front = windowId }
@@ -243,6 +258,8 @@ struct RootView: View {
             answerRouter()
             InkBoardMove.runIfNeeded(store)
             TestHooks.run(store)
+            RecordingDemo.atStart(store)
+            RecordingService.shared.resume()
             // Another writer (sync, the Files app) can change the folder at any time: look every few seconds while open,
             // and tell the other stores (and sync) what changed.
             while !Task.isCancelled {
@@ -325,6 +342,9 @@ struct RootView: View {
         case .home: return "Home"
         case .guide: return "How Nexus works"
         case .files(let path): return path.isEmpty ? "Files (the data folder)" : "Files: \(path)"
+        case .recordings: return "Recordings (recordings/)"
+        case .subject(let id): return store.workstream(id).map { "\($0.name)'s page (\($0.folder))" } ?? id
+        case .studyPage(let id): return store.workstream(id).map { "\($0.name)'s Study (\($0.folder)/study)" } ?? id
         }
     }
 
@@ -342,7 +362,12 @@ struct RootView: View {
         if router.ideas {
             router.ideas = false
             router.focusIdeas = true
+            quickOpen = false
             screen = .ideas
+        }
+        if router.quick {
+            router.quick = false
+            quickOpen = true
         }
     }
 
@@ -394,7 +419,7 @@ struct RootView: View {
             FolderSetupView()
         } else {
             switch s {
-            case .today: TodayView()
+            case .today: TodayView(go: go)
             case .home: HomeView(go: go)
             case .files(let path): FilesView(path: path, go: go)
             case .guide: GuideView()
@@ -414,13 +439,16 @@ struct RootView: View {
             case .ideas: IdeasView()
             case .time: TimeView()
             case .claude: ClaudeChatView()
+            case .recordings: RecordingsView()
+            case .subject(let id): SubjectPage(workstreamId: id, go: go)
+            case .studyPage(let id): StudyPage(workstreamId: id)
             }
         }
     }
 
     // MARK: the iPhone: a tab bar
 
-    enum PhoneTab: Hashable { case today, calendar, inbox, notebooks, more }
+    enum PhoneTab: Hashable { case today, calendar, inbox, subjects, more }
 
     private var phoneTabs: some View {
         TabView(selection: $tab) {
@@ -434,11 +462,12 @@ struct RootView: View {
                 .tabItem { Label("Inbox", systemImage: "tray") }
                 .badge(store.snapshot.isDataFolder ? store.planning.openCount(nil) : 0)
                 .tag(PhoneTab.inbox)
-            phoneStack(.notebooks, $notebooksPath) {
-                Sidebar(selection: .constant(nil), pushes: true, notebooksOnly: true, title: "Notebooks")
+            // the new look's Subjects tab: each subject opens its page; every notebook below them
+            phoneStack(.subjects, $subjectsPath) {
+                Sidebar(selection: .constant(nil), pushes: true, subjectsTab: true, title: "Subjects")
             }
-            .tabItem { Label("Notebooks", systemImage: "book.closed") }
-            .tag(PhoneTab.notebooks)
+            .tabItem { Label("Subjects", systemImage: "books.vertical") }
+            .tag(PhoneTab.subjects)
             // More is every screen, the ones in the tab bar too (the sidebar as a list)
             phoneStack(.more, $morePath) {
                 Sidebar(selection: .constant(nil), pushes: true, title: "More")
@@ -472,7 +501,7 @@ struct RootView: View {
             if which != .calendar && path.wrappedValue.last != .claude && store.snapshot.isDataFolder && store.snapshot.readOnlyReason == nil {
                 Button { addFrom(which, path.wrappedValue.last) } label: {
                     Image(systemName: "plus")
-                        .font(.title2.weight(.semibold))
+                        .font(.nx(.title2, .semibold))
                         .foregroundStyle(.white)
                         .frame(width: 56, height: 56)
                         .background(Theme.accent, in: Circle())
@@ -484,15 +513,20 @@ struct RootView: View {
                 .animation(.snappy, value: store.toast == nil)
             }
         }
-        // the running timer, over every tab (its task opens on a tap; Stop)
+        // a recording (not on Recordings, which has its own Stop) and the running timer, over every tab (Snap, Stop; the timer's task opens on a tap)
         .overlay(alignment: .bottomLeading) {
-            if store.snapshot.isDataFolder && TimeTracker.shared.current != nil && path.wrappedValue.last != .claude {
-                RunningTimerPill()
-                    .padding(.leading, 16)
-                    .padding(.trailing, 92)
-                    .padding(.bottom, (store.toast == nil ? 22 : 88) + (which == .calendar ? 56 : 0))
-                    .animation(.snappy, value: store.toast == nil)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            let recording = RecordingService.shared.active.map { !$0.filming } == true && path.wrappedValue.last != .recordings
+            let timing = store.snapshot.isDataFolder && TimeTracker.shared.current != nil
+            if (recording || timing) && path.wrappedValue.last != .claude {
+                VStack(alignment: .leading, spacing: 8) {
+                    if recording { RecordingPill() }
+                    if timing { RunningTimerPill().transition(.move(edge: .bottom).combined(with: .opacity)) }
+                }
+                .padding(.leading, 16)
+                .padding(.trailing, 92)
+                .padding(.bottom, (store.toast == nil ? 22 : 88) + (which == .calendar ? 56 : 0))
+                .animation(.snappy, value: store.toast == nil)
+                .animation(.snappy, value: recording)
             }
         }
         .overlay(alignment: .bottom) { UndoBar().animation(.snappy, value: store.toast) }
@@ -511,7 +545,7 @@ struct RootView: View {
         case .today: tab = .today; todayPath = []
         case .calendar: tab = .calendar; calendarPath = []
         case .inbox: tab = .inbox; inboxPath = []
-        case .notebook, .boardSearch, .boards: tab = .notebooks; notebooksPath = [s]
+        case .notebook, .boardSearch, .boards, .subject: tab = .subjects; subjectsPath = [s]
         default: tab = .more; morePath = [s]
         }
     }

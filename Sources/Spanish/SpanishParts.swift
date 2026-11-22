@@ -83,7 +83,7 @@ struct SpanishDictPanel: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 14) {
-                Text("SpanishDict").font(.headline)
+                Text("SpanishDict").font(.nx(.headline))
                 Spacer()
                 Button { web.back() } label: { Image(systemName: "chevron.left") }
                     .accessibilityLabel("Back").disabled(!web.canGoBack)
@@ -96,8 +96,8 @@ struct SpanishDictPanel: View {
             Divider()
             if SpanishDemo.active {
                 VStack(spacing: 8) {
-                    Image(systemName: "book").font(.largeTitle).foregroundStyle(.tertiary)
-                    Text(url?.absoluteString ?? "").font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                    Image(systemName: "book").font(.nx(.largeTitle)).foregroundStyle(.tertiary)
+                    Text(url?.absoluteString ?? "").font(.nx(.callout)).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .accessibilityIdentifier("spanishdict-page")
@@ -159,7 +159,7 @@ struct SpanishFileSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
-                ToolbarItem(placement: .status) { Text(path).font(.caption2).foregroundStyle(.secondary).lineLimit(1).truncationMode(.head) }
+                ToolbarItem(placement: .status) { Text(path).font(.nx(.caption2)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.head) }
             }
             .task { text = try? FolderAccess.read(store.folder.appendingPathComponent(path)) }
         }
@@ -253,7 +253,7 @@ struct SpanishToken: View {
         .buttonStyle(.plain)
         .accessibilityLabel(mark.map { m in m.kind == "good" ? "\(word), right" : "\(word), should be \(m.right)" } ?? word)
         .popover(isPresented: $open) {
-            pop.font(.body).padding(16).frame(minWidth: 240, idealWidth: 300, maxWidth: 360).presentationCompactAdaptation(.popover)
+            pop.font(.nx(.body)).padding(16).frame(minWidth: 240, idealWidth: 300, maxWidth: 360).presentationCompactAdaptation(.popover)
         }
     }
 
@@ -269,24 +269,24 @@ struct SpanishToken: View {
                 if m.kind == "good" {
                     Label { Text("Right: ").bold() + Text(m.wrong) } icon: { Image(systemName: "checkmark") }.foregroundStyle(Theme.accent)
                 } else {
-                    (Text(m.wrong).strikethrough() + Text(" → ") + Text(m.right.isEmpty ? "?" : m.right).bold()).font(.headline)
+                    (Text(m.wrong).strikethrough() + Text(" → ") + Text(m.right.isEmpty ? "?" : m.right).bold()).font(.nx(.headline))
                 }
                 Text(Spanish.skillName(m.skill) + (m.by != "claude" ? " · " + (m.by == "dictionary" ? "dictionary" : "LanguageTool") : ""))
-                    .font(.subheadline).foregroundStyle(.secondary)
-                if !m.why.isEmpty { Text(m.why).font(.callout) }
-                if let s = Spanish.skill[m.skill] { Text(s.rule).font(.footnote).foregroundStyle(.secondary) }
+                    .font(.nx(.subheadline)).foregroundStyle(.secondary)
+                if !m.why.isEmpty { Text(m.why).font(.nx(.callout)) }
+                if let s = Spanish.skill[m.skill] { Text(s.rule).font(.nx(.footnote)).foregroundStyle(.secondary) }
             } else {
                 let info = run?.info(word)
                 HStack(spacing: 4) {
-                    Text(word).font(.headline)
+                    Text(word).font(.nx(.headline))
                     if let l = info?.lemma, !l.isEmpty, l.lowercased() != word.lowercased() { Text("from").foregroundStyle(.secondary); Text(l).italic() }
                 }
                 if let info {
-                    if !info.form.isEmpty { Text(info.form).font(.subheadline).foregroundStyle(.secondary) }
-                    if !info.meaning.isEmpty { Text(info.meaning).font(.callout) }
+                    if !info.form.isEmpty { Text(info.form).font(.nx(.subheadline)).foregroundStyle(.secondary) }
+                    if !info.meaning.isEmpty { Text(info.meaning).font(.nx(.callout)) }
                 } else {
                     Text(run?.result?.partial == true ? "Claude did not read this sentence, so there is no meaning here." : run?.done == true ? "No meaning for this word." : "The meaning comes when Claude has read the sentence.")
-                        .font(.footnote).foregroundStyle(.secondary)
+                        .font(.nx(.footnote)).foregroundStyle(.secondary)
                 }
             }
             // side by side when they fit, one above the other in a narrow popover (never cut off)
@@ -356,12 +356,12 @@ struct SpanishResultView: View {
             let ms = SpanishCheck.mistakesOf(run.marks)
             if run.done && ms.isEmpty {
                 Label(run.result?.partial == true ? "The dictionary and the grammar checker found nothing." : "No mistakes.", systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(Theme.accent).font(.callout.weight(.medium))
+                    .foregroundStyle(Theme.accent).font(.nx(.callout, .medium))
                     .accessibilityIdentifier("spanish-no-mistakes")
             }
             if !ms.isEmpty {
                 if run.done, let c = run.result?.corrected, c != run.text {
-                    (Text("Fixed  ").foregroundStyle(.secondary) + Text(c)).font(.callout)
+                    (Text("Fixed  ").foregroundStyle(.secondary) + Text(c)).font(.nx(.callout))
                 }
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(ms) { m in
@@ -369,20 +369,20 @@ struct SpanishResultView: View {
                             HStack(alignment: .firstTextBaseline, spacing: 6) {
                                 Circle().fill(SpanishColors.of(m.kind)).frame(width: 7, height: 7)
                                 Text(m.wrong).strikethrough() + Text(" → ") + Text(m.right.isEmpty ? "?" : m.right).bold()
-                                Text(Spanish.skillName(m.skill)).font(.caption).foregroundStyle(.secondary)
+                                Text(Spanish.skillName(m.skill)).font(.nx(.caption)).foregroundStyle(.secondary)
                             }
-                            if !m.why.isEmpty && !compact { Text(m.why).font(.footnote).foregroundStyle(.secondary).padding(.leading, 13) }
+                            if !m.why.isEmpty && !compact { Text(m.why).font(.nx(.footnote)).foregroundStyle(.secondary).padding(.leading, 13) }
                         }
                     }
                 }
-                .font(.callout)
+                .font(.nx(.callout))
             }
             if let st = run.result?.structures, !st.isEmpty {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text("Uses").font(.caption).foregroundStyle(.secondary)
+                    Text("Uses").font(.nx(.caption)).foregroundStyle(.secondary)
                     SpanishFlow(spacing: 6, lineSpacing: 6) {
                         ForEach(Array(st.enumerated()), id: \.offset) { _, s in
-                            Text(s.name).font(.caption)
+                            Text(s.name).font(.nx(.caption))
                                 .padding(.horizontal, 7).padding(.vertical, 3)
                                 .background(Color.secondary.opacity(0.12), in: Capsule())
                         }
@@ -399,7 +399,7 @@ struct SpanishResultView: View {
             layer("LanguageTool", run.languagetool, run.ltError)
             layer("Claude", run.claude, run.aiError)
         }
-        .font(.caption2)
+        .font(.nx(.caption2))
         .foregroundStyle(.secondary)
     }
 

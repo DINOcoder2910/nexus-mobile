@@ -62,6 +62,13 @@ final class StudyLibrary {
         return studies.reduce(0) { n, s in n + s.decks.reduce(0) { $0 + (counts(s, $1, now: now)?.due ?? 0) } }
     }
 
+    /// Cards due now in one workstream's decks (the sidebar's Study row under a subject).
+    func due(_ workstreamId: String) -> Int {
+        guard let s = study(workstreamId) else { return 0 }
+        let now = Self.now
+        return s.decks.reduce(0) { $0 + (counts(s, $1, now: now)?.due ?? 0) }
+    }
+
     static var now: Int64 { Int64((Date().timeIntervalSince1970 * 1000).rounded()) }
 
     // MARK: reading

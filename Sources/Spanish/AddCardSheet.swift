@@ -42,12 +42,12 @@ struct SpanishAddCardSheet: View {
                     let warn = SpanishCards.warnings(front: front, back: back, tags: tagList, existing: existing(decks))
                     if !warn.isEmpty {
                         Section {
-                            ForEach(warn, id: \.self) { w in Label(w, systemImage: "exclamationmark.triangle").foregroundStyle(Theme.soon).font(.callout) }
+                            ForEach(warn, id: \.self) { w in Label(w, systemImage: "exclamationmark.triangle").foregroundStyle(Theme.soon).font(.nx(.callout)) }
                         }
                     }
                     Section {
                         Text("Nouns with their article; phrases are fine; skip cognates; for verbs, only the irregular forms. One card per word: the deck can be shown either way round.")
-                            .font(.footnote).foregroundStyle(.secondary)
+                            .font(.nx(.footnote)).foregroundStyle(.secondary)
                     }
                 }
             }

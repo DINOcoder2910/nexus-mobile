@@ -26,8 +26,8 @@ struct BoardSearchView: View {
                         }
                     } header: {
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(g.name).font(.headline).foregroundStyle(.primary).textCase(nil)
-                            if !g.place.isEmpty { Text(g.place).font(.caption).foregroundStyle(.secondary).textCase(nil) }
+                            Text(g.name).font(.nx(.headline)).foregroundStyle(.primary).textCase(nil)
+                            if !g.place.isEmpty { Text(g.place).font(.nx(.caption)).foregroundStyle(.secondary).textCase(nil) }
                         }
                     }
                 }
@@ -57,7 +57,7 @@ struct BoardSearchView: View {
                 ProgressView()
                 VStack(alignment: .leading, spacing: 2) {
                     Text(progressLine)
-                    if let name = index.current { Text(name).font(.caption).foregroundStyle(.secondary) }
+                    if let name = index.current { Text(name).font(.nx(.caption)).foregroundStyle(.secondary) }
                 }
             }
         } else {
@@ -65,7 +65,7 @@ struct BoardSearchView: View {
                 Text(doneLine)
                     .foregroundStyle(.secondary)
                 if let problem = index.problem {
-                    Text(problem).font(.caption).foregroundStyle(.orange)
+                    Text(problem).font(.nx(.caption)).foregroundStyle(.orange)
                 }
             }
         }
@@ -93,7 +93,7 @@ struct BoardSearchView: View {
                 .lineLimit(3)
             Spacer(minLength: 8)
             Text(hit.typed ? "typed" : "handwriting")
-                .font(.caption2)
+                .font(.nx(.caption2))
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
