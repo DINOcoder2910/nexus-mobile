@@ -167,6 +167,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         setUpGestures()
         setUpSnap()
         setUpSpaceGuide()
+        BoardTools.shared.refresh(pensRoot) // the pens shared with the laptop, before the bar shows them
         setUpBar()
         applyTool()
         setUpLinks()
@@ -231,6 +232,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         tutorBoardClosing()
         recordingBoardClosing()
         saveNow()
+        BoardTools.shared.saveShared()
         poll?.invalidate()
         boardClosing()
     }
@@ -511,7 +513,10 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         return canvas.isTracking || g == .began || g == .changed
     }
 
-    @objc func saveNowSelector() { HangWatch.note("board: app resigning active, saving"); saveNow() }
+    @objc func saveNowSelector() { HangWatch.note("board: app resigning active, saving"); saveNow(); BoardTools.shared.saveShared() }
+
+    /// The data folder, for the pens file (NexusCore Pens): only a board of the data folder itself, not a tutor replay's or a copy's.
+    var pensRoot: URL? { store?.folder == root ? root : nil }
 
     func saveNow() {
         saveWork?.cancel()
@@ -576,6 +581,9 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
 
     /// Another device (sync) or app wrote the board: read it again, unless something here isn't saved yet (that wins on the next save).
     func checkOutside() {
+        // the pens file changed (the laptop, or another board here): the bar and the tool in hand take it in
+        if presentedViewController == nil, !penDown, BoardTools.shared.refresh(pensRoot) { toolChanged() }
+        pensProbe()
         guard !dirty, presentedViewController == nil, !penDown, spaceLive == nil else { return }
         let now = fileStamps()
         guard now != stamps else { return }

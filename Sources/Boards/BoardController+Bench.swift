@@ -64,6 +64,24 @@ extension BoardController {
         start()
     }
 
+    /// The pens file as last read or written, on one line, for UITests/SharedPensTests (`-NexusTestSharedPens`).
+    func pensProbe() {
+        guard BoardTools.testShared else { return }
+        let label: UILabel
+        if let l = view.viewWithTag(9_194) as? UILabel { label = l } else {
+            label = UILabel()
+            label.tag = 9_194
+            label.accessibilityIdentifier = "pens-file"
+            label.font = .monospacedSystemFont(ofSize: 9, weight: .regular)
+            label.textColor = .white
+            label.backgroundColor = UIColor(white: 0.1, alpha: 0.7)
+            view.addSubview(label)
+            label.frame = CGRect(x: 10, y: view.bounds.height - 30, width: min(600, view.bounds.width - 20), height: 22)
+            label.autoresizingMask = [.flexibleTopMargin, .flexibleRightMargin]
+        }
+        label.text = (BoardTools.shared.lastFileText ?? "no pens file").split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }.joined(separator: " ")
+    }
+
     /// The last stroke's ink and width, and the tool's, for UITests/PenOptionsTests (`-NexusTestPenProbe`).
     func penProbe() {
         let label: UILabel
