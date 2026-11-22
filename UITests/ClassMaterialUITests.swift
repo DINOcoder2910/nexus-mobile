@@ -38,7 +38,7 @@ final class ClassMaterialUITests: XCTestCase {
         }
         XCTAssertTrue(row.waitForExistence(timeout: 10), "the notebook isn't in the sidebar")
         row.tap()
-        step("notebook page: \(name)")
+        step("class-notebook \(name)")
     }
 
     func testGetClassMaterial() {
@@ -47,13 +47,13 @@ final class ClassMaterialUITests: XCTestCase {
         openNotebook("Chem class")
         let button = app.buttons["class-material"].firstMatch
         XCTAssertTrue(button.waitForExistence(timeout: 10), "no Get class material on the notebook it fills")
-        step("the button")
+        step("class-button")
         button.tap()
         let line = app.staticTexts["class-material-line"].firstMatch
         XCTAssertTrue(line.waitForExistence(timeout: 10), "no line after the press")
         let done = NSPredicate(format: "label == %@", "New board: R3.2.8.")
         expectation(for: done, evaluatedWith: line)
         waitForExpectations(timeout: 15)
-        step("after the look")
+        step("class-done")
     }
 }

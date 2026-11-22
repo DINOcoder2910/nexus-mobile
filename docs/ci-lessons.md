@@ -11,6 +11,7 @@ Every iPad or iPhone CI or build failure goes here, with its cause and fix, so i
 
 ## Time limits
 
+- **Nov 22: "Unable to find a device matching the provided destination specifier" in "Run the iPhone tests"** (ui-check on 5686f7e, PR #50). The iPad test passed; the iPhone simulator that "Pick an iPhone simulator" chose wasn't available to xcodebuild a moment later (exit 70 before any test ran). Nothing in the PR touches the workflow or the iPhone. Fix: one re-run of the failed job (it passed). If it happens twice in a row, look at the pick step (boot the simulator it picks before the run).
 - **Nov 21: phone-check's iPhone "Run the tests" hit its 25-minute limit** (PR #46, cc88bbf). The new look (PR #45) and Recordings together added 15 iPhone test classes; the run was cut off mid-`TasksLookPhoneTests`, so no xcresult and no screenshots. Fix: step 45, job 60. When a PR adds a test class, check the matching step's limit in both ui-check.yml and phone-check.yml.
 - **Nov 21: `RecordingsTests.testRecordings` failed "Failed to get screenshot: Timed out while requesting screenshot"** (ui-check on f6947c7, iPad only; the iPhone passed the same test). The simulator didn't answer XCTest's screenshot call; nothing in the app or the test changed there. Fix: none in code; the next push re-ran it. If `shot()` times out twice in a row, read the freeze reports first (a stuck main thread also stops screenshots).
 
