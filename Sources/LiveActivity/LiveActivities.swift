@@ -19,6 +19,9 @@ final class LiveActivities {
     private(set) var showing: [String] = []
     /// Why one didn't start (the last time it tried).
     private(set) var problem: String?
+    /// What happened to them lately (started, ended and why, what iOS said), newest last: shown under Settings' Lock Screen
+    /// while the UI check runs, so a test that finds one gone can say why.
+    private(set) var log: [String] = []
     @ObservationIgnored private var queued = false
     /// Swiped off the Lock Screen: not put back while it runs.
     @ObservationIgnored private var dismissed: Set<NexusActivityAttributes> = []
@@ -57,6 +60,7 @@ final class LiveActivities {
         dismissed = dismissed.filter { d in want.contains { $0.attributes == d } }
         let live = all.filter { $0.activityState == .active || $0.activityState == .stale }
         for a in live where !want.contains(where: { $0.attributes == a.attributes }) {
+            note("end \(a.content.state.title): it stopped")
             Task { await a.end(nil, dismissalPolicy: .immediate) }
         }
         var problem: String?
@@ -68,9 +72,15 @@ final class LiveActivities {
             } else if UIApplication.shared.applicationState == .active {
                 // iOS starts one only while the app is in front (no push service under free signing): a timer started elsewhere shows when Nexus is next opened
                 do {
-                    _ = try Activity.request(attributes: w.attributes, content: ActivityContent(state: w.state, staleDate: nil), pushType: nil)
+                    let a = try Activity.request(attributes: w.attributes, content: ActivityContent(state: w.state, staleDate: nil), pushType: nil)
                     shown.append(w.state.title)
+                    note("start \(w.state.title)")
+                    let title = w.state.title
+                    Task { [weak self] in
+                        for await s in a.activityStateUpdates { self?.note("\(title): \(s)") }
+                    }
                 } catch {
+                    note("couldn't start \(w.state.title): \(error.localizedDescription)")
                     problem = Self.allowed ? "The Live Activity couldn't start: \(error.localizedDescription)" : "Live Activities are off for Nexus in the iPhone's Settings › Nexus."
                     HangWatch.note("live activity: \(error)")
                 }
@@ -78,6 +88,12 @@ final class LiveActivities {
         }
         self.problem = problem
         showing = shown
+    }
+
+    private func note(_ s: String) {
+        log.append(Date().formatted(date: .omitted, time: .standard) + " " + s)
+        if log.count > 12 { log.removeFirst(log.count - 12) }
+        HangWatch.note("live activity: " + s)
     }
 
     private struct Want { var attributes: NexusActivityAttributes; var state: NexusLiveState }
@@ -173,6 +189,11 @@ struct LiveActivitySettings: View {
                     if let p = live.problem { Label(p, systemImage: "exclamationmark.triangle").foregroundStyle(.secondary) }
                     NavigationLink("See how it looks") { LiveActivityPreview() }
                         .accessibilityIdentifier("live-preview")
+                    if ProcessInfo.processInfo.arguments.contains("-NexusTestTime") {
+                        Text(live.log.isEmpty ? "no log" : live.log.joined(separator: " | "))
+                            .font(.nx(.caption2)).foregroundStyle(.secondary)
+                            .accessibilityIdentifier("live-log")
+                    }
                 }
             } header: { Text("Lock Screen") } footer: {
                 Text("The running timer and a recording show on the Lock Screen and in the Dynamic Island, with Stop (and Pin and Snap while recording). One starts while Nexus is open on this iPhone; a timer started on the laptop shows the next time you open Nexus here.")

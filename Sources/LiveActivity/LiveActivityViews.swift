@@ -108,11 +108,12 @@ struct NexusLiveLockView: View {
                     Text(state.title).font(.system(size: 17, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
                     Text(state.detail).font(.system(size: 14)).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.85)
                 }
-                .layoutPriority(1)
                 Spacer(minLength: 6)
                 NexusLiveClock(state: state)
                     .font(.system(size: 26, weight: .semibold, design: .rounded))
-                    .frame(maxWidth: 104, alignment: .trailing)
+                    .lineLimit(1)
+                    .frame(minWidth: 72, maxWidth: 104, alignment: .trailing)
+                    .layoutPriority(1)
             }
             HStack {
                 Text("Nexus").font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)

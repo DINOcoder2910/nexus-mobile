@@ -55,6 +55,13 @@ final class LiveActivityPhoneTests: XCTestCase {
         return status
     }
 
+    /// The app's Live Activity log (Settings' Lock Screen, test runs only) into the test's output (the log's UISTEP lines).
+    func printLog(_ when: String) {
+        let log = app.staticTexts["live-log"].firstMatch
+        if !log.exists { app.swipeUp(velocity: .slow) }
+        print("UISTEP 0 live-log \(when): \(log.exists ? log.label : "(not found)")")
+    }
+
     /// Waits until `e`'s label holds `text`.
     func waitLabel(_ e: XCUIElement, contains text: String, _ timeout: TimeInterval = 15) -> Bool {
         let p = NSPredicate(format: "label CONTAINS %@", text)
@@ -72,6 +79,7 @@ final class LiveActivityPhoneTests: XCTestCase {
         XCTAssertTrue(status.waitForExistence(timeout: 10), "Settings has no Lock Screen section")
         XCTAssertTrue(waitLabel(status, contains: "Redox worksheet"), "the timer isn't showing as a Live Activity (\(status.label))")
         shot("live-1-settings")
+        printLog("at the start")
         let preview = app.buttons["live-preview"].firstMatch
         if !preview.isHittable { app.swipeUp(velocity: .slow) }
         preview.tap()
@@ -87,6 +95,10 @@ final class LiveActivityPhoneTests: XCTestCase {
         shot("live-3-island-timer")
         app.activate()
         XCTAssertTrue(app.tabBars.buttons["More"].waitForExistence(timeout: 15), "Nexus didn't come back")
+        openMoreRow("Settings")
+        _ = liveStatus()
+        printLog("back from the home screen")
+        back()
 
         // a recording joins it
         openMoreRow("Recordings")
@@ -95,6 +107,13 @@ final class LiveActivityPhoneTests: XCTestCase {
         start.tap()
         XCTAssertTrue(app.buttons["rec-stop"].firstMatch.waitForExistence(timeout: 10), "recording didn't start")
         sleep(3)
+        back()
+        openMoreRow("Settings")
+        let both = liveStatus()
+        XCTAssertTrue(waitLabel(both, contains: "Meeting"), "the recording isn't showing as a Live Activity (\(both.label))")
+        XCTAssertTrue(both.label.contains("Redox worksheet"), "the timer went from the Lock Screen (\(both.label))")
+        printLog("after the recording started")
+        back()
         XCUIDevice.shared.press(.home)
         sleep(6)
         shot("live-4-island-both")
@@ -147,6 +166,7 @@ final class LiveActivityPhoneTests: XCTestCase {
         back()
         openMoreRow("Settings")
         let after = liveStatus()
+        printLog("at the end")
         XCTAssertTrue(waitLabel(after, contains: "Nothing"), "a Live Activity still shows after both stopped (\(after.label))")
     }
 }
