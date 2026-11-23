@@ -56,6 +56,7 @@ final class SpanishPadTests: XCTestCase {
         let page = el("study-page-spanish-ab")
         var down = 0
         while !page.waitForExistence(timeout: 3) && down < 6 { app.swipeUp(); down += 1 }
+        if !page.waitForExistence(timeout: 10) { shot("pad-spanish-no-study-page") }
         XCTAssertTrue(page.waitForExistence(timeout: 10), "Study has no Spanish ab initio")
         page.tap()
         let link = el("study-spanish")

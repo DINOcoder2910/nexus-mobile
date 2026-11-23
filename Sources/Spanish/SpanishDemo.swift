@@ -12,7 +12,6 @@ enum SpanishDemo {
     @MainActor
     static func prepare(_ store: NexusStore) {
         guard active, store.snapshot.isDataFolder else { return }
-        writeGuide(store.folder)
         let root = store.folder
         let ws = root.appendingPathComponent(folder + "/workstream.yaml")
         let today = Days.today()
@@ -24,7 +23,7 @@ enum SpanishDemo {
             try? FolderAccess.write(orals.appendingPathComponent("\(Days.add(today, -3))-1.yaml"), "theme: identities\n")
             if FileManager.default.fileExists(atPath: ws.path) { store.reload(); return }
         }
-        guard !FileManager.default.fileExists(atPath: ws.path) else { return }
+        guard !FileManager.default.fileExists(atPath: ws.path) else { writeGuide(root); return }
         let month = String(today.prefix(7))
         let base = folder + "/"
         var files: [(String, String)] = [
@@ -55,6 +54,7 @@ enum SpanishDemo {
         let prompt = SpanishGrade.Prompt(id: "\(today)-1", text: "Acabas de volver de un viaje con tu familia. Escribe un correo electrónico a tu amigo/a contándole adónde fuiste, qué hiciste y qué te gustó más.",
                                          unit: Spanish.currentUnit?.code ?? "", types: ["correo electrónico", "blog", "diario"], source: "Ms. Panhausen, worksheet 3", added: today)
         files.append((Spanish.P.prompts, SpanishGrade.serializePrompts([prompt])))
+        files.append((SpanishTextTypes.dir + "/correo-informal.md", guideText))
         files.append((Spanish.P.note("ser-estar"), SpanishMemory.addToNote("", id: "ser-estar", status: "taught", lines: ["Taught: estar for states and places", "Wrote \"es cansada\" for a feeling: está cansada"], day: today, link: "chat")))
         do {
             for (rel, text) in files {
@@ -142,7 +142,8 @@ enum SpanishDemo {
     }
 
     /// One text type guide, as the laptop writes it (nexus desktop/backend/texttypes/correo-informal.md), for Writing's guide and Text
-    /// types; written when there is none, even when an earlier test already set Spanish up.
+    /// types: with the rest of the demo, or on its own when an earlier test already set Spanish up (never before workstream.yaml is
+    /// there, so the folder is a workstream from its first file on).
     static func writeGuide(_ root: URL) {
         let u = root.appendingPathComponent(folder + "/" + SpanishTextTypes.dir + "/correo-informal.md")
         guard !FileManager.default.fileExists(atPath: u.path) else { return }

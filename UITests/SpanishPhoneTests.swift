@@ -52,6 +52,7 @@ final class SpanishPhoneTests: XCTestCase {
         let page = el("study-page-spanish-ab")
         var down = 0
         while !page.waitForExistence(timeout: 3) && down < 6 { app.swipeUp(); down += 1 }
+        if !page.waitForExistence(timeout: 10) { shot("phone-spanish-no-study-page") }
         XCTAssertTrue(page.waitForExistence(timeout: 10), "Study has no Spanish ab initio")
         page.tap()
         let link = el("study-spanish")
@@ -140,12 +141,46 @@ final class SpanishPhoneTests: XCTestCase {
         type("spanish-piece", "¡Hola Marta!\n\nLa semana pasada fui a la playa con mi familia. Fuimos en coche y el viaje fue muy largo, pero divertido. Nos quedamos en un hotel pequeño cerca del mar.\n\nCada día nadamos y comimos paella en un restaurante. Ayer compre una camiseta para mi hermano. Lo que más me gustó fue el atardecer en la playa porque fue muy bonito.\n\n¿Y tú? ¿Qué hiciste en las vacaciones?\n\nUn abrazo,\nAli")
         hideKeyboard()
         sleep(1)
+        // the text type's guide as a sheet: a step ticked, a stem put into the piece
+        el("spanish-guide-open").tap()
+        XCTAssertTrue(el("spanish-guide-step-0").waitForExistence(timeout: 10), "the guide sheet has no structure")
+        el("spanish-guide-step-0").tap()
+        sleep(1)
+        shot("phone-spanish-guide-sheet")
+        let stem = el("spanish-stem-0-0")
+        var down = 0
+        while !stem.isHittable && down < 5 { app.swipeUp(); down += 1 }
+        stem.tap()
+        el("spanish-guide-done").tap()
+        sleep(1)
+        XCTAssertTrue((el("spanish-piece").value as? String ?? "").contains("¿Qué tal todo?"), "the stem didn't go into the piece")
         shot("phone-spanish-write")
         el("spanish-mark").tap()
         XCTAssertTrue(el("spanish-grade-total").waitForExistence(timeout: 20), "the piece wasn't marked")
+        XCTAssertTrue(el("spanish-graded-piece").waitForExistence(timeout: 5), "the marked piece isn't shown with its mistakes")
         el("spanish-grade-total").swipeUp()
         sleep(1)
         shot("phone-spanish-marked")
+        back()
+
+        // Text types: the guides, one with its exemplar, Practise with the tutor
+        let types = el("spanish-text-types")
+        var more = 0
+        while !types.waitForExistence(timeout: 2) && more < 6 { app.swipeUp(); more += 1 }
+        types.tap()
+        let guide = el("spanish-guide-correo-informal")
+        XCTAssertTrue(guide.waitForExistence(timeout: 10), "the demo's guide isn't listed")
+        guide.tap()
+        XCTAssertTrue(el("spanish-guide-structure").waitForExistence(timeout: 10), "the guide has no structure")
+        sleep(1)
+        shot("phone-spanish-guide")
+        el("spanish-guide-practise").tap()
+        XCTAssertTrue(el("spanish-chat-input").waitForExistence(timeout: 10), "Practise didn't open a chat")
+        sleep(4)
+        shot("phone-spanish-guide-practise")
+        el("spanish-guide-chat-close").tap()
+        sleep(1)
+        back()
         back()
         back()
 
