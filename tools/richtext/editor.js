@@ -31,6 +31,7 @@ let held = null; // { doc: { header, docs }, md }: the block's doc and the markd
 let tab = FIRST_TAB;
 let opts = { chem: true, review: false, locked: false };
 let marked = []; // comment ranges, as markdown offsets [from, to]
+let spanish = []; // Spanish underlines (Sources/Writing/BoardSpanish.swift): [from, to, kind] in markdown offsets, kind error | accent
 let mapCache = null; // richMap of `held`, made when a place has to cross the bridge
 
 // ---------------------------------------------------------------------------------------------------- places: markdown <-> doc
@@ -128,6 +129,28 @@ const markedPlugin = new Plugin({
     },
   },
 });
+// a Spanish block's mistakes, underlined as on the laptop (desktop/src/board/spanish.ts); a tap on one asks the app for its fix
+const SPANISH = new PluginKey('spanish');
+const spanishPlugin = new Plugin({
+  key: SPANISH,
+  state: { init: () => 0, apply: (tr, v) => (tr.getMeta(SPANISH) ? v + 1 : v) },
+  props: {
+    decorations(state) {
+      if (!spanish.length || !held || !view) return null; // (while the view is being made: the open's first dispatch draws them)
+      const out = [];
+      for (const [a, b, kind] of spanish) { const r = docRange(a, b); if (r && r.to > r.from) out.push(Decoration.inline(r.from, r.to, { class: 'rt-es' + (kind === 'accent' ? ' rt-es-accent' : ''), 'data-es': String(a) })); }
+      return DecorationSet.create(state.doc, out);
+    },
+    handleDOMEvents: {
+      touchend(v, e) {
+        const el = e.target.closest && e.target.closest('.rt-es[data-es]'); if (!el) return false;
+        const r = el.getBoundingClientRect();
+        post({ t: 'es', at: +el.dataset.es, x: r.left, y: r.top, w: r.width, h: r.height });
+        return false;
+      },
+    },
+  },
+});
 // maths typeset in place
 const typeset = (el, display) => { try { el.innerHTML = katex.renderToString(el.dataset.tex || '', { displayMode: display, throwOnError: false, strict: 'ignore' }); } catch { el.textContent = el.dataset.tex || ''; } };
 class MathView {
@@ -208,7 +231,8 @@ function dispatchTransaction(tr) {
 
 window.rich = {
   // open: { md (the block's words as the app holds them), jsonl (its .jsonl as last read or written, for ids), look, chem, review, locked,
-  // lang, caret: 'start' | 'end' | 'all' | { loc, len } (markdown offsets) | { x, y } (a point in the page), marked: [[from, to]], focus }
+  // lang, caret: 'start' | 'end' | 'all' | { loc, len } (markdown offsets) | { x, y } (a point in the page), marked: [[from, to]],
+  // spanish: [[from, to, kind]], focus }
   open(o) {
     if (view) { view.destroy(); view = null; }
     let prev = null;
@@ -218,9 +242,10 @@ window.rich = {
     held = { doc, md }; tab = tabOf(doc); mapCache = null;
     opts = { chem: o.chem !== false, review: !!o.review, locked: !!o.locked };
     marked = o.marked || [];
+    spanish = o.spanish || [];
     setLook(o.look);
     const node = doc.docs[tab] || schema.nodes.doc.create(null, [schema.nodes.paragraph.create()]);
-    const state = R.richState(node, { chem: () => opts.chem, plugins: [keys, listDeco, markedPlugin, reviewPlugin(() => opts.review), lockPlugin(() => opts.locked)] });
+    const state = R.richState(node, { chem: () => opts.chem, plugins: [keys, listDeco, markedPlugin, spanishPlugin, reviewPlugin(() => opts.review), lockPlugin(() => opts.locked)] });
     const ed = host(); ed.textContent = '';
     view = new EditorView(ed, {
       state, dispatchTransaction,
@@ -245,6 +270,7 @@ window.rich = {
   setLook(L) { setLook(L); return true; },
   setOpts(o) { Object.assign(opts, o || {}); if (o && o.lang != null && view) view.dom.lang = o.lang || ''; if (view) view.dispatch(view.state.tr.setMeta(MARKED, true)); return true; },
   setMarked(list) { marked = list || []; if (view) view.dispatch(view.state.tr.setMeta(MARKED, true)); return true; },
+  setSpanish(list) { spanish = list || []; if (view) view.dispatch(view.state.tr.setMeta(SPANISH, true).setMeta('addToHistory', false)); return true; },
   // the app's own edit of the words (a Review button, Spanish's Correct, a task chip...): `md` with the selection at { loc, len }, one undo step
   setMd(md, loc, len) {
     if (!view) return false;

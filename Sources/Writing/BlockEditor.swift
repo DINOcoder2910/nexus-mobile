@@ -97,6 +97,9 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
     /// A dead accent key waiting for its letter ("acute", "tilde", "umlaut").
     var deadKey: String?
     private var practiceTimer: Timer?
+    /// Spanish underlines (BoardSpanish.swift): the pause before new paragraphs are read, and the list the rich editor last got.
+    var spanishTimer: Timer?
+    var sentSpanish: [[String]] = []
     private var practiceOver = false
     private var keyboard: CGRect = .zero
     lazy var bar = FormatBar(session: self)
@@ -171,6 +174,8 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
 
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardChanged(_:)), name: UIResponder.keyboardWillChangeFrameNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardChanged(_:)), name: UIResponder.keyboardWillHideNotification, object: nil)
+        // a Spanish block's paragraphs not read yet are read soon after it opens
+        spanishLater(0.4)
     }
 
     deinit { NotificationCenter.default.removeObserver(self) }
@@ -203,6 +208,7 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
             r.setLook(richLook())
             r.setOpts(chem: look.chem && !practicing, review: look.review, locked: board?.blockLocked(id) ?? false)
             if fullscreen, let b = board { r.setMarked(b.markedRanges(id)) }
+            spanishSend()
             bar.refresh()
             return
         }
@@ -217,6 +223,7 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
                 storage.addAttribute(.backgroundColor, value: UIColor.systemPurple.withAlphaComponent(0.16), range: r)
             }
         }
+        spanishStyle()
         var typing = textView.typingAttributes
         typing[BlockStyler.hiddenKey] = nil
         typing[BlockStyler.glyphKey] = nil
@@ -368,6 +375,7 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
 
     /// The words changed: style them, size the block, hand them to the board (saved shortly).
     func edited() {
+        spanishEdited()
         if rich != nil {
             measure()
             place()
@@ -646,6 +654,8 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
     func stopTimers() {
         practiceTimer?.invalidate()
         practiceTimer = nil
+        spanishTimer?.invalidate()
+        spanishTimer = nil
     }
 
     func setStyle(_ style: BlockStyle) {
@@ -668,7 +678,7 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
     // MARK: ticking a checkbox while typing
 
     func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
-        taskLine(at: g.location(in: textView)) != nil
+        taskLine(at: g.location(in: textView)) != nil || spanishAt(g.location(in: textView)) != nil
     }
 
     func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { false }
@@ -679,6 +689,7 @@ final class WritingSession: NSObject, UITextViewDelegate, UIGestureRecognizerDel
     }
 
     @objc func tappedInside(_ g: UITapGestureRecognizer) {
+        if spanishTapped(g.location(in: textView)) { return }
         guard let line = taskLine(at: g.location(in: textView)), let md = TextLook.toggleTask(text, line: line) else { return }
         apply(MDEdit(md, textView.selectedRange))
     }
@@ -759,7 +770,8 @@ extension WritingSession {
         guard let r = rich, let b = board else { return }
         r.open(md: richText, jsonl: key == id ? b.content.docsOnDisk[id] : nil, look: richLook(), caret: caret,
                chem: look.chem && !practicing, review: look.review, locked: b.blockLocked(id), lang: item?.string("lang"),
-               marked: fullscreen ? b.markedRanges(id) : [])
+               marked: fullscreen ? b.markedRanges(id) : [], spanish: spanishList())
+        sentSpanish = spanishList()
     }
 
     /// The page's words changed (typing, a command, undo in the page).
