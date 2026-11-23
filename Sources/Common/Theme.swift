@@ -15,13 +15,19 @@ enum Theme {
 
     /// A workstream's colour; one without a colour gets a stable one from its id, as the laptop's Applications do.
     static func workstream(_ stored: String?, key: String) -> Color {
+        let pair = workstreamHex(stored, key: key)
+        return dynamic(light: pair.light, dark: pair.dark)
+    }
+
+    /// The same colour as hex, light and dark (the Live Activity carries it to the extension).
+    static func workstreamHex(_ stored: String?, key: String) -> (light: String, dark: String) {
         let name = WorkstreamColor.name(stored) ?? {
             var x: UInt32 = 7
             for c in key.unicodeScalars { x = x &* 31 &+ c.value }
             return WorkstreamColor.names[Int(x % UInt32(WorkstreamColor.names.count))]
         }()
         let pair = WorkstreamColor.hex[name] ?? ("#556B82", "#A2BAD4")
-        return dynamic(light: pair.light, dark: pair.dark)
+        return (pair.light, pair.dark)
     }
 
     static func dynamic(light: String, dark: String) -> Color {

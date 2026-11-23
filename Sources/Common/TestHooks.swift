@@ -210,7 +210,17 @@ enum TestHooks {
     /// "Redox worksheet" (UITests/TimeTrackingTests: the running timer, the Time screen, the task panel's Time section).
     static func timeSessions(_ store: NexusStore) {
         if !store.snapshot.isDataFolder { store.makeSample() }
-        guard TimeTracker.shared.entries.isEmpty else { return }
+        guard TimeTracker.shared.entries.isEmpty else {
+            // an earlier test on this simulator stopped it (LiveActivityPhoneTests stops it from the Lock Screen): it runs again
+            guard TimeTracker.shared.current == nil else { return }
+            let now = Date()
+            let url = store.folder.appendingPathComponent(TimeLog.file(device: TimeTracker.device, start: now))
+            let e = TimeLog.Entry(task: "smp8", title: "Redox worksheet", start: TimeLog.stamp(now.addingTimeInterval(-25 * 60)))
+            let before = try? FolderAccess.read(url)
+            try? FolderAccess.write(url, TimeLog.append(before, device: TimeTracker.device, e))
+            store.reload()
+            return
+        }
         let now = Date()
         func at(_ minutesAgo: Double) -> String { TimeLog.stamp(now.addingTimeInterval(-minutesAgo * 60)) }
         func put(_ device: String, _ list: [TimeLog.Entry]) {
