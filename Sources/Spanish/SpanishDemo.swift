@@ -8,6 +8,111 @@ enum SpanishDemo {
     static let active = ProcessInfo.processInfo.arguments.contains("-NexusSpanishDemo")
     static let folder = "classes/spanish-ab"
 
+    /// Three past orals for the Oral page: a practice oral Claude marked, with what the ears heard (three days ago), a session with
+    /// the tutor and an oral the teacher marked.
+    static func demoOrals(_ today: String) -> [(String, String)] {
+        let d3 = Days.add(today, -3), d6 = Days.add(today, -6), d10 = Days.add(today, -10)
+        return [
+            ("\(d3) 1800", """
+            id: \(d3) 1800
+            kind: full
+            by: practice
+            started: \(d3)T18:00
+            theme: experiencias
+            otherTheme: identidades
+            marks:
+              A: 8
+              B1: 4
+              B2: 4
+              C: 4
+              total: 20
+            summary: A clear description of the festival; the past tense slipped in Part 2 (fue for fui) and the answers in Part 3 were short.
+            segments:
+              - part: 1
+                file: p1.wav
+                ms: 62000
+                q: ""
+                heard: En la foto hay muchas personas en una fiesta. Llevan ropa de colores y bailan en la calle.
+                said: En la foto hay mucha personas en una fiesta. Llevan ropa de colores y bailan en la calle.
+              - part: 2
+                file: p2.wav
+                ms: 41000
+                q: ¿Qué hiciste el verano pasado?
+                heard: El verano pasado fue a la playa con mi familia y comimos paella.
+                said: ""
+            listening:
+              talk:
+                mine: 0.62
+                me: 103
+              diffs:
+                - part: 1
+                  said: mucha
+                  meant: muchas
+                  kind: ending
+              sounds:
+                r:
+                  - pero
+                  - calle
+              soundCounts:
+                r: 3
+              delivery:
+                - part: 1
+                  wpm: 94
+                  pauses: 3
+                  longPauses: 1
+                - part: 2
+                  wpm: 81
+                  pauses: 2
+              ears:
+                said: true
+                sounds: true
+
+            """),
+            ("\(d6) 1900", """
+            id: \(d6) 1900
+            kind: session
+            by: tutor
+            recording: recording.m4a
+            started: \(d6)T19:00
+            given:
+              total: 7
+              max: 10
+              comments: Más pasado, y frases más largas.
+            turns:
+              - start: 0
+                end: 4
+                who: examiner
+                text: ¿Qué hiciste el fin de semana?
+              - start: 4
+                end: 11
+                who: me
+                text: El sábado fui al cine con mis amigos y después comimos pizza.
+              - start: 11
+                end: 15
+                who: feedback
+                text: Very good, the preterite is right.
+
+            """),
+            ("\(d10) 1630", """
+            id: \(d10) 1630
+            kind: full
+            by: teacher
+            title: Formative IO
+            started: \(d10)T16:30
+            theme: identidades
+            given:
+              A: 9
+              B1: 5
+              B2: 4
+              C: 5
+              total: 23
+              max: 30
+              comments: Good range of vocabulary. Work on the past tenses and on asking questions back.
+
+            """),
+        ]
+    }
+
     /// After the sample data is made: the Spanish workstream, set up, with some history.
     @MainActor
     static func prepare(_ store: NexusStore) {
@@ -20,7 +125,7 @@ enum SpanishDemo {
         let orals = root.appendingPathComponent(folder + "/study/spanish/oral/orals", isDirectory: true)
         if (try? FileManager.default.contentsOfDirectory(atPath: orals.path))?.isEmpty ?? true {
             try? FileManager.default.createDirectory(at: orals, withIntermediateDirectories: true)
-            try? FolderAccess.write(orals.appendingPathComponent("\(Days.add(today, -3))-1.yaml"), "theme: identities\n")
+            for (id, text) in demoOrals(today) { try? FolderAccess.write(orals.appendingPathComponent(id + "/oral.yaml"), text) }
             if FileManager.default.fileExists(atPath: ws.path) { store.reload(); return }
         }
         guard !FileManager.default.fileExists(atPath: ws.path) else { return }

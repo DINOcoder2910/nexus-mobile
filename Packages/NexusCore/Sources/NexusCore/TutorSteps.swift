@@ -460,30 +460,8 @@ public enum TutorSteps {
 
     // MARK: the format, as Claude is told it (the laptop's STEPS_PROMPT, word for word)
 
-    public static let prompt = #"""
-Drawing steps: each step is one JSON object. Draw while you talk: put each step right after the sentence it goes with.
-Board coordinates are units (about 1 px), y down, relative to this turn's area: (0, 0) is its top-left; keep within about 800 wide.
-Every step may have "id" (letters, digits, _ or -; give one to anything you will point at later), "color" (ink, grey, blue, red, green, purple, orange, yellow, or #RRGGBB) and "label" (a few words).
-Blocks (have a size). "at" is the top-left [x, y], or {"below"|"above"|"right"|"left": "<id>"}; leave "at" out to go below the block before.
-- {"type":"text","text":"markdown","size":"small|normal|large|huge","w":300}
-- {"type":"math","tex":"\\Delta H = \\sum \\Delta H_f(\\text{products}) - \\sum \\Delta H_f(\\text{reactants})"}  (LaTeX, no $; chemical symbols upright: \\mathrm{Zn^{2+}})
-- {"type":"graph","fns":[{"fn":"x^2-3","label":"y = x² − 3"}],"x":[-4,4],"y":[-4,10],"points":[[0,-3,"min"]],"xLabel":"x","yLabel":"y","w":320,"h":220}  (fn uses x, + - * / ^, sin cos tan exp ln log sqrt abs, pi, e; "dash":true in a fn for a dashed curve). About 380 by 260 unless w and h say.
-- {"type":"graph","in":"g1","fns":[{"fn":"2x-1","label":"tangent"}],"points":[[1,1,"(1, 1)"]]}  (adds curves or points to graph g1, in its axes; never draw a second graph to add a curve)
-- {"type":"chem","kind":"lewis","molecule":"H2O"}, {"type":"chem","kind":"vsepr","molecule":"NH3"} (or "bp":3,"lp":1), {"type":"chem","kind":"cycle","compound":"NaCl"}  (Nexus's own chemistry diagrams; about lewis 260 wide, vsepr 200, cycle 600 by 340: leave them that room)
-Ink. A position is [x, y], an id (the edge of that thing facing the other end), or {"of":"<id>","side":"top|bottom|left|right|center|topleft|...","dx":0,"dy":0}.
-- {"type":"arrow","from":"eq1","to":"g1","bend":0.3,"label":"gives"}  (bend -1..1 curves it; "both":true for a double arrow)
-- {"type":"line","from":[0,40],"to":[200,40],"dash":true}
-- {"type":"path","points":[[0,0],[30,-20],[60,0]],"closed":false}  (a freehand curve through the points; a closed path has straight sides unless "smooth":true)
-- {"type":"circle"|"box"|"underline"|"highlight"|"point","target":"eq1"}  (target: an id, [x, y, w, h] or [x, y]; a box or circle round a coloured block takes its colour)
-- {"type":"circle","at":[150,150],"r":120}  (a true circle in a diagram, by its centre and radius)
-- {"type":"angle","at":[60,200],"from":[0,200],"to":[60,120],"right":true,"label":"θ"}  (at the corner, from and to a point along each side: a small square when "right":true, else an arc)
-Inside a block, as a target or a position: {"in":"eq1","part":"(x+3)"} (those symbols or words of a text or math block, as written in it: plain characters and symbols like "9+32", "x^2", "\\pm", one fraction's top or bottom, never a whole \\frac{..}{..}) or {"in":"g1","at":[2,-1]} (a point of graph g1 in its own x, y numbers); "last" is the block drawn last.
-Gestures: "brief":true on a mark, arrow, line or angle shows it only while its sentence is said (a teacher pointing), then it goes; a point is always brief. Keep ink (no brief) for what should stay in the notes.
-- {"type":"point","target":{"in":"g1","at":[0,-3]}}  (a pointer to it while you say "this minimum")
-- {"type":"erase","target":"eq1"}  (takes an earlier step's drawing away)
-- {"type":"yourturn","ask":"Write the next line: divide both sides by 2."}  (you stop here and they write it on the board; end your reply with it)
-On the screen (the screenshot, in its pixels): {"type":"point"|"circle"|"underline"|"highlight","on":"screen","target":[x, y] or [x, y, w, h],"label":"..."}; when unsure of the exact spot, "area":"C2" (a cell of the grid drawn on the screenshot) instead of "target".
-"""#
+    /// (the shared Rust core's STEPS_PROMPT, word for word the laptop's)
+    public static let prompt = RustCore.stepsPrompt
 
     /// The format as the iPad tells it: no screen overlay. Chemistry diagrams stay: the iPad draws them with the laptop's own study tools
     /// (the app's Sources/Render).
