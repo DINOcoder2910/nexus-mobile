@@ -114,10 +114,10 @@ final class RichEditor: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
     }
 
     /// The block's words into the page. caret: "start" | "end" | "all", or a range (markdown offsets).
-    func open(md: String, jsonl: String?, look: [String: Any], caret: Any, chem: Bool, review: Bool, locked: Bool, lang: String?, marked: [NSRange], focus: Bool = true) {
+    func open(md: String, jsonl: String?, look: [String: Any], caret: Any, chem: Bool, review: Bool, locked: Bool, lang: String?, marked: [NSRange], spanish: [[String]] = [], focus: Bool = true) {
         let o: [String: Any] = [
             "md": md, "jsonl": jsonl ?? NSNull(), "look": look, "caret": caret, "chem": chem, "review": review, "locked": locked,
-            "lang": lang ?? NSNull(), "marked": marked.map { [$0.location, NSMaxRange($0)] }, "focus": focus,
+            "lang": lang ?? NSNull(), "marked": marked.map { [$0.location, NSMaxRange($0)] }, "spanish": spanish.map(RichEditor.spanishRow), "focus": focus,
         ]
         call("rich.open(\(RichEditor.lit(o)))")
     }
@@ -131,6 +131,9 @@ final class RichEditor: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
     func setLook(_ look: [String: Any]) { call("rich.setLook(\(RichEditor.lit(look)))") }
     func setOpts(chem: Bool, review: Bool, locked: Bool) { call("rich.setOpts(\(RichEditor.lit(["chem": chem, "review": review, "locked": locked])))") }
     func setMarked(_ list: [NSRange]) { call("rich.setMarked(\(RichEditor.lit(list.map { [$0.location, NSMaxRange($0)] })))") }
+    /// Spanish underlines ([from, to, kind] in markdown offsets, BoardSpanish.swift).
+    func setSpanish(_ list: [[String]]) { call("rich.setSpanish(\(RichEditor.lit(list.map(RichEditor.spanishRow))))") }
+    static func spanishRow(_ r: [String]) -> [Any] { [Int(r[0]) ?? 0, Int(r[1]) ?? 0, r.count > 2 ? r[2] : "error"] }
 
     func focus() {
         RichWebView.focusing = true
@@ -174,6 +177,10 @@ final class RichEditor: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
             if !first || w.isEmpty { session?.richReloaded() }
         case "change":
             if let md = m["md"] as? String { session?.richChanged(md) }
+        case "es":
+            // a tap on a Spanish underline: where it starts in the markdown, its box in the page
+            let n = { (k: String) in CGFloat((m[k] as? NSNumber)?.doubleValue ?? 0) }
+            if let at = (m["at"] as? NSNumber)?.intValue { session?.richSpanishTapped(at: at, rect: CGRect(x: n("x"), y: n("y"), width: max(1, n("w")), height: max(1, n("h")))) }
         case "state":
             var s = State()
             s.style = m["style"] as? String ?? "body"

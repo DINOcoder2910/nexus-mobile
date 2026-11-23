@@ -1,0 +1,7 @@
+module nexus_core_ffiFFI {
+    header "nexus_core_ffiFFI.h"
+    export *
+    use "Darwin"
+    use "_Builtin_stdbool"
+    use "_Builtin_stdint"
+}

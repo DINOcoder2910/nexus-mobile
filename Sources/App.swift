@@ -174,6 +174,8 @@ enum Screen: Hashable {
     case recordings
     /// A subject's page (a workstream in the new look: its next tasks, notebooks, study and files), and its Study page.
     case subject(String), studyPage(String)
+    /// A Spanish subject's Oral practice page (Today's From Study oral card).
+    case oralPage(String)
 }
 
 /// The shell: the sidebar on the left (where you go), the screen on the right, and the task panel, add sheet and undo bar over both.
@@ -363,6 +365,7 @@ struct RootView: View {
         case .recordings: return "Recordings (recordings/)"
         case .subject(let id): return store.workstream(id).map { "\($0.name)'s page (\($0.folder))" } ?? id
         case .studyPage(let id): return store.workstream(id).map { "\($0.name)'s Study (\($0.folder)/study)" } ?? id
+        case .oralPage(let id): return store.workstream(id).map { "\($0.name)'s Oral practice (\($0.folder)/study/spanish/oral)" } ?? id
         }
     }
 
@@ -460,6 +463,7 @@ struct RootView: View {
             case .recordings: RecordingsView()
             case .subject(let id): SubjectPage(workstreamId: id, go: go)
             case .studyPage(let id): StudyPage(workstreamId: id)
+            case .oralPage(let id): OralPage(workstreamId: id)
             }
         }
     }

@@ -14,7 +14,7 @@ struct SpanishHome: View {
     }
 }
 
-enum SpanishRoute: Hashable { case history, chat, writing, skills }
+enum SpanishRoute: Hashable { case history, chat, writing, skills, oral }
 
 struct SpanishHomeContent: View {
     let workstreamId: String
@@ -51,13 +51,17 @@ struct SpanishHomeContent: View {
             // From History or Skills the chat takes their place (one destination: a second one nested inside it hangs the iPhone)
             case .history: SpanishHistoryList(workstreamId: workstreamId, onMove: moveToChat)
             case .skills: SpanishHost(workstreamId: workstreamId) { SpanishSkillsPage(workstreamId: workstreamId, onPractise: { openChat(first: $0) }) }
+            case .oral: OralPage(workstreamId: workstreamId)
             }
         }
         .sheet(isPresented: $addingPrompt) { SpanishPromptSheet(workstreamId: workstreamId) }
         .alert("Spanish", isPresented: Binding(get: { lib.problem != nil }, set: { if !$0 { lib.problem = nil } })) {
             Button("OK") { lib.problem = nil }
         } message: { Text(lib.problem ?? "") }
-        .task(id: store.snapshot.loadedAt) { lib.refreshIfChanged(store) }
+        .task(id: store.snapshot.loadedAt) {
+            lib.refreshIfChanged(store)
+            if let w = lib.workstream(workstreamId) { OralLibrary.shared.refreshIfChanged(store, w) }
+        }
     }
 
     // MARK: the two layouts
@@ -76,6 +80,7 @@ struct SpanishHomeContent: View {
                 VStack(alignment: .leading, spacing: 20) {
                     card { writing }
                     card { skills }
+                    card { oral }
                 }
                 .frame(width: twoColumns ? 360 : nil)
                 .frame(maxWidth: twoColumns ? nil : .infinity)
@@ -96,6 +101,8 @@ struct SpanishHomeContent: View {
                 go(.writing, "Writing", "pencil.and.list.clipboard", d.prompts.isEmpty ? "" : "\(d.prompts.count) \(d.prompts.count == 1 ? "prompt" : "prompts")")
                 let sh = SpanishCheck.solidShare(d.stats, d.status)
                 go(.skills, "Skills", "chart.bar", "\(sh.solid) of \(sh.of) solid")
+                let orals = OralLibrary.shared.home(workstreamId).rows.count
+                go(.oral, "Oral practice", "mic", orals == 0 ? "" : "\(orals) \(orals == 1 ? "oral" : "orals")")
             }
         }
         .listStyle(.insetGrouped)
@@ -252,7 +259,22 @@ struct SpanishHomeContent: View {
             .font(.nx(.caption)).buttonStyle(.borderless)
     }
 
-    // MARK: Writing and Skills (the iPad's right column)
+    // MARK: Oral, Writing and Skills (the iPad's right column)
+
+    @ViewBuilder
+    private var oral: some View {
+        let h = OralLibrary.shared.home(workstreamId)
+        HStack(alignment: .firstTextBaseline) {
+            Text("Oral practice").font(.nx(.title3, .semibold))
+            Spacer()
+            Button("Open") { route = .oral }.controlSize(.small).buttonStyle(.bordered).accessibilityIdentifier("spanish-oral")
+        }
+        if let r = h.rows.first {
+            Text("Last: \(r.title) · \(r.when)" + (r.total.map { " · \(OralRowView.mark($0))/\(OralRowView.mark(r.max))" } ?? "")).font(.nx(.caption)).foregroundStyle(.secondary)
+        }
+        Text("Past orals and their marks, Add a recording, the listening test. Practice orals with the examiner's voice are on the laptop.")
+            .font(.nx(.footnote)).foregroundStyle(.secondary)
+    }
 
     @ViewBuilder
     private var writing: some View {

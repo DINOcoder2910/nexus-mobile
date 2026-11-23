@@ -1,14 +1,16 @@
 import Foundation
 
-/// The tutor's reply, read as it streams in, the same as the laptop's `renderer/src/tutor/reply.js`. Claude writes what it says as plain
-/// prose and puts each drawing step on its own line as `<step>{json}</step>`, right after the sentence it goes with. `TutorReader` takes
+/// The tutor's reply, read as it streams in, the same as the laptop's `renderer/src/tutor/reply.js`: NexusCore's own Swift port, kept to
+/// check the shared Rust core against (SharedCasesTests). The app reads replies with `TutorReader` (RustCore.swift), which is the core.
+/// Claude writes what it says as plain
+/// prose and puts each drawing step on its own line as `<step>{json}</step>`, right after the sentence it goes with. It takes
 /// the text in any pieces (`push`) and hands back events in order: a sentence to say, or a clean step to draw. `end()` flushes what is
 /// left. A step that doesn't parse or that `TutorSteps.check` refuses is dropped and listed in `problems`.
 ///
 /// Sentences split after . ! ? (and a closing quote or bracket) followed by a space, not after an abbreviation, an initial or a number;
 /// a long run without one is cut at a comma or a space so the voice can start early. Markdown that slips in is taken out: the voice
 /// would read it aloud.
-public final class TutorReader {
+final class SwiftTutorReader {
     static let abbreviations: Set<String> = ["e.g", "i.e", "etc", "vs", "cf", "approx", "fig", "eq", "no", "mr", "mrs", "ms", "dr", "st", "p", "pp",
                                              "ca", "resp", "incl", "min", "max", "sec", "mol", "conc", "aq", "temp"]
     static let maxSentence = 220
@@ -77,14 +79,14 @@ public final class TutorReader {
     }
 
     func say(_ text: String) {
-        let t = TutorReader.speakable(text)
+        let t = SwiftTutorReader.speakable(text)
         guard t.unicodeScalars.contains(where: { CharacterSet.letters.contains($0) || CharacterSet.decimalDigits.contains($0) }) else { return }
         out.append(.say(t, n: sentences)); sentences += 1
     }
 
     func flushSentences(_ final: Bool) {
         while true {
-            let e = TutorReader.sentenceEnd(prose, final: final)
+            let e = SwiftTutorReader.sentenceEnd(prose, final: final)
             if e < 0 { break }
             let ns = prose as NSString
             say(ns.substring(to: e))
@@ -110,12 +112,12 @@ public final class TutorReader {
         buf += piece
         while true {
             let ns = buf as NSString
-            if let m = TutorReader.tagRe.firstMatch(in: buf, range: NSRange(location: 0, length: ns.length)) {
+            if let m = SwiftTutorReader.tagRe.firstMatch(in: buf, range: NSRange(location: 0, length: ns.length)) {
                 // a step on its own line, or after a full stop, ends the sentence before it (it is drawn while that one is said)
                 prose += ns.substring(to: m.range.location)
                 let pn = prose as NSString
                 let done = !prose.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    && TutorReader.sentenceDone.firstMatch(in: prose, range: NSRange(location: 0, length: pn.length)) != nil
+                    && SwiftTutorReader.sentenceDone.firstMatch(in: prose, range: NSRange(location: 0, length: pn.length)) != nil
                 flushSentences(done)
                 tag(ns.substring(with: m.range(at: 1)))
                 buf = ns.substring(from: m.range.location + m.range.length)
@@ -125,7 +127,7 @@ public final class TutorReader {
             let open = ns.range(of: "<step>")
             let cut: Int
             if open.location != NSNotFound { cut = open.location }
-            else if let m = TutorReader.openRe.firstMatch(in: buf, range: NSRange(location: 0, length: ns.length)) { cut = m.range.location }
+            else if let m = SwiftTutorReader.openRe.firstMatch(in: buf, range: NSRange(location: 0, length: ns.length)) { cut = m.range.location }
             else { cut = ns.length }
             prose += ns.substring(to: cut)
             buf = ns.substring(from: cut)
@@ -151,7 +153,7 @@ public final class TutorReader {
 
     /// A whole reply at once.
     public static func read(_ text: String) -> (events: [TutorEvent], said: [String], steps: [TutorStep], problems: [(problem: String, text: String)]) {
-        let r = TutorReader()
+        let r = SwiftTutorReader()
         let events = r.push(text) + r.end()
         let said = events.compactMap { e -> String? in if case .say(let s, _) = e { return s }; return nil }
         let steps = events.compactMap { e -> TutorStep? in if case .step(let s) = e { return s }; return nil }
