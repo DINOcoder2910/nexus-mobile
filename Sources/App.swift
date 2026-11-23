@@ -241,6 +241,7 @@ struct RootView: View {
                 let id = url.pathComponents.dropFirst().joined(separator: "/")
                 if store.task(id) != nil { store.openTaskId = id }
             case "recordings": screen = .recordings
+            case "today": screen = .today
             // Snap on a recording's Live Activity: the camera (filming: this moment marked for a picture from the film)
             case "snap": RecordingService.shared.snap()
             default: break

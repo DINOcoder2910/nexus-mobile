@@ -126,6 +126,8 @@ final class NexusStore {
         fingerprint = DataFolder.fingerprint(folder)
         loadShortcuts()
         TimeTracker.shared.load(folder)
+        // the iPhone's Live Activity shows today's tasks too (LiveActivities.swift)
+        LiveActivities.refresh()
         onReload?()
     }
 

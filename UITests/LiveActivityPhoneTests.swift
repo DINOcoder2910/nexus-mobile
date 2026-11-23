@@ -1,11 +1,12 @@
 import XCTest
 import UIKit
 
-/// The iPhone's Live Activities (Sources/LiveActivity/, the extension in Widgets/): on sample data with a timer running on "Redox
-/// worksheet" (-NexusTestTime) and the recording demo (-NexusTestRecordings: no microphone). The timer goes on the Lock Screen and in the
-/// Dynamic Island when the app is in front, a recording joins it, Settings › Lock Screen says what shows and how it looks, and Stop on
-/// the Lock Screen card stops the timer in the app. iPhone only (`ui-check.yml` runs every "…PhoneTests" class on its iPhone
-/// simulator); the "phone-live-…" screenshots are printed into its log.
+/// The iPhone's one Live Activity (Sources/LiveActivity/, the extension in Widgets/): on sample data with a timer running on "Redox
+/// worksheet" (-NexusTestTime) and the recording demo (-NexusTestRecordings: no microphone). The card shows the timer on the Lock
+/// Screen and in the Dynamic Island when the app is in front, a recording takes its big row with the timer on the line under it,
+/// Settings › Lock Screen says what shows and how it looks, the line's Stop on the Lock Screen stops the timer in the app, and once
+/// nothing runs the card shows the task up next, whose Start starts the timer. iPhone only (`ui-check.yml` runs every "…PhoneTests"
+/// class on its iPhone simulator); the "phone-live-…" screenshots are printed into its log.
 final class LiveActivityPhoneTests: XCTestCase {
     let app = XCUIApplication()
     let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
@@ -77,7 +78,7 @@ final class LiveActivityPhoneTests: XCTestCase {
         openMoreRow("Settings")
         let status = liveStatus()
         XCTAssertTrue(status.waitForExistence(timeout: 10), "Settings has no Lock Screen section")
-        XCTAssertTrue(waitLabel(status, contains: "Redox worksheet"), "the timer isn't showing as a Live Activity (\(status.label))")
+        XCTAssertTrue(waitLabel(status, contains: "Timer: Redox worksheet"), "the timer isn't showing on the Live Activity (\(status.label))")
         shot("live-1-settings")
         printLog("at the start")
         let preview = app.buttons["live-preview"].firstMatch
@@ -110,29 +111,26 @@ final class LiveActivityPhoneTests: XCTestCase {
         back()
         openMoreRow("Settings")
         let both = liveStatus()
-        XCTAssertTrue(waitLabel(both, contains: "Meeting"), "the recording isn't showing as a Live Activity (\(both.label))")
-        XCTAssertTrue(both.label.contains("Redox worksheet"), "the timer went from the Lock Screen (\(both.label))")
+        XCTAssertTrue(waitLabel(both, contains: "Recording: Meeting"), "the recording isn't showing on the Live Activity (\(both.label))")
+        XCTAssertTrue(both.label.contains("Timer: Redox worksheet"), "the timer went from the Live Activity (\(both.label))")
         printLog("after the recording started")
         back()
         XCUIDevice.shared.press(.home)
         sleep(6)
         shot("live-4-island-both")
 
-        // Notification Centre shows the Lock Screen cards
-        let top = springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.003))
-        top.press(forDuration: 0.1, thenDragTo: springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.75)))
-        sleep(3)
+        // Notification Centre shows the Lock Screen card
+        pullDown()
         shot("live-5-lock-screen")
 
-        // Stop on the timer's card stops the timer in Nexus (iOS runs the button in the app, in the background). The first tap on
-        // two cards opens the stack, and the first press on a Live Activity asks "Allow Live Activities from Nexus?" (Allow).
+        // Stop on the timer's line stops the timer in Nexus (iOS runs the button in the app, in the background). The first press
+        // on a Live Activity asks "Allow Live Activities from Nexus?" (Allow).
         let stop = springboard.buttons["Stop the timer"].firstMatch
         let found = stop.waitForExistence(timeout: 8)
         if found {
-            let card = springboard.staticTexts["Redox worksheet"].firstMatch
             var presses = 0
             // by coordinate: the springboard says a Live Activity's buttons aren't hittable (it draws them from another process)
-            while card.exists && presses < 4 {
+            while stop.exists && presses < 4 {
                 let allow = springboard.buttons["Allow"].firstMatch
                 if allow.exists { allow.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap(); sleep(2) }
                 if stop.exists { stop.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
@@ -141,7 +139,7 @@ final class LiveActivityPhoneTests: XCTestCase {
                 if presses == 1 { shot("live-6-stack-open") }
             }
             shot("live-7-timer-stopped")
-            XCTAssertFalse(card.exists, "the timer's card is still on the Lock Screen after Stop")
+            XCTAssertFalse(stop.exists, "the timer is still on the Lock Screen after Stop")
         } else {
             print("UINOTE the Lock Screen card's Stop isn't in the springboard's elements on this simulator; stopping in the app instead")
         }
@@ -159,7 +157,7 @@ final class LiveActivityPhoneTests: XCTestCase {
             if pill.waitForExistence(timeout: 5) { pill.tap() }
         }
 
-        // stopping the recording takes it off too: nothing shows
+        // stopping the recording too: the card shows the day (the task up next, or that the day is clear)
         // (More is at its list here: the test went back to it before leaving for the home screen; the iPhone shows the pill on it)
         let recStop = app.buttons["rec-pill-stop"].firstMatch
         XCTAssertTrue(recStop.waitForExistence(timeout: 10), "no recording pill to stop")
@@ -169,7 +167,46 @@ final class LiveActivityPhoneTests: XCTestCase {
         sleep(2)
         openMoreRow("Settings")
         let after = liveStatus()
-        printLog("at the end")
-        XCTAssertTrue(waitLabel(after, contains: "Nothing"), "a Live Activity still shows after both stopped (\(after.label))")
+        printLog("after both stopped")
+        XCTAssertTrue(waitLabel(after, contains: "Next up: ") || after.label.contains("Day: "), "the card doesn't show the day after both stopped (\(after.label))")
+        XCTAssertFalse(after.label.contains("Timer: ") || after.label.contains("Recording: "), "the card still shows a timer or a recording (\(after.label))")
+        let next = after.label.contains("Next up: ")
+        back()
+        XCUIDevice.shared.press(.home)
+        sleep(3)
+        shot("live-8-island-day")
+        pullDown()
+        shot("live-9-lock-screen-day")
+
+        // Start on the next task starts the timer on it
+        guard next else { return }
+        let go = springboard.buttons["Start the timer on it"].firstMatch
+        if go.waitForExistence(timeout: 8) {
+            go.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            sleep(4)
+            shot("live-10-started")
+            XCUIDevice.shared.press(.home)
+            sleep(1)
+            app.activate()
+            XCTAssertTrue(app.tabBars.buttons["More"].waitForExistence(timeout: 15), "Nexus didn't come back")
+            let pill = app.buttons["Stop the timer"].firstMatch
+            XCTAssertTrue(pill.waitForExistence(timeout: 15), "Start on the Lock Screen didn't start the timer")
+            openMoreRow("Settings")
+            let started = liveStatus()
+            XCTAssertTrue(waitLabel(started, contains: "Timer: "), "the card doesn't show the timer Start started (\(started.label))")
+            printLog("after Start")
+            back()
+            // and stopped again in the app, so the tests after this one find the sample as it was (TestHooks starts its timer again)
+            if pill.waitForExistence(timeout: 5) { pill.tap() }
+        } else {
+            print("UINOTE the card's Start isn't in the springboard's elements on this simulator")
+        }
+    }
+
+    /// Notification Centre (it shows the Lock Screen's Live Activities), pulled down from the top.
+    func pullDown() {
+        let top = springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.003))
+        top.press(forDuration: 0.1, thenDragTo: springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.75)))
+        sleep(3)
     }
 }
