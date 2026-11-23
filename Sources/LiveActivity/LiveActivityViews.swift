@@ -37,6 +37,7 @@ struct NexusLiveIcon: View {
 /// once the next task's time has come.
 struct NexusLiveClock: View {
     let state: NexusLiveState
+    var alignment: TextAlignment = .trailing
 
     var body: some View {
         let now = Date()
@@ -50,7 +51,7 @@ struct NexusLiveClock: View {
             }
         }
         .monospacedDigit()
-        .multilineTextAlignment(.trailing)
+        .multilineTextAlignment(alignment)
     }
 }
 
@@ -250,7 +251,9 @@ struct NexusLiveBig: View {
     var body: some View {
         Group {
             if state.clocks(Date()) || (state.focus == .next && state.timed) {
-                NexusLiveClock(state: state).font(.system(size: 44, weight: .semibold, design: .rounded))
+                // a timer's text takes all the width it is offered: held to the left part of the card
+                NexusLiveClock(state: state, alignment: .leading).font(.system(size: 44, weight: .semibold, design: .rounded))
+                    .frame(maxWidth: 200, alignment: .leading)
             } else {
                 Text(state.focus == .clear ? (state.done > 0 ? "All done" : "Free") : "Up next")
                     .font(.system(size: 34, weight: .bold, design: .rounded))
@@ -277,18 +280,16 @@ struct NexusLiveLockView: View {
                     Text(state.title).font(.system(size: 17, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
                     Text(state.detail).font(.system(size: 13)).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.85)
                 }
-                .layoutPriority(1)
                 Spacer(minLength: 4)
-                NexusLiveButtons(state: state)
+                NexusLiveButtons(state: state).fixedSize().layoutPriority(2)
             }
             HStack(alignment: .center, spacing: 10) {
                 VStack(alignment: .leading, spacing: 3) {
                     NexusLiveBig(state: state)
                     NexusLiveEstimate(state: state).frame(maxWidth: 180)
                 }
-                .layoutPriority(1)
                 Spacer(minLength: 6)
-                NexusLiveDay(state: state, trailing: true)
+                NexusLiveDay(state: state, trailing: true).fixedSize().layoutPriority(2)
             }
             if let line {
                 NexusLiveLineRow(line: line)
