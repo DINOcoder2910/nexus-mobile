@@ -61,6 +61,9 @@ final class SpanishChat: Identifiable {
     var draft = ""
     var review: Review?
     var closed = false
+    /// A text type guide this chat is about (Practise with the tutor on a guide, or the guide its first message names), sent with the
+    /// memory: the tutor here can't open the file the way the laptop's does.
+    var guide = ""
     @ObservationIgnored private var relay: String?
     @ObservationIgnored private var turn: Task<Void, Never>?
 
@@ -104,16 +107,18 @@ final class SpanishChat: Identifiable {
         let lib = SpanishLibrary.shared
         guard let w = lib.workstream(wsId) else { return }
         let d = lib.data(wsId)
+        if guide.isEmpty, messages.count == 1, let g = SpanishTextTypes.mentioned(t, d.guides) { guide = SpanishTextTypes.tutorSection(g) }
         let notes = SpanishCheck.weakest(d.stats, 4).compactMap { s -> (id: String, text: String)? in
             let p = w.folder + "/" + Spanish.P.note(s.id)
             guard d.noteFiles.contains(p), let t = try? FolderAccess.read(store.folder.appendingPathComponent(p)) else { return nil }
             return (id: s.id, text: t)
         }
         let unit = Spanish.currentUnit.map { "\($0.code) \($0.title)" } ?? ""
-        let index = SpanishMemory.tutorIndex(base: w.folder, profile: d.profileText, status: d.status, stats: d.stats,
+        let memory = SpanishMemory.tutorIndex(base: w.folder, profile: d.profileText, status: d.status, stats: d.stats,
                                              chats: d.chats.filter { $0.path != path }.map { .init(path: $0.path, title: $0.title, summary: $0.summary) },
                                              decks: lib.decks(wsId).map { .init(id: $0.deck.id, title: $0.deck.title, cards: $0.deck.cards.count) },
                                              prompts: d.prompts.count, unit: unit, today: Days.today(), course: d.course, notes: notes, recent: d.entries)
+        let index = guide.isEmpty ? memory : memory + "\n\n" + guide
         // the conversation, the memory before its first message; the same role twice in a row is one message
         var convo: [ClaudeMessage] = []
         for (i, m) in messages.enumerated() {

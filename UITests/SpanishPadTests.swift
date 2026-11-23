@@ -137,13 +137,48 @@ final class SpanishPadTests: XCTestCase {
         let prompt = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'spanish-prompt-2'")).firstMatch
         XCTAssertTrue(prompt.waitForExistence(timeout: 5), "no prompt")
         prompt.tap()
+        // the text type's guide beside the piece: the one the prompt offers, a step of its structure ticked
+        XCTAssertTrue(el("spanish-guide-panel").waitForExistence(timeout: 10), "no text type guide beside the piece")
+        XCTAssertTrue(el("spanish-guide-step-0").waitForExistence(timeout: 5), "the guide has no structure")
+        el("spanish-guide-step-0").tap()
         type("spanish-piece", "¡Hola Marta!\n\nLa semana pasada fui a la playa con mi familia. Fuimos en coche y el viaje fue muy largo, pero divertido. Nos quedamos en un hotel pequeño cerca del mar.\n\nCada día nadamos y comimos paella en un restaurante. Ayer compre una camiseta para mi hermano. Lo que más me gustó fue el atardecer en la playa porque fue muy bonito.\n\n¿Y tú? ¿Qué hiciste en las vacaciones?\n\nUn abrazo,\nAli")
         hideKeyboard()
+        // a sentence stem tapped goes into the piece
+        let stem = el("spanish-stem-0-0")
+        var down = 0
+        while !stem.isHittable && down < 5 { el("spanish-guide-panel").swipeUp(); down += 1 }
+        stem.tap()
+        sleep(1)
+        XCTAssertTrue((el("spanish-piece").value as? String ?? "").contains("¿Qué tal todo?"), "the stem didn't go into the piece")
         shot("pad-spanish-write")
         el("spanish-mark").tap()
         XCTAssertTrue(el("spanish-grade-total").waitForExistence(timeout: 20), "the piece wasn't marked")
+        XCTAssertTrue(el("spanish-graded-piece").waitForExistence(timeout: 5), "the marked piece isn't shown with its mistakes")
         sleep(1)
         shot("pad-spanish-marked")
+        app.navigationBars.buttons.firstMatch.tap()
+        sleep(1)
+
+        // Text types: the guides, one with its exemplar, Practise with the tutor
+        let types = el("spanish-text-types")
+        var more = 0
+        while !types.isHittable && more < 6 { app.swipeUp(); more += 1 }
+        types.tap()
+        let guide = el("spanish-guide-correo-informal")
+        XCTAssertTrue(guide.waitForExistence(timeout: 10), "the demo's guide isn't listed")
+        shot("pad-spanish-types")
+        guide.tap()
+        XCTAssertTrue(el("spanish-guide-exemplar").waitForExistence(timeout: 10), "the guide has no exemplar")
+        sleep(1)
+        shot("pad-spanish-guide")
+        el("spanish-guide-practise").tap()
+        XCTAssertTrue(el("spanish-chat-input").waitForExistence(timeout: 10), "Practise didn't open a chat")
+        sleep(4)
+        shot("pad-spanish-guide-practise")
+        el("spanish-guide-chat-close").tap()
+        sleep(1)
+        app.navigationBars.buttons.firstMatch.tap()
+        sleep(1)
         app.navigationBars.buttons.firstMatch.tap()
         sleep(1)
 

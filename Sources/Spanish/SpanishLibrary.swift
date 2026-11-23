@@ -31,6 +31,8 @@ final class SpanishLibrary {
         var promptsError: String?
         var pieces: [SpanishGrade.PieceInfo] = []
         var samples: [SpanishGrade.Sample] = []
+        /// study/spanish/text-types/*.md, in the laptop's order (the laptop writes them; here they are read)
+        var guides: [SpanishTextTypes.Guide] = []
         var noteFiles: Set<String> = []
         /// A month's log that does not parse (nothing is written over it).
         var brokenLogs: [String] = []
@@ -50,6 +52,8 @@ final class SpanishLibrary {
     /// Writing: each prompt's piece as it is being written, and its marking (by "<workstream>|<prompt id>").
     var drafts: [String: String] = [:]
     var grades: [String: SpanishGradeRun] = [:]
+    /// the text type picked for a prompt's piece (SpanishGradeRun.key), when it isn't the first the prompt offers
+    var guidePicks: [String: String] = [:]
     @ObservationIgnored private var stamps: [String: String] = [:]
     @ObservationIgnored private var listStamp = ""
 
@@ -140,6 +144,12 @@ final class SpanishLibrary {
         d.pieces = pieces.prefix(80).compactMap { p in read(root, p).flatMap { SpanishGrade.pieceInfo($0, path: p) } }
         d.samples = samples.compactMap { read(root, $0).flatMap(SpanishGrade.parseSample) }
         d.noteFiles = Set(all.filter { $0.hasPrefix(base + Spanish.P.notes + "/") })
+        d.guides = SpanishTextTypes.sorted(all.filter { $0.hasPrefix(base + SpanishTextTypes.dir + "/") && $0.lowercased().hasSuffix(".md") && !SyncPaths.isConflictCopy($0) }.compactMap { p -> SpanishTextTypes.Guide? in
+            guard let t = read(root, p) else { return nil }
+            var g = SpanishTextTypes.parse(slug: String((p as NSString).lastPathComponent.dropLast(3)), text: t)
+            g.path = p
+            return g
+        })
         data[w.id] = d
         stamps[w.id] = Self.fingerprint(root, w)
     }
@@ -168,6 +178,13 @@ final class SpanishLibrary {
                 problem = "A copy of the Spanish log could not be merged: \(error.localizedDescription)"
             }
         }
+    }
+
+    /// The guide for a prompt's piece: the one picked, else the first the prompt's text types point at.
+    func guide(_ wsId: String, prompt: SpanishGrade.Prompt) -> SpanishTextTypes.Guide? {
+        let all = data(wsId).guides
+        if let s = guidePicks[SpanishGradeRun.key(wsId, prompt.id)], let g = all.first(where: { $0.slug == s }) { return g }
+        return SpanishTextTypes.guidesFor(prompt.types, all).first
     }
 
     // MARK: writing

@@ -26,7 +26,8 @@ final class SpanishGradeRun {
         g.busy = true
         g.text = text
         lib.grades[k] = g
-        let ask = SpanishGrade.gradePrompt(prompt: prompt, text: text, count: count, samples: lib.data(wsId).samples)
+        let guide = lib.guide(wsId, prompt: prompt).map(SpanishTextTypes.conventions) ?? ""
+        let ask = SpanishGrade.gradePrompt(prompt: prompt, text: text, count: count, samples: lib.data(wsId).samples, guide: guide)
         Task {
             do {
                 let reply = try await SpanishClaude.once(model: SpanishModel.current, system: SpanishGrade.system, prompt: ask, maxTokens: 6000, demo: { SpanishDemo.grade() })
@@ -71,6 +72,12 @@ struct SpanishPromptRows: View {
             }
             .accessibilityIdentifier("spanish-prompt-\(p.id)")
         }
+        NavigationLink {
+            SpanishTextTypesList(workstreamId: workstreamId)
+        } label: {
+            Label(d.guides.isEmpty ? "Text type guides" : "Text type guides (\(d.guides.count))", systemImage: "text.book.closed")
+        }
+        .accessibilityIdentifier("spanish-text-types")
         Text(d.samples.isEmpty ? "Teacher-marked samples: none yet. Put marked pieces in \(Spanish.P.samples)/ (A, B and C in the front matter) and the marking matches your teacher's standard."
                                : "Marking matches \(d.samples.count) \(d.samples.count == 1 ? "piece" : "pieces") your teacher marked (\(Spanish.P.samples)/).")
             .font(.nx(.caption)).foregroundStyle(.secondary)
@@ -155,6 +162,9 @@ struct SpanishWriteView: View {
     let promptId: String
     @Environment(NexusStore.self) private var store
     @Environment(\.horizontalSizeClass) private var size
+    /// the iPad's side column: the text type's guide, or the marks
+    @State private var side = "guide"
+    @State private var guideOpen = false
     var lib: SpanishLibrary { .shared }
 
     var body: some View {
@@ -164,7 +174,22 @@ struct SpanishWriteView: View {
                     if size == .regular {
                         HStack(alignment: .top, spacing: 24) {
                             ScrollView { writing(p).padding(.vertical) }.frame(maxWidth: .infinity)
-                            ScrollView { marks(p).padding(.vertical) }.frame(maxWidth: 460)
+                            VStack(alignment: .leading, spacing: 12) {
+                                Picker("Beside the piece", selection: $side) {
+                                    Text("Text type").tag("guide")
+                                    Text("Marks").tag("marks")
+                                }
+                                .pickerStyle(.segmented)
+                                .accessibilityIdentifier("spanish-side")
+                                ScrollView {
+                                    Group {
+                                        if side == "guide" { SpanishGuidePanel(workstreamId: workstreamId, prompt: p, put: { put(p, $0) }) } else { marks(p) }
+                                    }
+                                    .padding(.vertical)
+                                }
+                            }
+                            .padding(.top)
+                            .frame(maxWidth: 460)
                         }
                         .padding(.horizontal, 24)
                     } else {
@@ -177,10 +202,32 @@ struct SpanishWriteView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .primaryAction) { SpanishModelMenu() } }
                 .spanishKeyboardDone()
+                .onChange(of: lib.grades[SpanishGradeRun.key(workstreamId, p.id)]?.busy) { _, busy in if busy == true { side = "marks" } }
+                .sheet(isPresented: $guideOpen) {
+                    NavigationStack {
+                        ScrollView { SpanishGuidePanel(workstreamId: workstreamId, prompt: p, put: { put(p, $0) }).padding() }
+                            .navigationTitle("Text type")
+                            .navigationBarTitleDisplayMode(.inline)
+                            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { guideOpen = false }.accessibilityIdentifier("spanish-guide-done") } }
+                    }
+                    .presentationDetents([.medium, .large])
+                }
             } else {
                 EmptyNote(title: "This prompt is no longer in prompts.yaml.", icon: "questionmark.folder")
             }
         }
+    }
+
+    /// A sentence stem into the piece, at its end (an unfinished stem's "…" left for you to go on from).
+    private func put(_ p: SpanishGrade.Prompt, _ stem: String) {
+        let k = SpanishGradeRun.key(workstreamId, p.id)
+        var t = lib.drafts[k] ?? ""
+        var s = stem
+        if s.hasSuffix("…") { s.removeLast() }
+        s = s.trimmingCharacters(in: .whitespaces)
+        if !t.isEmpty && !t.hasSuffix(" ") && !t.hasSuffix("\n") { t += " " }
+        lib.drafts[k] = t + s + " "
+        store.toast = .init(message: "Put in: " + s)
     }
 
     private func writing(_ p: SpanishGrade.Prompt) -> some View {
@@ -196,6 +243,13 @@ struct SpanishWriteView: View {
                 .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
                 .overlay(alignment: .leading) { Rectangle().fill(Theme.accent).frame(width: 3) }
             if !p.types.isEmpty { Text("Text types offered: " + p.types.joined(separator: ", ")).font(.nx(.caption)).foregroundStyle(.secondary) }
+            if size != .regular {
+                Button { SpanishKeyboard.hide(); guideOpen = true } label: {
+                    Label(lib.guide(workstreamId, prompt: p).map { "Guide: " + $0.title } ?? "Text type guide", systemImage: "text.book.closed")
+                }
+                .buttonStyle(.bordered)
+                .accessibilityIdentifier("spanish-guide-open")
+            }
             TextEditor(text: text)
                 .font(.nx(.body))
                 .autocorrectionDisabled()
@@ -238,7 +292,7 @@ struct SpanishWriteView: View {
         VStack(alignment: .leading, spacing: 14) {
             if let g = lib.grades[k] {
                 if !g.error.isEmpty { Label(g.error, systemImage: "exclamationmark.triangle").foregroundStyle(Theme.late).font(.nx(.callout)) }
-                if let x = g.grade { SpanishGradeView(grade: x, path: g.path) }
+                if let x = g.grade { SpanishGradeView(grade: x, path: g.path, text: g.text) }
             } else if size == .regular {
                 Text("The marks show here: each criterion's mark, what was met and missed, the evidence from your piece and what to do next.")
                     .font(.nx(.callout)).foregroundStyle(.secondary)
@@ -268,6 +322,8 @@ struct SpanishFileLink: View {
 struct SpanishGradeView: View {
     let grade: SpanishGrade.Grade
     var path = ""
+    /// the piece as marked, shown with its mistakes underlined
+    var text = ""
 
     var body: some View {
         let x = grade
@@ -295,6 +351,10 @@ struct SpanishGradeView: View {
                 } label: {
                     HStack { Text("\(c.key) \(c.name)").bold(); Spacer(); Text("\(k.mark)/\(c.max)").monospacedDigit() }
                 }
+            }
+            if !text.isEmpty {
+                Text("Your piece, its mistakes underlined").font(.nx(.caption, .semibold)).foregroundStyle(.secondary).textCase(.uppercase)
+                SpanishMarkedPiece(text: text, mistakes: x.mistakes)
             }
             if !x.applied.isEmpty { (Text("Examiner rules applied: ").bold() + Text(x.applied.joined(separator: " "))).font(.nx(.footnote)) }
             if !x.mistakes.isEmpty {
