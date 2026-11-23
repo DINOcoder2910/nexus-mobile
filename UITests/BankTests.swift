@@ -27,15 +27,21 @@ final class BankTests: XCTestCase {
     func tap(_ id: String, _ why: String, in list: XCUIElement? = nil) {
         let e = el(id)
         _ = e.waitForExistence(timeout: 8)
-        // a list only keeps the rows near the screen: a row that is gone may be above (the list starts scrolled down, as the iPad's
-        // sidebar can), so look up first, then down; a row that is there but off screen is scrolled toward
+        // a list only keeps the rows near the screen. A row that is there but can't be tapped (off screen, or under the system's
+        // notifications alert, which the first swipe answers) is scrolled toward: down when it is in the list's upper half. A row
+        // that is gone may be above, so look up first (4 swipes), then down. Nov 23, PR #55: swiping only up lost the sidebar's
+        // Study row, which the alert had made untappable while it was on screen.
         let l = list ?? app.collectionViews.firstMatch
-        var tries = 0
-        while !e.exists && tries < 4 { l.swipeDown(); tries += 1 }
-        tries = 0
-        while !(e.exists && e.isHittable) && tries < 10 {
-            if e.exists && e.frame.midY < l.frame.minY { l.swipeDown() } else { l.swipeUp() }
-            tries += 1
+        var downs = 0
+        for _ in 0..<14 {
+            if e.exists && e.isHittable { break }
+            if e.exists {
+                if e.frame.midY < l.frame.midY { l.swipeDown() } else { l.swipeUp() }
+            } else if downs < 4 {
+                l.swipeDown(); downs += 1
+            } else {
+                l.swipeUp()
+            }
         }
         XCTAssertTrue(e.waitForExistence(timeout: 5), why)
         e.tap()

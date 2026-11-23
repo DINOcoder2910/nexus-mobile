@@ -155,7 +155,7 @@ struct BankQuestionView: View {
                             HStack(spacing: 6) {
                                 Text("\(k + 1)").font(.nx(.caption, .semibold)).padding(.horizontal, 5).padding(.vertical, 1)
                                     .background(.quaternary, in: RoundedRectangle(cornerRadius: 4))
-                                Text(QuestionBank.markWord[m] ?? m).font(.nx(.callout, .medium)).lineLimit(1)
+                                Text(QuestionBank.markWord[m] ?? m).font(.nx(.callout, .medium)).lineLimit(1).minimumScaleFactor(0.75)
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 9)
@@ -294,7 +294,7 @@ enum BankClip {
         let total = rs.reduce(0) { $0 + $1.height * k } + gap * CGFloat(max(0, rs.count - 1))
         let format = UIGraphicsImageRendererFormat()
         format.scale = 2
-        return UIGraphicsImageRenderer(size: CGSize(width: width, height: max(1, total)), format: format).image { ctx in
+        let full = UIGraphicsImageRenderer(size: CGSize(width: width, height: max(1, total)), format: format).image { ctx in
             var y: CGFloat = 0
             for r in rs {
                 let h = r.height * k
@@ -307,6 +307,38 @@ enum BankClip {
                 y += h + gap
             }
         }
+        return trimBottom(full)
+    }
+
+    /// The picture without the blank paper under what is there (the last question of a page runs to the page's foot), keeping a
+    /// little margin.
+    static func trimBottom(_ image: UIImage) -> UIImage {
+        guard let cg = image.cgImage, cg.width > 0, cg.height > 0 else { return image }
+        let w = cg.width, h = cg.height
+        var px = [UInt8](repeating: 0, count: w * h * 4)
+        let drawn = px.withUnsafeMutableBytes { buf -> Bool in
+            guard let ctx = CGContext(data: buf.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                                      space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+            ctx.setFillColor(UIColor.white.cgColor)
+            ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
+            ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+            return true
+        }
+        guard drawn else { return image }
+        // the bitmap's first row is the picture's top; the last row with anything darker than near-white is its foot
+        var last = -1
+        for row in stride(from: h - 1, through: 0, by: -1) {
+            let base = row * w * 4
+            var ink = false
+            for x in stride(from: 0, to: w, by: 2) where px[base + x * 4] < 235 || px[base + x * 4 + 1] < 235 || px[base + x * 4 + 2] < 235 {
+                ink = true
+                break
+            }
+            if ink { last = row; break }
+        }
+        let keep = min(h, max(last + Int(40 * image.scale), Int(120 * image.scale)))
+        guard last >= 0, keep < h - Int(20 * image.scale), let cut = cg.cropping(to: CGRect(x: 0, y: 0, width: w, height: keep)) else { return image }
+        return UIImage(cgImage: cut, scale: image.scale, orientation: .up)
     }
 
     /// Forget the board read for pictures (a board written on since shows its new ink).

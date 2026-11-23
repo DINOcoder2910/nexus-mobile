@@ -13,6 +13,8 @@ extension BoardController {
             toast("File this board's notebook under a subject first (one with a Study folder)")
             return
         }
+        // a text block being typed in gives up the keyboard first, so the box gets the drag
+        view.window?.endEditing(true)
         view.subviews.first { $0 is QuestionBoxView }?.removeFromSuperview()
         let box = QuestionBoxView(frame: view.bounds)
         box.autoresizingMask = [.flexibleWidth, .flexibleHeight]

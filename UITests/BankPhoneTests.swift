@@ -99,6 +99,10 @@ final class BankPhoneTests: XCTestCase {
         let box = el("question-box")
         XCTAssertTrue(box.waitForExistence(timeout: 5), "no box to draw round the question")
         sleep(1)
+        // the system's first-keyboard tip ("Speed up your typing…") sits over everything and takes the drag (Nov 23, PR #55)
+        let tip = app.buttons["Continue"].firstMatch
+        if tip.exists { tip.tap(); sleep(1) }
+        shot("phone-bank-box")
         box.coordinate(withNormalizedOffset: CGVector(dx: 0.15, dy: 0.30))
             .press(forDuration: 0.3, thenDragTo: box.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.40)))
         let added = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'is in the question bank'")).firstMatch
