@@ -227,7 +227,6 @@ struct SpanishWriteView: View {
         s = s.trimmingCharacters(in: .whitespaces)
         if !t.isEmpty && !t.hasSuffix(" ") && !t.hasSuffix("\n") { t += " " }
         lib.drafts[k] = t + s + " "
-        store.toast = .init(message: "Put in: " + s)
     }
 
     private func writing(_ p: SpanishGrade.Prompt) -> some View {

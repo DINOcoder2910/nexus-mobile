@@ -135,6 +135,29 @@ final class SpanishPhoneTests: XCTestCase {
         el("spanish-go-Writing").tap()
         sleep(1)
         shot("phone-spanish-writing")
+        // Text types (under the prompts): the guides, one with its structure, Practise with the tutor, back to the prompts
+        let types = app.descendants(matching: .any).matching(NSPredicate(format: "identifier == 'spanish-text-types' OR label BEGINSWITH 'Text type guides'")).firstMatch
+        var more = 0
+        while !types.waitForExistence(timeout: 2) && more < 4 { app.swipeUp(); more += 1 }
+        if !types.exists { shot("phone-spanish-no-text-types") }
+        XCTAssertTrue(types.exists, "no Text type guides under the prompts")
+        types.tap()
+        let guide = el("spanish-guide-correo-informal")
+        XCTAssertTrue(guide.waitForExistence(timeout: 10), "the demo's guide isn't listed")
+        shot("phone-spanish-types")
+        guide.tap()
+        XCTAssertTrue(el("spanish-guide-structure").waitForExistence(timeout: 10), "the guide has no structure")
+        sleep(1)
+        shot("phone-spanish-guide")
+        el("spanish-guide-practise").tap()
+        XCTAssertTrue(el("spanish-chat-input").waitForExistence(timeout: 10), "Practise didn't open a chat")
+        sleep(4)
+        shot("phone-spanish-guide-practise")
+        el("spanish-guide-chat-close").tap()
+        sleep(1)
+        back()
+        back()
+        app.swipeDown()
         let prompt = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'spanish-prompt-2'")).firstMatch
         XCTAssertTrue(prompt.waitForExistence(timeout: 5), "no prompt")
         prompt.tap()
@@ -161,26 +184,6 @@ final class SpanishPhoneTests: XCTestCase {
         el("spanish-grade-total").swipeUp()
         sleep(1)
         shot("phone-spanish-marked")
-        back()
-
-        // Text types: the guides, one with its exemplar, Practise with the tutor
-        let types = el("spanish-text-types")
-        var more = 0
-        while !types.waitForExistence(timeout: 2) && more < 6 { app.swipeUp(); more += 1 }
-        types.tap()
-        let guide = el("spanish-guide-correo-informal")
-        XCTAssertTrue(guide.waitForExistence(timeout: 10), "the demo's guide isn't listed")
-        guide.tap()
-        XCTAssertTrue(el("spanish-guide-structure").waitForExistence(timeout: 10), "the guide has no structure")
-        sleep(1)
-        shot("phone-spanish-guide")
-        el("spanish-guide-practise").tap()
-        XCTAssertTrue(el("spanish-chat-input").waitForExistence(timeout: 10), "Practise didn't open a chat")
-        sleep(4)
-        shot("phone-spanish-guide-practise")
-        el("spanish-guide-chat-close").tap()
-        sleep(1)
-        back()
         back()
         back()
 
