@@ -36,6 +36,8 @@ html.dark #ed mark { color: #111; }
 #ed ins { color: #188038; text-decoration: underline; text-decoration-color: rgba(24, 128, 56, .5); background: rgba(24, 128, 56, .08); }
 #ed del { color: #d93025; text-decoration: line-through; background: rgba(217, 48, 37, .06); }
 #ed .rt-comment, #ed .rt-marked { background: rgba(175, 82, 222, .16); border-radius: 2px; }
+#ed .rt-es { text-decoration: underline wavy #D93F3F; text-decoration-thickness: 1.5px; text-underline-offset: 3px; text-decoration-skip-ink: none; }
+#ed .rt-es-accent { text-decoration-color: #D98A1E; }
 #ed .rt-chip { display: inline-block; padding: 0 .4em; border-radius: .6em; background: var(--code-back); font-size: .9em; }
 #ed .rt-unknown, #ed .rt-ink, #ed .rt-embed, #ed .rt-toc { padding: 4px 8px; border-radius: 4px; background: var(--code-back); color: var(--muted); font-size: .85em; }
 #ed .rt-ink::after { content: 'Handwriting (shown on the board)'; }

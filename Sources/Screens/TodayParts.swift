@@ -146,8 +146,8 @@ struct StudyDueCard: View {
         if item.oral { oral } else { cards }
     }
 
-    /// "Oral practice · Spanish · last one 3 days ago": the orals are run on the laptop (its voice models), so this says when the
-    /// last one was and opens the subject's Study.
+    /// "Oral practice · Spanish · last one 3 days ago": when the last oral was, and Open for the subject's Oral page (past orals,
+    /// Add a recording, the listening test; the practice orals themselves run on the laptop, with its voice models).
     private var oral: some View {
         let color = store.color(workstream: item.workstream.id)
         let last = item.lastDays.map { $0 == 0 ? "last one today" : "last one \($0) day\($0 == 1 ? "" : "s") ago" } ?? "none yet"
@@ -159,11 +159,11 @@ struct StudyDueCard: View {
                 .background(color.opacity(0.13), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text("Oral practice").font(.nx(.body, .medium)).foregroundStyle(Kit.ink)
-                Text((item.workstream.name.split(separator: " ").first.map(String.init) ?? item.workstream.name) + " · " + last + " · on the laptop")
+                Text((item.workstream.name.split(separator: " ").first.map(String.init) ?? item.workstream.name) + " · " + last)
                     .font(.nx(.caption)).foregroundStyle(Kit.faint).lineLimit(1)
             }
             Spacer(minLength: 8)
-            Button("Study", action: open).buttonStyle(KitButtonStyle(kind: .tone, small: true))
+            Button("Open", action: open).buttonStyle(KitButtonStyle(kind: .tone, small: true)).accessibilityIdentifier("study-oral-open")
         }
         .padding(.horizontal, 14).padding(.vertical, 12)
         .kitSurface(Kit.rests, radius: 16)
