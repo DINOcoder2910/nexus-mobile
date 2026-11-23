@@ -12,6 +12,13 @@ final class BankPhoneTests: XCTestCase {
         XCUIDevice.shared.orientation = .portrait
     }
 
+    /// The system's first-keyboard tip, if this test brought it up, is answered here, so it doesn't carry over the simulator
+    /// into the next test that types (SpanishPhoneTests failed to type on 80e8744 and 7784cc5, Nov 23, PR #55).
+    override func tearDownWithError() throws {
+        let tip = app.buttons["Continue"].firstMatch
+        if tip.exists { tip.tap() }
+    }
+
     func shot(_ name: String) {
         let a = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         a.name = name
@@ -92,6 +99,11 @@ final class BankPhoneTests: XCTestCase {
         let insert = app.buttons["Insert"].firstMatch
         XCTAssertTrue(insert.waitForExistence(timeout: 30), "the paper's board didn't open")
         sleep(3)
+        // Insert sits past the tool strip's right edge: scroll the strip ourselves and let it settle, so the tap isn't made
+        // while XCUITest's own scroll-to-visible is still moving the strip (on 80e8744 a keyboard came up there, Nov 23, PR #55)
+        let strip = app.scrollViews.containing(NSPredicate(format: "label == 'Insert'")).firstMatch
+        var swipes = 0
+        while !insert.isHittable && strip.exists && swipes < 3 { strip.swipeLeft(); sleep(1); swipes += 1 }
         insert.tap()
         let mark = app.buttons["Mark as question"].firstMatch
         XCTAssertTrue(mark.waitForExistence(timeout: 5), "Insert has no Mark as question")
@@ -105,8 +117,11 @@ final class BankPhoneTests: XCTestCase {
         shot("phone-bank-box")
         box.coordinate(withNormalizedOffset: CGVector(dx: 0.15, dy: 0.30))
             .press(forDuration: 0.3, thenDragTo: box.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.40)))
+        // the board's toast (board-toast) says where it went, or why not
         let added = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'is in the question bank'")).firstMatch
-        XCTAssertTrue(added.waitForExistence(timeout: 10), "no word that the question went into the bank")
+        let toast = el("board-toast")
+        XCTAssertTrue(added.waitForExistence(timeout: 10),
+                      "no word that the question went into the bank (the toast: \(toast.exists ? toast.label : "none"))")
         shot("phone-bank-marked-on-board")
         let close = app.navigationBars.buttons["Close"].firstMatch
         if close.waitForExistence(timeout: 5) { close.tap() }

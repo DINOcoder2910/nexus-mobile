@@ -52,12 +52,12 @@ extension BoardController {
         lib.refresh(study, root: root)
         let words = BankPdf.words(root: root, board: path, items: content.items, rect: rect)
         guard let q = lib.addMarked(store, id, board: path, rect: [rect.minX, rect.minY, rect.maxX, rect.maxY], words: words) else {
-            toast(lib.problem ?? "Couldn't add it to the question bank")
+            toast(lib.problem ?? "Couldn't add it to the question bank", hold: 3)
             lib.problem = nil
             return
         }
         let unit = lib.bank(id)?.questions[path]?.merged(q)?["topics"]?.array?.compactMap(\.string) ?? []
-        toast("\(QuestionBank.qName(q)) is in the question bank" + (unit.isEmpty ? "; pick its unit there" : " (\(unit.joined(separator: ", ")))"))
+        toast("\(QuestionBank.qName(q)) is in the question bank" + (unit.isEmpty ? "; pick its unit there" : " (\(unit.joined(separator: ", ")))"), hold: 3)
     }
 }
 

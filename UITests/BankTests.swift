@@ -121,8 +121,11 @@ final class BankTests: XCTestCase {
         sleep(1)
         let from = box.coordinate(withNormalizedOffset: CGVector(dx: 0.30, dy: 0.30))
         from.press(forDuration: 0.3, thenDragTo: box.coordinate(withNormalizedOffset: CGVector(dx: 0.65, dy: 0.42)))
+        // the board's toast (board-toast) says where it went, or why not
         let added = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'is in the question bank'")).firstMatch
-        XCTAssertTrue(added.waitForExistence(timeout: 10), "no word that the question went into the bank")
+        let toast = el("board-toast")
+        XCTAssertTrue(added.waitForExistence(timeout: 10),
+                      "no word that the question went into the bank (the toast: \(toast.exists ? toast.label : "none"))")
         shot("pad-bank-marked-on-board")
 
         // back from the board to the question
