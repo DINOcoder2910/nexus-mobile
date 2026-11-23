@@ -48,13 +48,16 @@ final class BoardSpanish {
     func scan(_ item: BoardItem?, _ md: String, board: BoardController) {
         guard Self.liveOn, let item, SpanishBlock.checking(item, md) else { return }
         watch(board)
-        for p in SpanishBlock.paragraphs(md) where SpanishBlock.worth(p.text) && !known.has(p.text) && !waiting.contains(p.text) {
-            waiting.append(p.text)
-        }
+        ask(SpanishBlock.paragraphs(md).map(\.text), ws: workstream(board)) { [weak board] in board?.tell($0) }
+    }
+
+    /// Paragraphs to read, in turn, never the same words twice (a board's block, the tutor's message box): what they find is kept
+    /// for every place, and each place is drawn again as it comes back.
+    func ask(_ texts: [String], ws: String?, tell: @escaping (String) -> Void) {
+        for t in texts where SpanishBlock.worth(t) && !known.has(t) && !waiting.contains(t) { waiting.append(t) }
         guard !running, !waiting.isEmpty else { return }
         running = true
-        let ws = workstream(board)
-        Task { @MainActor [weak board] in
+        Task { @MainActor in
             while !self.waiting.isEmpty {
                 let t = self.waiting.removeFirst()
                 if self.known.has(t) { continue }
@@ -62,13 +65,29 @@ final class BoardSpanish {
                     self.known.set(t, try await self.check(t, ws: ws, log: nil))
                 } catch {
                     self.known.set(t, [])
-                    if !self.told { self.told = true; board?.tell("The Spanish couldn't be checked: \(error.localizedDescription)") }
+                    if !self.told { self.told = true; tell("The Spanish couldn't be checked: \(error.localizedDescription)") }
                 }
                 self.keep()
                 self.redraw()
             }
             self.running = false
         }
+    }
+
+    /// The tutor's message boxes on screen, drawn again when a check comes back.
+    private var boxes: [UUID: () -> Void] = [:]
+    func onChange(_ f: @escaping () -> Void) -> UUID { let id = UUID(); boxes[id] = f; return id }
+    func stopWatching(_ id: UUID) { boxes[id] = nil }
+
+    /// What is known of some words' paragraphs (one a line), as marks over the whole of them.
+    func marks(of text: String) -> [SpanishCheck.Mark] {
+        var out: [SpanishCheck.Mark] = []
+        var at = 0
+        for line in text.components(separatedBy: "\n") {
+            for m in known.get(line) ?? [] { var x = m; x.s += at; x.e += at; out.append(x) }
+            at += (line as NSString).length + 1
+        }
+        return out
     }
 
     /// The Spanish workstream a board belongs to (its folder), else the first one: whose taught tenses the checker is told, and whose
@@ -99,6 +118,7 @@ final class BoardSpanish {
     /// Every open board's blocks drawn again with what is known now.
     func redraw() {
         for b in boards.allObjects { b.spanishRedraw() }
+        for f in boxes.values { f() }
     }
 
     // MARK: the block menu's actions

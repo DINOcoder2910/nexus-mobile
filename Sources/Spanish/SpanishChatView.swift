@@ -41,8 +41,6 @@ struct SpanishChatBody: View {
     var wide: Bool
     @Environment(NexusStore.self) private var store
     @Environment(\.spanish) private var actions
-    @FocusState private var typing: Bool
-
     var body: some View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
@@ -158,12 +156,15 @@ struct SpanishChatBody: View {
 
     private var composer: some View {
         HStack(alignment: .bottom, spacing: 8) {
-            TextField("Message the tutor", text: $chat.draft, axis: .vertical)
-                .lineLimit(1...6)
-                .textFieldStyle(.roundedBorder)
-                .focused($typing)
-                .onSubmit { chat.send(store, chat.draft) }
-                .accessibilityIdentifier("spanish-chat-input")
+            // Spanish underlines as he writes (each paragraph read after a pause, not counted), Return sends
+            SpanishTextBox(text: $chat.draft, placeholder: "Message the tutor", wsId: chat.wsId, identifier: "spanish-chat-input") {
+                if !chat.busy { chat.send(store, chat.draft) }
+            }
+            .overlay(alignment: .topLeading) {
+                if chat.draft.isEmpty {
+                    Text("Message the tutor").foregroundStyle(.tertiary).padding(.horizontal, 11).padding(.vertical, 8).allowsHitTesting(false)
+                }
+            }
             if chat.busy {
                 Button { chat.stop() } label: { Image(systemName: "stop.circle.fill").font(.nx(.title2)) }
                     .accessibilityLabel("Stop")

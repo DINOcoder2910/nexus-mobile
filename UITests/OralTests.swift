@@ -3,7 +3,8 @@ import XCTest
 /// Spanish › Oral and the board's Spanish underlines on the iPad, with the demo (-NexusSpanishDemo: three past orals in the sample's
 /// Spanish class, canned answers in place of Claude, no microphone). The Oral page: the list with its marks, one oral (Claude's marks,
 /// what the ears heard), Add a recording made here (it waits for the laptop), the listening test read line by line and sent. Then a
-/// Spanish paragraph typed in a board block is underlined after a pause, and the closed block keeps the marks. The screenshots
+/// Spanish paragraph typed in a board block is underlined after a pause, and the closed block keeps the marks; and the tutor's
+/// message box underlines it too. The screenshots
 /// ("pad-oral-…") are kept in the result bundle. Skips itself on the iPhone.
 final class OralTests: XCTestCase {
     var app = XCUIApplication()
@@ -43,8 +44,9 @@ final class OralTests: XCTestCase {
         if sample.waitForExistence(timeout: 2) && sample.isHittable { sample.tap() }
     }
 
-    func openOral() {
-        launch()
+    /// Spanish ab initio's Spanish screen, through its Study page.
+    func openSpanish(_ more: [String] = []) {
+        launch(more)
         let study = el("sidebar-Study")
         XCTAssertTrue(study.waitForExistence(timeout: 20), "no Study row in the sidebar")
         study.tap()
@@ -57,6 +59,10 @@ final class OralTests: XCTestCase {
         XCTAssertTrue(link.waitForExistence(timeout: 10), "the Study page has no Spanish link")
         link.tap()
         XCTAssertTrue(el("spanish-sentence").waitForExistence(timeout: 10), "the Spanish screen didn't open")
+    }
+
+    func openOral() {
+        openSpanish()
         let open = el("spanish-oral")
         XCTAssertTrue(open.waitForExistence(timeout: 10), "the Spanish screen has no Oral practice card")
         shot("pad-oral-spanish-card")
@@ -183,5 +189,26 @@ final class OralTests: XCTestCase {
         print("UISTEP ESDUMP closed \(closed)")
         XCTAssertFalse(open.contains("checks:0") || open.isEmpty, "the paragraph was never read: \(open)")
         XCTAssertTrue(closed.range(of: "closed:[1-9]", options: .regularExpression) != nil, "the closed block has no underlines: \(closed)")
+    }
+
+    /// The tutor's message box: a Spanish sentence typed there is underlined after a pause, as on a board (not sent).
+    func testTutorBoxUnderlines() {
+        openSpanish(["-debug.blockDump", "YES"])
+        let chat = el("spanish-new-chat")
+        reveal(chat, "New chat")
+        chat.tap()
+        let box = el("spanish-chat-input")
+        XCTAssertTrue(box.waitForExistence(timeout: 15), "the chat has no message box")
+        box.tap()
+        box.typeText("Ayer yo voy a la playa con mi amigos y comi un helado.")
+        let dump = el("esbox")
+        var seen = ""
+        for _ in 0..<20 {
+            if dump.exists { seen = dump.label; if seen.range(of: "box:[1-9]", options: .regularExpression) != nil { break } }
+            sleep(1)
+        }
+        print("UISTEP ESBOX \(seen)")
+        shot("pad-tutor-box-underlined")
+        XCTAssertTrue(seen.range(of: "box:[1-9]", options: .regularExpression) != nil, "the message box has no underlines: \(seen)")
     }
 }

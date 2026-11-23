@@ -71,6 +71,8 @@ final class SpanishOralTests: XCTestCase {
                 XCTAssertEqual(a.who, s(x["who"])); XCTAssertEqual(a.text, s(x["text"])); XCTAssertEqual(a.start, d(x["start"]) ?? 0)
             }
             XCTAssertEqual(o.listening != nil, want["listening"] as? Bool ?? false, "listening \(i)")
+            XCTAssertEqual(o.waiting, s(want["waiting"]), "waiting \(i)")
+            XCTAssertEqual(o.from, s(want["from"]), "from \(i)")
             XCTAssertEqual(SpanishOral.maxOf(o.kind), Int(d(want["max"]) ?? 0))
             XCTAssertEqual(SpanishOral.when(o.started), s(want["when"]))
             let listed = SpanishOral.rows([o], settings: .init(), images: [])[0]

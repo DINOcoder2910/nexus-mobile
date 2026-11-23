@@ -2,7 +2,7 @@ import XCTest
 
 /// Spanish › Oral on the iPhone, with the demo (-NexusSpanishDemo: three past orals in the sample's Spanish class, canned answers in
 /// place of Claude, no microphone): the list with its marks, one oral, Add a recording made here (it waits for the laptop), the
-/// listening test read line by line and sent. The board's underlines are in OralTests. The screenshots ("phone-oral-…") are
+/// listening test read line by line and sent; the tutor's message box underlining a Spanish sentence. The board's underlines are in OralTests. The screenshots ("phone-oral-…") are
 /// kept in the result bundle. Skips itself on the iPad.
 final class OralPhoneTests: XCTestCase {
     var app = XCUIApplication()
@@ -42,8 +42,9 @@ final class OralPhoneTests: XCTestCase {
         if sample.waitForExistence(timeout: 2) && sample.isHittable { sample.tap() }
     }
 
-    func openOral() {
-        launch()
+    /// Spanish ab initio's Spanish screen, through its Study page.
+    func openSpanish(_ more: [String] = []) {
+        launch(more)
         let more = app.tabBars.buttons["More"]
         XCTAssertTrue(more.waitForExistence(timeout: 15), "no More tab")
         more.tap()
@@ -61,6 +62,10 @@ final class OralPhoneTests: XCTestCase {
         XCTAssertTrue(link.waitForExistence(timeout: 10), "the Study page has no Spanish link")
         link.tap()
         XCTAssertTrue(el("spanish-sentence").waitForExistence(timeout: 10), "the Spanish screen didn't open")
+    }
+
+    func openOral() {
+        openSpanish()
         let open = el("spanish-go-Oral practice")
         reveal(open, "Oral practice row")
         shot("phone-oral-spanish-row")
@@ -134,5 +139,26 @@ final class OralPhoneTests: XCTestCase {
         let take = el("oral-t-take")
         reveal(take, "the sent take")
         shot("phone-oral-test-sent")
+    }
+
+    /// The tutor's message box: a Spanish sentence typed there is underlined after a pause, as on a board (not sent).
+    func testTutorBoxUnderlines() {
+        openSpanish(["-debug.blockDump", "YES"])
+        let chat = el("spanish-new-chat")
+        reveal(chat, "New chat")
+        chat.tap()
+        let box = el("spanish-chat-input")
+        XCTAssertTrue(box.waitForExistence(timeout: 15), "the chat has no message box")
+        box.tap()
+        box.typeText("Ayer yo voy a la playa con mi amigos y comi un helado.")
+        let dump = el("esbox")
+        var seen = ""
+        for _ in 0..<20 {
+            if dump.exists { seen = dump.label; if seen.range(of: "box:[1-9]", options: .regularExpression) != nil { break } }
+            sleep(1)
+        }
+        print("UISTEP ESBOX \(seen)")
+        shot("phone-tutor-box-underlined")
+        XCTAssertTrue(seen.range(of: "box:[1-9]", options: .regularExpression) != nil, "the message box has no underlines: \(seen)")
     }
 }
