@@ -103,7 +103,7 @@ extension BoardController {
         let host = UIHostingController(rootView: GoogleDocsPanelView(model: GoogleDocsPanelModel(board: self, id: id)).tint(Theme.accent))
         host.modalPresentationStyle = .formSheet
         if let s = host.sheetPresentationController {
-            s.detents = [.medium(), .large()]
+            s.detents = Device.isPhone ? [.medium(), .large()] : [.large()] // the iPad's form sheet: all of it at once
             s.prefersGrabberVisible = true
         }
         var top: UIViewController = self
@@ -249,7 +249,9 @@ struct GoogleDocsPanelView: View {
                         if let e = model.versionsError { Text(e).foregroundStyle(.secondary) }
                         else if let v = model.versions {
                             if v.isEmpty { Text("Google has no versions of this Doc yet.").foregroundStyle(.secondary) }
-                            ForEach(v) { r in LabeledContent(r.by.isEmpty ? "Someone" : r.by, value: r.when) }
+                            ForEach(v.indices, id: \.self) { i in
+                                LabeledContent(v[i].by.isEmpty ? "Someone" : v[i].by, value: v[i].when).accessibilityIdentifier("gdocs-version-\(i)")
+                            }
                             if model.more > 0 { Text("\(model.more) earlier.").font(.footnote).foregroundStyle(.secondary) }
                         } else { Text("Asking Google…").foregroundStyle(.secondary) }
                         Text("To go back to one, open the Doc and use File › Version history; the block follows.").font(.footnote).foregroundStyle(.secondary)

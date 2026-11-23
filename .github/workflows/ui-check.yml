@@ -24,7 +24,7 @@ concurrency:
 jobs:
   ui:
     runs-on: macos-latest
-    timeout-minutes: 200
+    timeout-minutes: 230
     steps:
       - uses: actions/checkout@v4
 
@@ -208,7 +208,7 @@ jobs:
       - name: Run the iPhone tests
         if: ${{ !cancelled() }}
         # 12 tests took 23 min on Nov 18 and over 40 on a slow runner Nov 19
-        timeout-minutes: 70
+        timeout-minutes: 90
         env:
           HEAD_MSG: ${{ github.event.head_commit.message }}
         run: |

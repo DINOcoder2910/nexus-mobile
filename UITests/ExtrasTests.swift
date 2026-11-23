@@ -66,12 +66,16 @@ class ExtrasTests: XCTestCase {
         XCTAssertTrue(up, "the Google Docs panel didn't open")
         XCTAssertEqual(head.label, "Redox notes", "the panel doesn't name the linked Doc")
         XCTAssertTrue(text(containing: "In step").waitForExistence(timeout: 15), "the panel doesn't show the hub's last round")
-        let versions = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'You'")).firstMatch
-        reveal(versions)
+        // inside the panel's own list: a swipe on the screen's middle may land on the sheet's head
+        let list = app.collectionViews.containing(.any, identifier: "gdocs-head").firstMatch
+        let versions = el("gdocs-version-0")
+        var n = 0
+        while !(versions.exists && versions.isHittable) && n < 6 { list.swipeUp(velocity: .slow); n += 1 }
         XCTAssertTrue(versions.waitForExistence(timeout: 15), "the Doc's recent edits didn't show")
         shot("gdocs-versions-\(mode)")
         let sync = el("gdocs-sync")
-        reveal(sync)
+        n = 0
+        while !(sync.exists && sync.isHittable) && n < 6 { list.swipeDown(velocity: .slow); n += 1 }
         XCTAssertTrue(sync.exists, "no Sync now")
         if sync.exists { sync.tap() }
         sleep(2)
@@ -129,6 +133,9 @@ class ExtrasTests: XCTestCase {
         XCTAssertTrue(app.buttons["Widget key copied"].firstMatch.waitForExistence(timeout: 5), "the key wasn't copied")
         XCTAssertTrue(el("widget-on").waitForExistence(timeout: 5), "no Keep the widgets up to date")
         shot("widgets-\(mode)")
+        // off again: the next tests on this simulator (the Live Activity's) run without the widget file being written
+        let toggle = app.switches["widget-on"].firstMatch
+        if toggle.exists && (toggle.value as? String) == "1" { toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap() }
     }
 
     func testGoogleDocsLight() { googleDocs(dark: false) }
@@ -143,7 +150,8 @@ final class ExtrasPhoneTests: ExtrasTests {
     /// The board's tool pill: the pen picked, tapped again for its sheet (kind, Width, Colour), the eraser's sheet, and + for Insert.
     func pill(dark: Bool) {
         let mode = dark ? "dark" : "light"
-        launch(["-NexusTestExtras", "-board.tool", "pen", "-board.penKind", "pen"], dark: dark)
+        // no -board.tool: a launch argument outranks what the app writes to UserDefaults, so the tool could never change
+        launch(["-NexusTestExtras", "-board.penKind", "pen"], dark: dark)
         // the hook opens the block's Google Docs panel over the board: close it first
         // (its look on the iPhone: the iPad's own test checks the rest of the panel)
         if el("gdocs-head").waitForExistence(timeout: 60) {
@@ -158,7 +166,10 @@ final class ExtrasPhoneTests: ExtrasTests {
         XCTAssertTrue(pill.waitForExistence(timeout: 20), "no tool pill on the iPhone's board")
         shot("pill-\(mode)")
         let pen = app.buttons["phone-tool-pen"].firstMatch
-        XCTAssertTrue(pen.exists && pen.isSelected, "the pen isn't shown picked in the pill")
+        XCTAssertTrue(pen.exists, "no pen in the pill")
+        // an earlier test may have left another tool picked: one tap picks the pen, the next opens its sheet
+        if !pen.isSelected { pen.tap(); sleep(1) }
+        XCTAssertTrue(pen.isSelected, "the pen isn't shown picked in the pill")
         pen.tap()
         let sheet = el("phone-tool-sheet")
         XCTAssertTrue(sheet.waitForExistence(timeout: 10), "the picked pen tapped again didn't open its sheet")
