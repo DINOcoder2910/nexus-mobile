@@ -362,6 +362,9 @@ struct LiveActivityPreview: View {
                 Text(Device.isPhone ? "Hold the Dynamic Island to open it: the card's rows and buttons. Tap the card to open its task, Recordings or Today." : "Tap the card to open its task, Recordings or Today; its buttons work from the Lock Screen.")
                     .font(.nx(.footnote)).foregroundStyle(.secondary)
             }
+            // the iPad's Lock Screen draws the card about 430 points wide, not across the whole pane
+            .frame(maxWidth: Device.isPhone ? .infinity : 460)
+            .frame(maxWidth: .infinity)
             .padding(.horizontal, 12).padding(.top, 20)
             // clear of the tab bar and the timer's pill
             .padding(.bottom, 140)
