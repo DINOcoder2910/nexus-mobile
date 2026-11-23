@@ -70,7 +70,11 @@ final class BankTests: XCTestCase {
         XCTAssertTrue(el("bank-lede").waitForExistence(timeout: 10), "the question bank didn't open")
         sleep(2)
         shot("pad-bank")
-        XCTAssertTrue(el("bank-working-card").exists, "the pinned Acids paper isn't under Working on")
+        // the card's own id doesn't come through a List row on the iPad (a9e4986), so look for its section's title and its Go on chip
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Working on'")).firstMatch.exists,
+                      "no Working on (the pinned Acids paper)")
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Go on at'")).firstMatch.exists,
+                      "the pinned Acids paper has no Go on at its bookmark")
 
         // a filter: only what is marked Review later
         tap("bank-filter-marked", "no Marked filter")
