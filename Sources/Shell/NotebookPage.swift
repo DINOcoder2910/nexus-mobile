@@ -6,7 +6,7 @@ import NexusCore
 /// A notebook's page: the path at the top, the notebooks inside it, then its boards as cards (the board's picture, thumb.png, its name
 /// and when it was last edited). New: Blank board · From a PDF · From a photo · From a scan · New notebook. Press and hold a card for
 /// Open · Rename · Move to… · Duplicate · Background · Share as PDF · Delete; drag a card onto a notebook (here or in the sidebar) to
-/// move it there.
+/// move it there. On a notebook Schoology fills, Get class material asks the G14 for new class boards (ClassMaterialButton.swift).
 struct NotebookPage: View {
     let path: String
     let go: (Screen) -> Void
@@ -31,7 +31,11 @@ struct NotebookPage: View {
             }
         }
         .navigationTitle(nb?.name ?? "Notebook")
-        .toolbar { ToolbarItem(placement: .primaryAction) { newMenu.disabled(nb == nil) } }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) { newMenu.disabled(nb == nil) }
+            ToolbarItem(placement: .primaryAction) { ClassMaterialToolbarButton(path: path) }
+        }
+        .task(id: path) { await ClassMaterialModel.shared.refresh() }
         .notebookPrompts(actions, store: store)
         .fileImporter(isPresented: $pickingPDF, allowedContentTypes: [.pdf]) { r in
             HangWatch.note("notebook: PDF picker answered")
@@ -77,6 +81,7 @@ struct NotebookPage: View {
     private func content(_ nb: Notebook, color: String?) -> some View {
         VStack(alignment: .leading, spacing: 18) {
             crumbs
+            ClassMaterialLine(path: path)
             if !nb.notebooks.isEmpty {
                 Text("Notebooks").font(.nx(.headline))
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 14)], spacing: 14) {
