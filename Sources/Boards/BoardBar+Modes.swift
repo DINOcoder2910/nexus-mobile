@@ -311,7 +311,12 @@ extension BoardBar {
     }
 
     func fillInsertRow(_ b: BoardController) {
-        for e in b.insertMenu().children { if let x = rowButton(e) { rowStack.addArrangedSubview(x) } }
+        for e in b.insertMenu().children {
+            guard let x = rowButton(e) else { continue }
+            // the question bank (BoardController+Question.swift): Mark as question comes in the menu, as on the iPhone's
+            if (e as? UIAction)?.title == "Mark as question" { x.accessibilityIdentifier = "insert-question" }
+            rowStack.addArrangedSubview(x)
+        }
         rowStack.addArrangedSubview(divider())
         let space = BoardTools.shared.tool == .space
         rowStack.addArrangedSubview(rowButton(UIAction(title: BoardTool.space.title, image: UIImage(systemName: BoardTool.space.symbol), state: space ? .on : .off) { [weak b] _ in
@@ -320,10 +325,6 @@ extension BoardBar {
             b?.bar.setMode(.draw)
         })!)
         rowStack.addArrangedSubview(rowButton(UIAction(title: "Tool card", image: UIImage(systemName: "square.grid.2x2")) { [weak b] _ in b?.toggleToolPanel() })!)
-        // the question bank (BoardController+Question.swift): box a question to put it in the subject's bank
-        let mark = rowButton(UIAction(title: "Mark as question", image: UIImage(systemName: "list.number")) { [weak b] _ in b?.markQuestion() })!
-        mark.accessibilityIdentifier = "insert-question"
-        rowStack.addArrangedSubview(mark)
     }
 
     func fillViewRow(_ b: BoardController) {
