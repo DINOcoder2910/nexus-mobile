@@ -54,8 +54,10 @@ final class PenExtrasTests: XCTestCase {
 
     func colours(_ label: String = "Colour") -> XCUIElementQuery { app.buttons.matching(NSPredicate(format: "label == %@", label)) }
 
+    /// The board's canvas: the biggest scroll view. Not "hittable": while Copy from a stroke's cover is over it, isHittable is
+    /// false, and the biggest hittable one was the bar's colour row (the Nov 23 failure, docs/ci-lessons.md).
     func board() -> XCUIElement {
-        let all = app.scrollViews.allElementsBoundByIndex.filter { $0.exists && $0.isHittable }
+        let all = app.scrollViews.allElementsBoundByIndex.filter { $0.exists && !$0.frame.isEmpty }
         return all.max(by: { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }) ?? app.windows.firstMatch
     }
 
