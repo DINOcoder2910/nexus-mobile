@@ -55,8 +55,15 @@ class TimeTrackingTests: XCTestCase {
         shot("time-1-today")
 
         // a task's menu: Start timer / Stop timer
-        let lab = app.staticTexts["Q1–5"].firstMatch
+        // the list's row (Today shows the title in several parts), once Today has settled: From Study's cards come in after the
+        // first draw and move the list down, and a press on a row that moves turns into a tap on the row above it
+        sleep(2)
+        let inList = app.otherElements["today-list"].staticTexts["Q1–5"].firstMatch
+        let lab = inList.exists ? inList : app.staticTexts["Q1–5"].firstMatch
         if lab.waitForExistence(timeout: 5) {
+            // the iPhone's first row can sit under the tab bar and the timer pill: bring it up into the clear first
+            var up = 0
+            while lab.frame.maxY > app.frame.height * 0.7 && up < 4 { app.scrollViews.firstMatch.swipeUp(velocity: .slow); sleep(1); up += 1 }
             lab.press(forDuration: 1.2)
             sleep(1)
             XCTAssertTrue(app.buttons["Start timer"].firstMatch.waitForExistence(timeout: 5), "no Start timer in the menu")

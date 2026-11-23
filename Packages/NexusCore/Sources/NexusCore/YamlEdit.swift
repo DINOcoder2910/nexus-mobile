@@ -246,6 +246,19 @@ public enum YamlEdit {
             let pad = String(repeating: " ", count: dashIndent)
             return body.enumerated().map { $0.offset == 0 ? pad + "- " + $0.element : pad + "  " + $0.element }
         }
+        let hadList = parent != nil || lines.contains { $0.hasPrefix("tasks:") }
+        try insert(&lines, item: item, parent: parent, before: nil)
+        return join(lines, trailing || !hadList)
+    }
+
+    /// Puts an item (its lines for a "- " at a given indent) into `parent`'s subtasks (nil: the file's `tasks:` list), before the
+    /// sibling `before`, or at the end of the list when that is nil.
+    static func insert(_ lines: inout [String], item: (Int) -> [String], parent: String?, before: String?) throws {
+        if let before {
+            guard let b = findOpening(&lines, id: before) else { throw Failure.notFound(before) }
+            lines.insert(contentsOf: item(b.dashIndent), at: b.item)
+            return
+        }
         if let parent {
             guard let b = findOpening(&lines, id: parent) else { throw Failure.notFound(parent) }
             if let k = b.keys.first(where: { $0.name == "subtasks" }) {
@@ -261,12 +274,13 @@ public enum YamlEdit {
                 let child = item(b.fieldIndent + 2).map { String($0.dropFirst(b.fieldIndent)) }
                 lines = insertField(lines, b, key: "subtasks", valueLines: ["subtasks:"] + child)
             }
-            return join(lines, trailing)
+            return
         }
         guard let t = lines.firstIndex(where: { $0.hasPrefix("tasks:") }) else {
             // no list yet: a fresh file
             let prefix = lines.isEmpty || lines.allSatisfy(isBlank) ? [] : lines + [""]
-            return join(prefix + ["tasks:"] + item(2), true)
+            lines = prefix + ["tasks:"] + item(2)
+            return
         }
         let inline = lines[t].dropFirst("tasks:".count).trimmingCharacters(in: .whitespaces)
         var end = t + 1
@@ -278,7 +292,16 @@ public enum YamlEdit {
             let dashIndent = (t + 1..<end).compactMap { dash(lines[$0]) }.first?.0 ?? 2
             lines.insert(contentsOf: item(dashIndent), at: end)
         }
-        return join(lines, trailing)
+    }
+
+    /// Puts a task's lines (as `removeTask` gave them, its "- " at `from`) under `parent` (nil: the top-level list), before the
+    /// sibling `before` (nil: at the end).
+    public static func placeTask(_ text: String, lines item: [String], from: Int, parent: String?, before: String?) throws -> String {
+        var (lines, trailing) = split(text)
+        let fresh = parent == nil && before == nil && !lines.contains { $0.hasPrefix("tasks:") }
+        try insert(&lines, item: { d in item.map { l in isBlank(l) ? l : String(repeating: " ", count: d) + String(l.dropFirst(min(from, indent(l)))) } },
+                   parent: parent, before: before)
+        return join(lines, trailing || fresh)
     }
 
     /// Takes a task, with everything under it, out of a text. Returns the text after, the task's lines as they were, and the indent

@@ -14,8 +14,16 @@ enum SpanishDemo {
         guard active, store.snapshot.isDataFolder else { return }
         let root = store.folder
         let ws = root.appendingPathComponent(folder + "/workstream.yaml")
-        guard !FileManager.default.fileExists(atPath: ws.path) else { return }
         let today = Days.today()
+        // an oral three days ago (the laptop runs them), so Today's From Study shows Oral practice; written even when an earlier
+        // test already set Spanish up
+        let orals = root.appendingPathComponent(folder + "/study/spanish/oral/orals", isDirectory: true)
+        if (try? FileManager.default.contentsOfDirectory(atPath: orals.path))?.isEmpty ?? true {
+            try? FileManager.default.createDirectory(at: orals, withIntermediateDirectories: true)
+            try? FolderAccess.write(orals.appendingPathComponent("\(Days.add(today, -3))-1.yaml"), "theme: identities\n")
+            if FileManager.default.fileExists(atPath: ws.path) { store.reload(); return }
+        }
+        guard !FileManager.default.fileExists(atPath: ws.path) else { return }
         let month = String(today.prefix(7))
         let base = folder + "/"
         var files: [(String, String)] = [

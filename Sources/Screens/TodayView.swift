@@ -129,7 +129,8 @@ struct TodayView: View {
             if items.isEmpty {
                 QuietCard(text: "Nothing due from your decks today.")
             } else {
-                ForEach(items.prefix(2)) { s in StudyDueCard(item: s) { go(.studyPage(s.workstream.id)) } }
+                // up to two subjects' cards, and every oral reminder
+                ForEach(Array(items.filter { !$0.oral }.prefix(2)) + items.filter(\.oral)) { s in StudyDueCard(item: s) { go(.studyPage(s.workstream.id)) } }
             }
         }
         if wide {
@@ -155,6 +156,21 @@ struct TodayView: View {
                 if d > 0 { n += d; decks.append(f.deck?.title ?? f.fileId) }
             }
             return n > 0 ? StudyDue(workstream: s.workstream, count: n, decks: decks) : nil
+        } + oralItems()
+    }
+
+    /// Spanish oral practice in each subject that has it (study/spanish/oral), with the days since the last oral (orals/ files are
+    /// named from their day), as the laptop's From Study.
+    private func oralItems() -> [StudyDue] {
+        let fm = FileManager.default
+        return store.snapshot.workstreams.values.sorted { $0.name < $1.name }.compactMap { w in
+            guard !w.parked else { return nil }
+            let oral = store.folder.appendingPathComponent(w.folder).appendingPathComponent("study/spanish/oral", isDirectory: true)
+            var dir: ObjCBool = false
+            guard fm.fileExists(atPath: oral.path, isDirectory: &dir), dir.boolValue else { return nil }
+            let names = (try? fm.contentsOfDirectory(atPath: oral.appendingPathComponent("orals").path)) ?? []
+            let last = names.filter { $0.count >= 10 && Days.isIso(String($0.prefix(10))) }.map { String($0.prefix(10)) }.max()
+            return StudyDue(workstream: w, count: 0, decks: [], oral: true, lastDays: last.map { max(0, Days.between($0, store.today)) })
         }
     }
 

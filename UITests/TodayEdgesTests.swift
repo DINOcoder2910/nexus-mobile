@@ -2,9 +2,10 @@ import XCTest
 import UIKit
 
 /// Today's two edges (Nov 22 2026, from Murtaza's iPad screenshot): a task tonight that runs past 10 pm stays inside the day's hours
-/// (the hours run to midnight, the end of the day, instead of the block hanging over Tomorrow), and Tomorrow's strip labels never overlap (measured in the
-/// strip's real width; one that fits neither row is left out). Sample data plus -NexusTestDayEdges (TestHooks.dayEdges): "Physics IA
-/// lock in" at 21:30 for 3h today, five tasks crowded into tomorrow morning. The "edges-…" screenshots are printed in the UI check log.
+/// (the hours run to the app's end of day, 4 am, instead of the block hanging over Tomorrow), and Tomorrow's strip labels never overlap (measured in the
+/// strip's real width; one that fits neither row is left out, one with room always shows). Sample data plus -NexusTestDayEdges (TestHooks.dayEdges):
+/// "Physics IA lock in" at 21:30 for 3h today, five tasks crowded into tomorrow morning and "Evening run" at 7 pm. The "edges-…" screenshots are
+/// printed in the UI check log.
 class TodayEdgesTests: XCTestCase {
     var app = XCUIApplication()
     var phone: Bool { UIDevice.current.userInterfaceIdiom == .phone }
@@ -66,7 +67,17 @@ class TodayEdgesTests: XCTestCase {
         reach(tomorrow, "Tomorrow")
         sleep(1)
         let labels = tomorrow.staticTexts.matching(identifier: "tomorrow-label").allElementsBoundByIndex.map { ($0.label, $0.frame) }
-        XCTAssertGreaterThanOrEqual(labels.count, 3, "Tomorrow's strip shows \(labels.count) labels for five crowded tasks")
+        let said = labels.map { $0.0 }.joined(separator: ", ")
+        // The strip runs 8 am to the 4 am end of the day (20 hours in about 370 points on a landscape iPad), so the five morning tasks
+        // (8:30 to 1 pm) start within about 90 points: two of their labels fit, one on each row, and the rest are left out. The evening
+        // task has room, so its label always shows. (Before Nov 22 the strip ended at 10 pm and the morning fit four labels.)
+        XCTAssertTrue(labels.contains { $0.0 == "Chemistry practice" }, "the first morning task has no label in Tomorrow's strip (shown: \(said))")
+        XCTAssertTrue(labels.contains { $0.0 == "Evening run" }, "the evening task, alone with room, has no label in Tomorrow's strip (shown: \(said))")
+        XCTAssertGreaterThanOrEqual(labels.count, 3, "Tomorrow's strip shows \(labels.count) labels (\(said)): the crowded morning should fill both rows, plus the evening's")
+        XCTAssertGreaterThanOrEqual(Set(labels.map { Int($0.1.minY.rounded()) }).count, 2, "Tomorrow's crowded labels don't use the strip's second row (shown: \(said))")
+        for l in labels {
+            XCTAssertTrue(l.1.minX >= tomorrow.frame.minX - 1 && l.1.maxX <= tomorrow.frame.maxX + 1, "Tomorrow's label \"\(l.0)\" runs outside the card")
+        }
         for i in labels.indices {
             for j in labels.indices where j > i {
                 let overlap = labels[i].1.insetBy(dx: 1, dy: 1).intersects(labels[j].1.insetBy(dx: 1, dy: 1))
