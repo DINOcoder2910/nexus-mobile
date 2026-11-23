@@ -62,6 +62,10 @@ struct Sidebar: View {
         .notebookPrompts(notebookActions, store: store)
         .workstreamPrompts(wsActions, store: store)
         .onAppear { wsActions.made = { id in if !pushes { selection = .subject(id) } } }
+        // a subject's page opened from elsewhere (a workstream just made, a link) while the sidebar is inside another: it follows
+        .onChange(of: selection) { _, new in
+            if case .subject(let id)? = new, let i = inside, i != id { withAnimation(Kit.spring) { inside = id } }
+        }
         .onChange(of: ShortcutCenter.shared.notebookRequest) { _, _ in
             if s.isDataFolder && !pushes { notebookActions.ask(.notebook, in: BoardFormat.notebooks) }
         }
@@ -353,6 +357,7 @@ struct Sidebar: View {
             .buttonStyle(.borderless)
             .keyboardShortcut(.cancelAction)
             .accessibilityLabel("Back to every subject")
+            .accessibilityValue(w.name)
             .accessibilityIdentifier("subject-back")
             HStack(spacing: 2) {
                 Color.clear.frame(width: NotebookTreeLine.arrowWidth, height: 1)

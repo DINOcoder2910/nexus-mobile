@@ -211,6 +211,11 @@ class WorkstreamsAndPlannerTests: XCTestCase {
         // its page opens
         XCTAssertTrue(app.navigationBars.staticTexts["Essay club"].firstMatch.waitForExistence(timeout: 10), "the new workstream's page didn't open")
         sleep(1)
+        if !phone {
+            // the sidebar was inside Nexus: it follows to the new one
+            let back = el("subject-back")
+            if back.waitForExistence(timeout: 5) { XCTAssertEqual(back.value as? String, "Essay club", "the sidebar stayed inside another subject") }
+        }
         menu("Rename…")
         answer("Essay society", "Rename")
         XCTAssertTrue(app.staticTexts["Essay society"].firstMatch.waitForExistence(timeout: 8), "the rename didn't show")
