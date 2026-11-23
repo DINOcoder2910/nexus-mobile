@@ -4,12 +4,13 @@ import WidgetKit
 
 // The Live Activity extension (project.yml target NexusLiveActivity, bundle app.nexus.mobile.live): it only draws the one activity the
 // app starts (Sources/LiveActivity/LiveActivities.swift). Its views and buttons are shared with the app (Sources/LiveActivity/).
-// Only the iPhone's download carries it (build.yml): it needs one more App ID under free signing, and the iPad has no use for it.
+// NexusMobile-Live.ipa carries it (build.yml): one more App ID under free signing. The Home Screen widgets (NexusHomeWidget.swift) live here too.
 
 @main
 struct NexusWidgets: WidgetBundle {
     var body: some Widget {
         NexusLiveWidget()
+        NexusDayWidget() // the Home Screen widgets (NexusHomeWidget.swift), in this same extension: no slot of their own
     }
 }
 

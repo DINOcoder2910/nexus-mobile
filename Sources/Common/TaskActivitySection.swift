@@ -61,7 +61,8 @@ struct TaskActivitySection: View {
         for w in store.snapshot.workstreams.values { names[w.tasksFile] = w.name }
         var history: JSONValue?
         do {
-            history = try await HubAsk.call("GET", "/v2/activity", query: [("path", path), ("id", task.id), ("limit", "30")], timeout: 15)
+            history = TestHooks.extrasTask ? TestHooks.activityAnswer(path: path, current: current)
+                : try await HubAsk.call("GET", "/v2/activity", query: [("path", path), ("id", task.id), ("limit", "30")], timeout: 15)
             note = history?["repo"]?.bool == false ? "The data folder isn't backed up with git, so only when it was added and ticked show here." : nil
         } catch let e as HubAsk.Failure {
             note = e.kind == "nohub" ? "Set up sync with the hub (Settings › Sync) to see the rest of its history."

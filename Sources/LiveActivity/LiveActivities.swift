@@ -67,6 +67,7 @@ final class LiveActivities {
 
     /// Puts it on, updates it, or ends it.
     func apply() {
+        WidgetShare.update() // the Home Screen widgets' card (WidgetShare.swift)
         guard Self.supported else { return }
         let all = Activity<NexusActivityAttributes>.activities
         for a in all where a.activityState == .dismissed { dismissed = Self.signature(a.content.state) }
@@ -132,7 +133,8 @@ final class LiveActivities {
     // MARK: what it shows
 
     /// The card now, and when it should be drawn again (the next event's or task's time); nil: nothing to show.
-    static func state(now: Date = Date()) -> (NexusLiveState, Date?)? {
+    /// `always`: the day's card even when Settings says not to show it while nothing runs (the Home Screen widgets show it always).
+    static func state(now: Date = Date(), always: Bool = false) -> (NexusLiveState, Date?)? {
         let store = AppServices.store
         let cal = AppServices.calendar
         let tracker = TimeTracker.shared
@@ -141,7 +143,7 @@ final class LiveActivities {
         let v = TodayPlan.day(store.planning, now: mins, events: { d in TodayEvents.spans(cal, d).map { TodayPlan.Span($0.start, $0.end) } })
         let timer = tracker.current
         let rec = RecordingService.shared.active
-        guard timer != nil || rec != nil || day else { return nil }
+        guard timer != nil || rec != nil || day || always else { return nil }
 
         var s: NexusLiveState
         var lines: [NexusLiveLine] = []

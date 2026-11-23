@@ -165,22 +165,27 @@ final class PenOptionsPhoneTests: XCTestCase {
         print("UISTEP \(Date().timeIntervalSince1970) \(name)")
     }
 
+    /// The iPhone's tools are a pill at the foot (PhoneToolPill): the picked pen tapped again opens its sheet, with the ten colours
+    /// and the widths from the iPad's Draw row.
     func testPhonePenRow() {
         app.launchArguments = ["-NexusTestPdfBoard", "-board.tool", "pen", "-board.penKind", "pen"]
         app.launch()
         XCTAssertTrue(app.buttons["Insert"].firstMatch.waitForExistence(timeout: 30), "the board didn't open")
         sleep(3)
+        shot("phone-pens-pill")
+        let pen = app.buttons["phone-tool-pen"].firstMatch
+        XCTAssertTrue(pen.waitForExistence(timeout: 10), "no pen in the iPhone's tool pill")
+        pen.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["phone-tool-sheet"].firstMatch.waitForExistence(timeout: 10), "the picked pen tapped again didn't open its sheet")
+        sleep(1)
         let colours = app.buttons.matching(NSPredicate(format: "label == 'Colour'"))
         XCTAssertEqual(colours.count, 10)
-        let first = colours.element(boundBy: 0)
-        let from = first.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-        // a line at the Extra bold width
         let bold = app.buttons["Extra bold"].firstMatch
-        XCTAssertTrue(bold.exists, "no Extra bold width")
+        XCTAssertTrue(bold.exists && bold.isHittable, "no Extra bold width in the pen's sheet")
         shot("phone-pens-row")
-        var tries = 0
-        while !bold.isHittable && tries < 4 { from.press(forDuration: 0.05, thenDragTo: from.withOffset(CGVector(dx: -250, dy: 0))); tries += 1; sleep(1) }
-        if bold.isHittable { bold.tap() }
+        bold.tap()
+        sleep(1)
+        XCTAssertEqual(bold.value as? String ?? "", "Picked", "Extra bold wasn't picked")
         shot("phone-pens-row-scrolled")
     }
 }

@@ -70,6 +70,7 @@ struct SettingsView: View {
             RecordingSettings()
 
             LiveActivitySettings()
+            WidgetSettings() // the Home Screen widgets (WidgetShare.swift)
 
             if !s.problems.isEmpty {
                 Section("Things to check") {

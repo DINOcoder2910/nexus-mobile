@@ -13,6 +13,8 @@ enum HubAsk {
 
     /// The hub's base address and token, when sync is set up.
     static var hub: (url: URL, token: String, device: String)? {
+        // the UI check's made-up hub (TestHooks+Extras): nothing reaches a network
+        if TestHooks.extras || TestHooks.extrasTask { return (URL(string: "http://hub.test:8787")!, "test", Device.name) }
         let d = UserDefaults.standard
         let token = (Keychain.get("hub-token") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard let url = HTTPSyncTransport.hubURL(d.string(forKey: "sync.hubAddress") ?? ""), !token.isEmpty else { return nil }
@@ -23,6 +25,7 @@ enum HubAsk {
     /// `method route?query` with an optional JSON body -> the answer as JSON (an empty object when it has none).
     static func call(_ method: String, _ route: String, query: [(String, String)] = [], body: JSONValue? = nil, timeout: TimeInterval = 20) async throws -> JSONValue {
         guard let h = hub else { throw Failure(kind: "nohub", words: "Set up sync with the hub first (Settings › Sync).") }
+        if TestHooks.extras || TestHooks.extrasTask { return TestHooks.hubAnswer(method, route, query) }
         var c = URLComponents(url: h.url, resolvingAgainstBaseURL: false)
         c?.path = route.hasPrefix("/") ? route : "/" + route
         if !query.isEmpty { c?.queryItems = query.map { URLQueryItem(name: $0.0, value: $0.1) } }

@@ -119,6 +119,12 @@ final class SharedPensPhoneTests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["Insert"].firstMatch.waitForExistence(timeout: 30), "the board didn't open")
         sleep(3)
+        // the iPhone's pens are in the picked pen's sheet (the tool pill's pen, tapped again)
+        let pen = app.buttons["phone-tool-pen"].firstMatch
+        XCTAssertTrue(pen.waitForExistence(timeout: 10), "no pen in the iPhone's tool pill")
+        pen.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["phone-tool-sheet"].firstMatch.waitForExistence(timeout: 10), "the pen's sheet didn't open")
+        sleep(1)
         let colours = app.buttons.matching(NSPredicate(format: "label == 'Colour'"))
         XCTAssertEqual(colours.count, 10)
         XCTAssertTrue((colours.element(boundBy: 2).value as? String ?? "").contains("picked"), "the laptop's red should be picked")
