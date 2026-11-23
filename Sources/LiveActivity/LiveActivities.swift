@@ -152,9 +152,11 @@ final class LiveActivities {
             s = t
         } else if let n = v.next {
             let hex = hex(of: n, store: store)
-            let at = TodayPlan.clock(v.time(n)).flatMap { m in Days.date(v.today).map { $0.addingTimeInterval(Double(m) * 60) } }
-            var bits = [store.workstreamName(n)]
             let m = TodayPlan.minutes(n)
+            // its time today, unless that is long gone (after midnight the app's day is still yesterday, whose 4 pm has passed)
+            let at = TodayPlan.clock(v.time(n)).flatMap { t in Days.date(v.today).map { $0.addingTimeInterval(Double(t) * 60) } }
+                .flatMap { $0 > now.addingTimeInterval(-Double(max(m, 30)) * 60) ? $0 : nil }
+            var bits = [store.workstreamName(n)]
             if m > 0 { bits.append(NexusLive.spent(Double(m) * 60)) }
             if let at { bits.insert("Up next at " + at.formatted(date: .omitted, time: .shortened), at: 0) } else { bits.insert("Up next", at: 0) }
             s = .init(focus: .next, title: n.text, detail: bits.joined(separator: " · "), since: at ?? Days.date(v.today) ?? now, timed: at != nil, light: hex.light, dark: hex.dark,
@@ -358,7 +360,9 @@ struct LiveActivityPreview: View {
                 Text("Hold the Dynamic Island to open it: the card's rows and buttons. Tap the card to open its task, Recordings or Today.")
                     .font(.nx(.footnote)).foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 12).padding(.vertical, 20)
+            .padding(.horizontal, 12).padding(.top, 20)
+            // clear of the tab bar and the timer's pill
+            .padding(.bottom, 140)
             // a picture: its buttons would act on the real timer
             .allowsHitTesting(false)
             .accessibilityElement(children: .contain)

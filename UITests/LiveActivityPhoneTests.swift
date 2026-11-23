@@ -168,7 +168,7 @@ final class LiveActivityPhoneTests: XCTestCase {
         openMoreRow("Settings")
         let after = liveStatus()
         printLog("after both stopped")
-        XCTAssertTrue(waitLabel(after, contains: "Next up: ") || after.label.contains("Day: "), "the card doesn't show the day after both stopped (\(after.label))")
+        XCTAssertTrue(waitLabel(after, contains: "Next up: ", 6) || after.label.contains("Day: "), "the card doesn't show the day after both stopped (\(after.label))")
         XCTAssertFalse(after.label.contains("Timer: ") || after.label.contains("Recording: "), "the card still shows a timer or a recording (\(after.label))")
         let next = after.label.contains("Next up: ")
         back()
@@ -183,7 +183,7 @@ final class LiveActivityPhoneTests: XCTestCase {
         let go = springboard.buttons["Start the timer on it"].firstMatch
         if go.waitForExistence(timeout: 8) {
             go.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-            sleep(4)
+            sleep(7)
             shot("live-10-started")
             XCUIDevice.shared.press(.home)
             sleep(1)
