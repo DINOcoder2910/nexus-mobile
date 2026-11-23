@@ -129,11 +129,16 @@ final class LiveActivityPhoneTests: XCTestCase {
         let found = stop.waitForExistence(timeout: 8)
         if found {
             var presses = 0
-            // by coordinate: the springboard says a Live Activity's buttons aren't hittable (it draws them from another process)
+            // by coordinate: the springboard says a Live Activity's buttons aren't hittable (it draws them from another process).
+            // The point is read from Stop's frame right after the check and tapped on the springboard: an element's own
+            // coordinate looks Stop up again at the tap, and failed "Failed to get matching snapshot" when it had just gone (Nov 23).
             while stop.exists && presses < 4 {
                 let allow = springboard.buttons["Allow"].firstMatch
                 if allow.exists { allow.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap(); sleep(2) }
-                if stop.exists { stop.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+                if stop.exists {
+                    let at = stop.frame
+                    springboard.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: at.midX, dy: at.midY)).tap()
+                }
                 presses += 1
                 sleep(4)
                 if presses == 1 { shot("live-6-stack-open") }
