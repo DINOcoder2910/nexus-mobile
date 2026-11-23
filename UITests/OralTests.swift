@@ -4,8 +4,9 @@ import XCTest
 /// Spanish class, canned answers in place of Claude, no microphone). The Oral page: the list with its marks, one oral (Claude's marks,
 /// what the ears heard), Add a recording made here (it waits for the laptop), the listening test read line by line and sent. Then a
 /// Spanish paragraph typed in a board block is underlined after a pause, and the closed block keeps the marks; and the tutor's
-/// message box underlines it too. The screenshots
-/// ("pad-oral-…") are kept in the result bundle. Skips itself on the iPhone.
+/// message box underlines it too. The screenshots ("pad-oral-…") are kept in the result bundle; the iPad's come out turned a quarter
+/// (landscape). Skips itself on the iPhone. Its iPhone twin, OralPhoneTests, is in this file (a *PhoneTests.swift file would start
+/// phone-check too), so `[ui-only: OralTests]` runs both.
 final class OralTests: XCTestCase {
     var app = XCUIApplication()
 
