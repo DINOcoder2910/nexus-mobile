@@ -116,6 +116,8 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     var copyBanner: UIView?
     let pickRing = CAShapeLayer()
     let undoToast = UndoToast()
+    /// Each printout PDF's markscheme, looked up once (BoardController+Sheets.swift).
+    var msLookup: [String: String?] = [:]
 
     init(root: URL, path: String, focus: CGRect?) {
         self.root = root

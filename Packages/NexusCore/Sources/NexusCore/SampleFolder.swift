@@ -155,6 +155,7 @@ public enum SampleFolder {
         text("study/decks/acids.yaml", """
             id: acids
             title: Acids and bases
+            unit: R3.1
             description: Which acids and bases are strong, and which are weak.
             columns: [{key: name, label: Name}, {key: type, label: Type}]
             cards:

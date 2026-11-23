@@ -421,6 +421,7 @@ struct UnitDetailView: View {
     let workstreamId: String
     let code: String
     @State private var preview: URL?
+    @State private var pdf: PdfOpen?
     @State private var filter = StudySheets.Filter()
     @State private var browsing = false
 
@@ -449,7 +450,7 @@ struct UnitDetailView: View {
                     Text("No sheet is linked to this unit yet. Sheets link by their unit folder, the codes in their names and the topics in their titles.")
                         .font(.nx(.callout)).foregroundStyle(.secondary)
                 } else {
-                    ForEach(list) { sh in SheetRow(sheet: sh, root: store.folder, onUnit: nil) { preview = $0 } }
+                    ForEach(list) { sh in SheetRow(sheet: sh, root: store.folder, onUnit: nil) { PdfOpen.route($0, root: store.folder, pdf: $pdf, preview: $preview) } }
                 }
             } header: {
                 SectionTitle(title: "Sheets", count: list.count)
@@ -464,6 +465,7 @@ struct UnitDetailView: View {
         .navigationTitle(code)
         .navigationBarTitleDisplayMode(.inline)
         .quickLookPreview($preview)
+        .pdfPage($pdf)
         .navigationDestination(isPresented: $browsing) {
             SheetsBrowser(workstreamId: workstreamId, filter: $filter, embedded: false)
         }
