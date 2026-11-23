@@ -16,6 +16,7 @@ enum TestHooks {
         if ProcessInfo.processInfo.arguments.contains("-NexusTestDayEdges") { dayEdges(store); return }
         guard ProcessInfo.processInfo.arguments.contains("-NexusTestPdfBoard") else { return }
         if !store.snapshot.isDataFolder { store.makeSample() }
+        sharedPens(store)
         let dir = "notebooks/PDF zoom"
         let url = store.folder.appendingPathComponent(dir, isDirectory: true)
         // made by an earlier test on this simulator: open it again (UITests/PenOptionsTests runs after PdfZoomTests)
@@ -25,6 +26,36 @@ enum TestHooks {
         }
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         try? NotebookActions().newBoard(pdfData: finePrint(), named: "Zoom test", in: dir, store)
+    }
+
+    /// With `-NexusTestPdfBoard`: `-NexusTestSharedPens` puts a pens file in the data folder as the laptop writes it (the pen red at
+    /// Bold, Bold set wider on the laptop, the highlighter at Fine, the eraser on part of a stroke, a part only the laptop knows;
+    /// UITests/SharedPensTests); without it, a pens file an earlier test left is taken away, so every other test starts with none.
+    static func sharedPens(_ store: NexusStore) {
+        let url = store.folder.appendingPathComponent(Pens.file)
+        guard BoardTools.testShared else { try? FileManager.default.removeItem(at: url); return }
+        let text = """
+        {
+          "format": "nexus-pens/1",
+          "pen": {
+            "color": "#D93025FF",
+            "step": 4
+          },
+          "marker": {
+            "color": "#9BE7A0FF",
+            "step": 1
+          },
+          "widths": {
+            "pen": [1.0, 1.5, 3.0, 4.5, 8.0, 10.0]
+          },
+          "eraser": "part",
+          "ring": {
+            "tools": ["pen"]
+          }
+        }
+
+        """
+        try? FolderAccess.write(url, text)
     }
 
     /// `-NexusTestNestedNotebooks`: sample data, then notebooks nested three deep with boards at each level and notebook.json
