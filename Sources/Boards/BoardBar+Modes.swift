@@ -187,11 +187,12 @@ extension BoardBar {
         return tc
     }
 
-    /// The tools, each ink tool with a line of its colour under it. Insert space and what + used to hold are in Insert's row, so
-    /// Draw's row has room for every colour and size.
+    /// The tools, each ink tool with a line of its colour under it, and Insert space last (Murtaza, Nov 23: it was too far away in
+    /// Insert's row alone; Insert keeps it too). What + used to hold is in Insert's row, so Draw's row has room for every colour
+    /// and size.
     func fillTools(_ b: BoardController) {
         let tools = BoardTools.shared
-        for t in BoardTool.allCases where t != .space || tools.tool == .space {
+        for t in BoardTool.allCases {
             let on = tools.tool == t
             let button = icon(t.symbol, t.title, selected: on) { [weak b] in b?.selectTool(t) }
             button.accessibilityIdentifier = "board-tool-" + t.rawValue

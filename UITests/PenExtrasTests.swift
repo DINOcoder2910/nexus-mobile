@@ -31,6 +31,8 @@ final class PenExtrasTests: XCTestCase {
         hideSidebar()
         tap(until: { self.button("Pen").isSelected }) { self.button("Pen") }
         XCTAssertTrue(button("Pen").isSelected, "the Pen should be picked")
+        // Insert space sits with the Draw tools (Nov 23), not only in Insert's row
+        XCTAssertTrue(app.buttons["board-tool-space"].firstMatch.waitForExistence(timeout: 5), "Insert space isn't with the Draw tools")
     }
 
     /// The sidebar floats over the board in landscape: put it away with the board bar's Sidebar button (as PenOptionsTests).
