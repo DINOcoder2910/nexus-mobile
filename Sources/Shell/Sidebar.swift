@@ -24,6 +24,7 @@ struct Sidebar: View {
     /// The subject the sidebar has stepped inside (its name was tapped), or nil for the full list. Per window.
     @State private var inside: String?
     @State private var notebookActions = NotebookActions()
+    @State private var wsActions = WorkstreamActions()
     /// The notebook tree's view of the folder, read lazily (NotebookTreeModel).
     @State private var notebookTree = NotebookTreeModel()
     @Environment(\.scenePhase) private var phase
@@ -59,6 +60,8 @@ struct Sidebar: View {
             if !pushes { footer }
         }
         .notebookPrompts(notebookActions, store: store)
+        .workstreamPrompts(wsActions, store: store)
+        .onAppear { wsActions.made = { id in if !pushes { selection = .subject(id) } } }
         .onChange(of: ShortcutCenter.shared.notebookRequest) { _, _ in
             if s.isDataFolder && !pushes { notebookActions.ask(.notebook, in: BoardFormat.notebooks) }
         }
@@ -77,6 +80,16 @@ struct Sidebar: View {
             } else if s.isDataFolder {
                 ToolbarItem(placement: .primaryAction) {
                     Button { notebookActions.ask(.notebook, in: BoardFormat.notebooks) } label: { Label("New notebook", systemImage: "folder.badge.plus") }
+                }
+                // New workstream, in a group (the iPad has it on a hold of a group's name)
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        Section("New workstream in…") {
+                            ForEach(s.groups) { g in Button(g.label) { wsActions.ask(.create(group: g.id)) } }
+                        }
+                    } label: { Label("New workstream", systemImage: "plus") }
+                    .disabled(s.readOnlyReason != nil)
+                    .accessibilityIdentifier("new-workstream")
                 }
             }
         }
@@ -135,6 +148,10 @@ struct Sidebar: View {
                         ForEach(list) { w in subject(w) }
                     } header: {
                         Text(g.label).font(.nx(.subheadline, .semibold)).foregroundStyle(Kit.ink)
+                            .contextMenu {
+                                Button { wsActions.ask(.create(group: g.id)) } label: { Label("New workstream in \(g.label)…", systemImage: "plus") }
+                                    .disabled(s.readOnlyReason != nil)
+                            }
                     }
                 }
             }
@@ -197,6 +214,7 @@ struct Sidebar: View {
         .contentShape(Rectangle())
         if pushes {
             NavigationLink(value: school ? Screen.school(w.id) : Screen.subject(w.id)) { label }
+                .contextMenu { WorkstreamMenu(workstream: w, actions: wsActions) }
                 .accessibilityIdentifier("subject-" + w.id)
         } else {
             HStack(spacing: 2) {
@@ -209,6 +227,7 @@ struct Sidebar: View {
                 // would hide the name from tests that find the row by it; tests tap the name
                 label
             }
+            .contextMenu { WorkstreamMenu(workstream: w, actions: wsActions) }
             .tag(SidebarItem.screen(school ? .school(w.id) : .subject(w.id)))
             if open { subjectParts(w, indent: 1) }
         }

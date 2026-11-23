@@ -13,6 +13,14 @@ public struct Change {
     public var also: [Change] = []
     /// The step made the file (Undo takes it away instead of leaving it empty).
     public var created = false
+    /// The step moved a folder (a workstream to another group): Undo moves it back, after putting its files' text back.
+    public var moved: Moved?
+
+    public struct Moved: Equatable {
+        public var from: String
+        public var to: String
+        public init(from: String, to: String) { self.from = from; self.to = to }
+    }
 
     public init(file: String, before: String, after: String, message: String, offerParent: String? = nil, also: [Change] = []) {
         self.file = file; self.before = before; self.after = after; self.message = message; self.offerParent = offerParent; self.also = also
@@ -246,9 +254,18 @@ public struct TaskEditor {
         for x in all where x.before != x.after {
             guard (try? read(root.appendingPathComponent(x.file))) == x.after else { throw Failure.changedOnDisk }
         }
+        if let m = c.moved, FileManager.default.fileExists(atPath: root.appendingPathComponent(m.from).path) { throw Failure.changedOnDisk }
         for x in all.reversed() where x.before != x.after {
             let url = root.appendingPathComponent(x.file)
-            if x.before.isEmpty, x.created { try? FileManager.default.removeItem(at: url) } else { try write(url, x.before) }
+            if x.before.isEmpty, x.created {
+                try? FileManager.default.removeItem(at: url)
+                // a folder the step made (a new workstream's) goes with its last file
+                let dir = url.deletingLastPathComponent()
+                if x.file.contains("/"), ((try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? ["x"]).isEmpty { try? FileManager.default.removeItem(at: dir) }
+            } else { try write(url, x.before) }
+        }
+        if let m = c.moved {
+            try FileManager.default.moveItem(at: root.appendingPathComponent(m.to), to: root.appendingPathComponent(m.from))
         }
     }
 
