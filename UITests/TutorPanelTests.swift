@@ -202,4 +202,25 @@ final class TutorPanelTests: XCTestCase {
         sleep(1)
         shot("tutor-maths-2-hint")
     }
+
+    /// Check my maths reads the handwriting on screen when it opens (a stand-in for Vision: pieces out of order, one line in two,
+    /// a capital X), puts it in the box a line of working a line, and checks it.
+    func testCheckMyMathsReadsHandwriting() {
+        launch(["-NexusTestFakeHandwriting"])
+        openBoard("Maths check")
+        openTutor()
+        let start = app.buttons["Check my maths"].firstMatch
+        XCTAssertTrue(start.waitForExistence(timeout: 10), "no Check my maths on the panel's welcome")
+        var swipes = 0
+        while !start.isHittable && swipes < 3 { start.swipeUp(); swipes += 1 }
+        start.tap()
+        let input = app.textViews["maths-input"].firstMatch
+        XCTAssertTrue(input.waitForExistence(timeout: 10), "the Check my maths sheet didn't open")
+        XCTAssertTrue(app.descendants(matching: .any)["maths-from-ink"].firstMatch.waitForExistence(timeout: 10), "the handwriting wasn't read on opening")
+        XCTAssertEqual(input.value as? String, "2x + 6 = 14\n2x = 8\nx = -4", "the handwritten lines in the wrong order or not joined")
+        XCTAssertTrue(app.descendants(matching: .any)["Line 3 is the first slip"].firstMatch.waitForExistence(timeout: 5), "the read working wasn't checked")
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "maths-line").count, 3, "one row a handwritten line")
+        sleep(1)
+        shot("tutor-maths-3-handwriting")
+    }
 }
