@@ -49,6 +49,9 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
         spaceTap.delegate = self
         canvas.addGestureRecognizer(spaceTap)
 
+        // the lasso's path, for restyling what it holds (BoardController+PenExtras.swift)
+        canvas.drawingGestureRecognizer.addTarget(self, action: #selector(lassoTraced(_:)))
+
         quickRing.board = self
         quickRing.frame = view.bounds
         quickRing.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -106,12 +109,14 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
 
     func selectTool(_ t: BoardTool) {
         if writing != nil, t != .text { endWriting() }
+        if copyingStroke { endCopyFromStroke() }
         BoardTools.shared.tool = t
         toolChanged()
     }
 
     /// A tool, colour, width or kind changed in the bar.
     func toolChanged() {
+        if BoardTools.shared.tool != .lasso { clearLassoPick() }
         applyTool()
         bar.refresh()
         quickRing.refresh()

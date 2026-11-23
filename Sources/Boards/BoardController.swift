@@ -109,6 +109,13 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     var onSidebar: (() -> Void)?
     /// The board in Side by side's second pane (its bar's close button closes the pane).
     var isSidePane = false
+    // the pen panel's extras (BoardController+PenExtras.swift): the lasso's path being drawn, the strokes it holds, copying a pen
+    var lassoTrace: [CGPoint] = []
+    var lassoMoved = false
+    var lassoPick: LassoPick?
+    var copyBanner: UIView?
+    let pickRing = CAShapeLayer()
+    let undoToast = UndoToast()
 
     init(root: URL, path: String, focus: CGRect?) {
         self.root = root
@@ -484,6 +491,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
             if TestHooks.isPenProbeRun { penProbe() }
         }
         strokeCount = canvas.drawing.strokes.count
+        lassoDrawingChanged()
         recordingDrawingChanged()
         if selected != nil { selected = nil }
         growIfNeeded()
