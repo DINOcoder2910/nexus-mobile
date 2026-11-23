@@ -118,11 +118,13 @@ final class RecordingService: NSObject {
         startTicking()
         store.didWrite(touched: [path])
         version += 1
+        LiveActivities.refresh()
         if kind == .lesson && !film { await startListening() }
     }
 
-    /// Stops, moves the sound (and film) into the folder, then turns it into words and asks Claude.
-    func stop() async {
+    /// Stops, moves the sound (and film) into the folder, then turns it into words and asks Claude. `waitForWords` false (the Live
+    /// Activity's Stop, run in the background): returns once the files are saved, and the words come after.
+    func stop(waitForWords: Bool = true) async {
         guard var a = active else { return }
         tick?.invalidate(); tick = nil
         await stopListening()
@@ -159,7 +161,9 @@ final class RecordingService: NSObject {
         active = nil
         store.didWrite(touched: [a.path])
         version += 1
-        if failed == nil { await process(a.path) }
+        LiveActivities.refresh()
+        guard failed == nil else { return }
+        if waitForWords { await process(a.path) } else { let path = a.path; Task { await self.process(path) } }
     }
 
     /// Snap: a photo pinned to now (sound), or a moment to take from the film (filming).
@@ -183,6 +187,7 @@ final class RecordingService: NSObject {
             try writeMeta(a.path, a.meta)
             active = a
             store.didWrite(touched: [a.path])
+            LiveActivities.refresh()
         } catch { problem = "The picture couldn't be saved: \(error.localizedDescription)" }
     }
 
@@ -201,6 +206,7 @@ final class RecordingService: NSObject {
         active = a
         try? writeMeta(a.path, a.meta)
         store.didWrite(touched: [a.path])
+        LiveActivities.refresh()
         if by == "auto" && MomentSettings.popups {
             let pop = MomentPopup(pin: p)
             withAnimation(.snappy) { popup = pop }
@@ -221,6 +227,7 @@ final class RecordingService: NSObject {
         active = a
         try? writeMeta(a.path, a.meta)
         store.didWrite(touched: [a.path])
+        LiveActivities.refresh()
     }
 
     /// A line heard live: the phrases now, Haiku with the next minute's lines.
@@ -538,6 +545,7 @@ final class RecordingService: NSObject {
         startTicking()
         store.didWrite(touched: [path])
         version += 1
+        LiveActivities.refresh()
         if kind == .lesson && !film { Task { await startListening() } }
     }
 
@@ -552,6 +560,7 @@ final class RecordingService: NSObject {
         try? FolderAccess.write(folder.appendingPathComponent(Recordings.transcriptText), t.markdown(title: m.title))
         try? writeMeta(a.path, m)
         active = nil
+        LiveActivities.refresh()
         await pinFromTranscript(a.path, &m, t)
         working[a.path] = "Claude is reading it…"
         version += 1

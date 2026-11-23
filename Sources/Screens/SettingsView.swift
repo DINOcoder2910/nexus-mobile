@@ -69,6 +69,8 @@ struct SettingsView: View {
 
             RecordingSettings()
 
+            LiveActivitySettings()
+
             if !s.problems.isEmpty {
                 Section("Things to check") {
                     ForEach(s.problems) { p in

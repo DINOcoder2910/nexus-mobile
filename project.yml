@@ -41,6 +41,8 @@ targets:
         type: folder
     dependencies:
       - package: NexusCore
+      # the Live Activity (Widgets/): embedded in PlugIns; build.yml takes it out of the iPad's download
+      - target: NexusLiveActivity
     info:
       path: Support/Info.plist
       properties:
@@ -82,6 +84,12 @@ targets:
         # the Calendar reads the device's own calendars (Google, school, iCloud) through EventKit; the event sheets may show invitees
         NSCalendarsFullAccessUsageDescription: Nexus shows your calendars beside your planned tasks, and lets you add and edit events.
         NSContactsUsageDescription: Nexus shows who is invited to an event.
+        # the running timer and a recording on the iPhone's Lock Screen and in the Dynamic Island (Sources/LiveActivity/)
+        NSSupportsLiveActivities: true
+        # the Live Activity's links back in (nexus://task/<id>, nexus://recordings)
+        CFBundleURLTypes:
+          - CFBundleURLName: app.nexus.mobile
+            CFBundleURLSchemes: [nexus]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.nexus.mobile
@@ -91,6 +99,37 @@ targets:
         CURRENT_PROJECT_VERSION: "1"
         NEXUS_BUILD: dev
         SWIFT_VERSION: "5.0"
+        CODE_SIGNING_ALLOWED: "NO"
+        CODE_SIGNING_REQUIRED: "NO"
+        CODE_SIGN_IDENTITY: ""
+
+  # The Live Activity extension: draws the activities the app starts (the running timer, a recording). Under free signing it needs
+  # an App ID of its own (Sideloadly registers it), so only the iPhone's download carries it (build.yml). The shared files are listed
+  # one by one: the rest of Sources is the app's.
+  NexusLiveActivity:
+    type: app-extension
+    platform: iOS
+    sources:
+      - Widgets
+      - Sources/LiveActivity/NexusActivity.swift
+      - Sources/LiveActivity/LiveActivityViews.swift
+      - Sources/LiveActivity/LiveActivityIntents.swift
+    info:
+      path: Support/LiveActivity-Info.plist
+      properties:
+        CFBundleDisplayName: Nexus
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.nexus.mobile.live
+        TARGETED_DEVICE_FAMILY: "1,2"
+        MARKETING_VERSION: "0.2"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.0"
+        # the intents' perform runs in the app (LiveActivityIntents.swift)
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) NEXUS_WIDGET"
+        APPLICATION_EXTENSION_API_ONLY: "YES"
         CODE_SIGNING_ALLOWED: "NO"
         CODE_SIGNING_REQUIRED: "NO"
         CODE_SIGN_IDENTITY: ""

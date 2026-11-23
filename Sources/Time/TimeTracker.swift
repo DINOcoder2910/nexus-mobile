@@ -52,6 +52,8 @@ final class TimeTracker {
         }
         entries = all
         problems = bad
+        // the running timer on the iPhone's Lock Screen (LiveActivities.swift)
+        LiveActivities.refresh()
     }
 
     // MARK: what is there
