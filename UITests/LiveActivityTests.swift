@@ -12,7 +12,9 @@ final class LiveActivityTests: XCTestCase {
     override func setUpWithError() throws {
         try XCTSkipIf(UIDevice.current.userInterfaceIdiom == .phone, "iPad only")
         continueAfterFailure = true
-        XCUIDevice.shared.orientation = .landscapeLeft
+        // portrait: in landscape the springboard's Lock Screen is drawn rotated and a tap by coordinate on the card's Stop didn't
+        // stop the timer (Nov 23, aa182b9); every other iPad test sets its own orientation
+        XCUIDevice.shared.orientation = .portrait
         app.launchArguments = ["-NexusTestTime"]
         app.launch()
         let sample = app.buttons["Try with sample data"]
@@ -77,6 +79,7 @@ final class LiveActivityTests: XCTestCase {
         // Stop on the card stops the timer in Nexus (the first press asks "Allow Live Activities from Nexus?")
         let stop = springboard.buttons["Stop the timer"].firstMatch
         if stop.waitForExistence(timeout: 8) {
+            print("UISTEP 0 the card's Stop at \(stop.frame)")
             var presses = 0
             while stop.exists && presses < 4 {
                 let allow = springboard.buttons["Allow"].firstMatch
@@ -84,6 +87,7 @@ final class LiveActivityTests: XCTestCase {
                 if stop.exists { stop.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
                 presses += 1
                 sleep(4)
+                if presses == 1 { shot("live-ipad-3b-after-first-press") }
             }
             shot("live-ipad-4-stopped")
             XCUIDevice.shared.press(.home)
