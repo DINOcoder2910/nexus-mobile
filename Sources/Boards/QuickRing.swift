@@ -200,7 +200,7 @@ final class QuickRing: UIView {
     /// The band the ring may sit in: below the board's bar, above the bottom edge.
     private var band: ClosedRange<CGFloat> {
         let top = (board?.topInset ?? safe.top) + Self.bubbleSize / 2 + 12
-        let bottom = bounds.height - safe.bottom - Self.bubbleSize / 2 - 12
+        let bottom = bounds.height - (board?.bottomInset ?? safe.bottom) - Self.bubbleSize / 2 - 12
         return top...max(top, bottom)
     }
 
