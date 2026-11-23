@@ -161,11 +161,16 @@ struct NexusLiveLineRow: View {
             .font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary).lineLimit(1)
             if line.kind == .timer {
                 // a timer under a recording: it can stop too
-                NexusLiveButton(intent: StopTimerLiveIntent(), icon: "stop.fill", spoken: "Stop the timer", style: .stop)
-                    .scaleEffect(0.85)
+                Button(intent: StopTimerLiveIntent()) {
+                    Image(systemName: "stop.fill").font(.system(size: 9, weight: .bold)).foregroundStyle(.white)
+                        .frame(width: 24, height: 20).background(Color.red, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Stop the timer")
             }
         }
-        .padding(.horizontal, 10).padding(.vertical, 6)
+        .padding(.horizontal, 10).padding(.vertical, 5)
+        .frame(minHeight: 28)
         .background(Color.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
     }
 
@@ -182,10 +187,11 @@ struct NexusLiveLineRow: View {
 /// The day: a bar and "3 of 7 done", and the time tracked today (counting while a timer runs).
 struct NexusLiveDay: View {
     let state: NexusLiveState
-    @Environment(\.colorScheme) private var scheme
+    /// Right-aligned (the Lock Screen card's right side).
+    var trailing = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: trailing ? .trailing : .leading, spacing: 4) {
             if state.total > 0 {
                 HStack(spacing: 6) {
                     GeometryReader { g in
@@ -237,39 +243,63 @@ struct NexusLiveEstimate: View {
     }
 }
 
-/// The Lock Screen (and Notification Centre) card: the badge, the title and what's under it, the big clock; the line under it;
-/// the day and the buttons.
+/// The big number: the clock up from the timer's or the recording's start, down to the next task, or a word when nothing counts.
+struct NexusLiveBig: View {
+    let state: NexusLiveState
+
+    var body: some View {
+        Group {
+            if state.clocks(Date()) || (state.focus == .next && state.timed) {
+                NexusLiveClock(state: state).font(.system(size: 44, weight: .semibold, design: .rounded))
+            } else {
+                Text(state.focus == .clear ? (state.done > 0 ? "All done" : "Free") : "Up next")
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
+            }
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
+        .frame(height: 46, alignment: .leading)
+    }
+}
+
+/// The Lock Screen (and Notification Centre) card, as tall as iOS lets it be (160 points): the badge, the title and what's under
+/// it, and the buttons; the big clock (with the bar toward the estimate) beside the day's ticks and time tracked; then the line of
+/// what else runs or comes next.
 struct NexusLiveLockView: View {
     let state: NexusLiveState
 
     var body: some View {
         let line = state.line(at: Date())
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .center, spacing: 12) {
-                NexusLiveIcon(state: state)
-                VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .center, spacing: 10) {
+                NexusLiveIcon(state: state, size: 38)
+                VStack(alignment: .leading, spacing: 1) {
                     Text(state.title).font(.system(size: 17, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
                     Text(state.detail).font(.system(size: 13)).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.85)
-                    NexusLiveEstimate(state: state).padding(.top, 2)
                 }
-                if state.clocks(Date()) || (state.focus == .next && state.timed) {
-                    Spacer(minLength: 6)
-                    NexusLiveClock(state: state)
-                        .font(.system(size: 26, weight: .semibold, design: .rounded))
-                        .lineLimit(1)
-                        .frame(minWidth: 72, maxWidth: 104, alignment: .trailing)
-                        .layoutPriority(1)
-                } else {
-                    Spacer(minLength: 0)
-                }
-            }
-            if let line { NexusLiveLineRow(line: line) }
-            HStack(alignment: .center) {
-                NexusLiveDay(state: state)
-                Spacer(minLength: 6)
+                .layoutPriority(1)
+                Spacer(minLength: 4)
                 NexusLiveButtons(state: state)
             }
+            HStack(alignment: .center, spacing: 10) {
+                VStack(alignment: .leading, spacing: 3) {
+                    NexusLiveBig(state: state)
+                    NexusLiveEstimate(state: state).frame(maxWidth: 180)
+                }
+                .layoutPriority(1)
+                Spacer(minLength: 6)
+                NexusLiveDay(state: state, trailing: true)
+            }
+            if let line {
+                NexusLiveLineRow(line: line)
+            } else {
+                Text(state.focus == .clear ? "Nothing else on today" : "Nothing else timed today")
+                    .font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
+                    .padding(.horizontal, 10)
+                    .background(Color.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+            }
         }
-        .padding(14)
+        .padding(.horizontal, 16).padding(.vertical, 12)
     }
 }

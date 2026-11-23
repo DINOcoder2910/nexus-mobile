@@ -163,7 +163,7 @@ final class LiveActivities {
                       task: n.id, minutes: m)
         } else {
             let done = v.done.count
-            s = .init(focus: .clear, title: done > 0 ? "All done for today" : "Nothing planned today",
+            s = .init(focus: .clear, title: done > 0 ? "Today's list is done" : "Nothing planned today",
                       detail: done > 0 ? (done == 1 ? "1 task ticked off" : "\(done) tasks ticked off") : "Add a task in Nexus",
                       since: Days.date(v.today) ?? now, light: "#0F7A49", dark: "#4FD28F")
         }
