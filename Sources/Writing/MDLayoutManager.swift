@@ -78,6 +78,50 @@ final class MDLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
             guard let box = value as? BlockStyler.MathBox, let r = mathRect(box, at: range.location) else { return }
             box.picture()?.draw(in: r.offsetBy(dx: origin.x, dy: origin.y))
         }
+        drawSpanish(in: chars, at: origin)
+    }
+
+    // MARK: Spanish underlines
+
+    static let spanishError = UIColor(red: 0xD9 / 255, green: 0x3F / 255, blue: 0x3F / 255, alpha: 1)
+    static let spanishAccent = UIColor(red: 0xD9 / 255, green: 0x8A / 255, blue: 0x1E / 255, alpha: 1)
+
+    /// A wavy line under each Spanish mistake (BlockStyler.spanishKey), as the laptop's: red, an accent amber, 1.5 points, 3 below the
+    /// baseline, all at the words' size.
+    func drawSpanish(in chars: NSRange, at origin: CGPoint) {
+        guard let storage = textStorage, let ctx = UIGraphicsGetCurrentContext() else { return }
+        storage.enumerateAttribute(BlockStyler.spanishKey, in: chars, options: []) { value, range, _ in
+            guard let kind = value as? String, range.length > 0 else { return }
+            let size = (storage.attribute(.font, at: range.location, effectiveRange: nil) as? UIFont)?.pointSize ?? 17
+            let k = max(0.5, size / 17)
+            let g = glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+            ctx.saveGState()
+            ctx.setStrokeColor((kind == "accent" ? MDLayoutManager.spanishAccent : MDLayoutManager.spanishError).cgColor)
+            ctx.setLineWidth(1.4 * k)
+            ctx.setLineCap(.round)
+            enumerateLineFragments(forGlyphRange: g) { rect, _, container, line, _ in
+                let part = NSIntersectionRange(line, g)
+                guard part.length > 0 else { return }
+                let box = self.boundingRect(forGlyphRange: part, in: container)
+                guard box.width > 0.5 else { return }
+                let y = origin.y + rect.minY + self.location(forGlyphAt: part.location).y + 3 * k
+                MDLayoutManager.wave(ctx, from: origin.x + box.minX, to: origin.x + box.maxX, y: y, k: k)
+            }
+            ctx.restoreGState()
+        }
+    }
+
+    static func wave(_ ctx: CGContext, from x0: CGFloat, to x1: CGFloat, y: CGFloat, k: CGFloat) {
+        let step = 2.2 * k, amp = 1.1 * k
+        var x = x0, up = true
+        ctx.move(to: CGPoint(x: x0, y: y))
+        while x < x1 {
+            let nx = min(x1, x + step)
+            ctx.addQuadCurve(to: CGPoint(x: nx, y: y), control: CGPoint(x: (x + nx) / 2, y: y + (up ? -2 * amp : 2 * amp)))
+            x = nx
+            up.toggle()
+        }
+        ctx.strokePath()
     }
 
     /// Where a formula's picture is drawn (container coordinates).

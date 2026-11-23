@@ -167,4 +167,61 @@ final class TutorPanelTests: XCTestCase {
         sleep(1)
         shot("tutor-5-dark")
     }
+
+    /// Check my maths: lines of working checked by the shared Rust core (the laptop's maths.rs), the first slip marked, then a hint
+    /// about it from the tutor. The screenshots "tutor-maths-…" are printed into the ui-check log.
+    func testCheckMyMaths() {
+        launch()
+        openBoard("Maths check")
+        openTutor()
+        let start = app.buttons["Check my maths"].firstMatch
+        XCTAssertTrue(start.waitForExistence(timeout: 10), "no Check my maths on the panel's welcome")
+        var swipes = 0
+        while !start.isHittable && swipes < 3 { start.swipeUp(); swipes += 1 } // (the welcome's last starter, below the fold on a short panel)
+        start.tap()
+        let input = app.textViews["maths-input"].firstMatch
+        XCTAssertTrue(input.waitForExistence(timeout: 10), "the Check my maths sheet didn't open")
+        sleep(1)
+        shot("tutor-maths-0-empty")
+        input.tap()
+        input.typeText("2x + 6 = 14\n2x = 8\nx = -4")
+        app.buttons["maths-check"].firstMatch.tap()
+        let verdict = app.otherElements["maths-verdict"].firstMatch
+        XCTAssertTrue(verdict.waitForExistence(timeout: 10), "no verdict after Check")
+        XCTAssertTrue(app.descendants(matching: .any)["Line 3 is the first slip"].firstMatch.waitForExistence(timeout: 5), "the slip in the last line isn't named")
+        XCTAssertTrue(app.descendants(matching: .any)["The first equation's solutions: x = 4"].firstMatch.exists, "no solutions line")
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "maths-line").count, 3, "one row a written line")
+        sleep(1)
+        shot("tutor-maths-1-slip")
+        let hint = app.buttons["maths-hint"].firstMatch
+        XCTAssertTrue(hint.waitForExistence(timeout: 5), "no Ask the tutor for a hint")
+        hint.tap()
+        let closed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: input)
+        XCTAssertEqual(XCTWaiter().wait(for: [closed], timeout: 10), .completed, "the sheet stays open after asking for a hint")
+        waitForAnswer("maths hint")
+        sleep(1)
+        shot("tutor-maths-2-hint")
+    }
+
+    /// Check my maths reads the board when it opens (the demo's stand-in for Claude: the question, the equation it gives and the
+    /// working after it), shows the question, puts the equation first in the box, and checks it.
+    func testCheckMyMathsReadsHandwriting() {
+        launch(["-NexusTestFakeHandwriting"])
+        openBoard("Maths check")
+        openTutor()
+        let start = app.buttons["Check my maths"].firstMatch
+        XCTAssertTrue(start.waitForExistence(timeout: 10), "no Check my maths on the panel's welcome")
+        var swipes = 0
+        while !start.isHittable && swipes < 3 { start.swipeUp(); swipes += 1 }
+        start.tap()
+        let input = app.textViews["maths-input"].firstMatch
+        XCTAssertTrue(input.waitForExistence(timeout: 10), "the Check my maths sheet didn't open")
+        XCTAssertTrue(app.descendants(matching: .any)["maths-from-ink"].firstMatch.waitForExistence(timeout: 10), "the board wasn't read on opening")
+        XCTAssertTrue(app.descendants(matching: .any)["maths-question"].firstMatch.exists, "the question read off the board isn't shown")
+        XCTAssertEqual(input.value as? String, "2x + 6 = 14\n2x = 8\nx = -4", "the question's equation isn't first, or the working is wrong")
+        XCTAssertTrue(app.descendants(matching: .any)["Line 3 is the first slip"].firstMatch.waitForExistence(timeout: 5), "the read working wasn't checked")
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "maths-line").count, 3, "one row a handwritten line")
+        sleep(1)
+        shot("tutor-maths-3-handwriting")
+    }
 }
