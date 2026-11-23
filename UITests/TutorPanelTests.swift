@@ -203,8 +203,8 @@ final class TutorPanelTests: XCTestCase {
         shot("tutor-maths-2-hint")
     }
 
-    /// Check my maths reads the handwriting on screen when it opens (a stand-in for Vision: pieces out of order, one line in two,
-    /// a capital X), puts it in the box a line of working a line, and checks it.
+    /// Check my maths reads the board when it opens (the demo's stand-in for Claude: the question, the equation it gives and the
+    /// working after it), shows the question, puts the equation first in the box, and checks it.
     func testCheckMyMathsReadsHandwriting() {
         launch(["-NexusTestFakeHandwriting"])
         openBoard("Maths check")
@@ -216,8 +216,9 @@ final class TutorPanelTests: XCTestCase {
         start.tap()
         let input = app.textViews["maths-input"].firstMatch
         XCTAssertTrue(input.waitForExistence(timeout: 10), "the Check my maths sheet didn't open")
-        XCTAssertTrue(app.descendants(matching: .any)["maths-from-ink"].firstMatch.waitForExistence(timeout: 10), "the handwriting wasn't read on opening")
-        XCTAssertEqual(input.value as? String, "2x + 6 = 14\n2x = 8\nx = -4", "the handwritten lines in the wrong order or not joined")
+        XCTAssertTrue(app.descendants(matching: .any)["maths-from-ink"].firstMatch.waitForExistence(timeout: 10), "the board wasn't read on opening")
+        XCTAssertTrue(app.descendants(matching: .any)["maths-question"].firstMatch.exists, "the question read off the board isn't shown")
+        XCTAssertEqual(input.value as? String, "2x + 6 = 14\n2x = 8\nx = -4", "the question's equation isn't first, or the working is wrong")
         XCTAssertTrue(app.descendants(matching: .any)["Line 3 is the first slip"].firstMatch.waitForExistence(timeout: 5), "the read working wasn't checked")
         XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "maths-line").count, 3, "one row a handwritten line")
         sleep(1)
