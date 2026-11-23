@@ -132,4 +132,18 @@ final class SpanishOralTests: XCTestCase {
         XCTAssertEqual(r.from, "iPhone"); XCTAssertTrue(r.advice.hasPrefix("The ears hear you"))
         XCTAssertNil(SpanishOral.parseTest("at: x\n", file: "f"))
     }
+
+    func testWhatTheEarsHeardAsTheLaptopShowsIt() throws {
+        let y = "listening:\n  talk:\n    mine: 0.64\n    me: 185\n  diffs:\n    - part: 2\n      said: fue\n      meant: fui\n      kind: ending\n  sounds:\n    r:\n      - pero\n      - caro\n    h:\n      - hablo\n  soundCounts:\n    r: 3\n    h: 1\n  delivery:\n    - part: 1\n      wpm: 92\n      pauses: 3\n      longPauses: 1\n      english:\n        - okay\n    - part: all\n      wpm: 88\n      pauses: 1\n  ears:\n    said: true\n    sounds: true\n"
+        let h = try XCTUnwrap(SpanishOral.heard(try YValue.parse(y)["listening"]))
+        XCTAssertEqual(h.talkLine, "You spoke 64% of the time (3 min).")
+        XCTAssertEqual(h.diffs, [.init(said: "fue", meant: "fui", kind: "ending", part: "part 2")])
+        XCTAssertEqual(h.sounds.map(\.say), ["an English r", "the h sounded (it is silent)"])
+        XCTAssertEqual(h.sounds.map(\.count), [3, 1])
+        XCTAssertEqual(h.sounds[0].words, ["pero", "caro"])
+        XCTAssertEqual(h.delivery, ["Part 1: 92/min, 3 pauses (1 long), English: okay", "Overall: 88/min, 1 pause"])
+        XCTAssertTrue(h.saidEar); XCTAssertTrue(h.soundsEar)
+        XCTAssertNil(SpanishOral.heard(try YValue.parse("x: 1")))
+        XCTAssertEqual(SpanishOral.partLabel(.string("3:10")), "At 3:10")
+    }
 }

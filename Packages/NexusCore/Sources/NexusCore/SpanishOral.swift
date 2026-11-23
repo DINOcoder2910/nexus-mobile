@@ -170,6 +170,73 @@ public enum SpanishOral {
         return (t, Double(maxOf(o.kind)))
     }
 
+    // MARK: what the laptop's ears heard (an oral's listening:, as OralAdd.tsx ListeningBox shows it)
+
+    /// The sounds the phoneme ear flags (spanishoralhear.js PHONE_ISSUE's say).
+    public static let phoneIssue: [String: String] = [
+        "r": "an English r", "rr": "a tapped r where Spanish rolls it", "vowel": "an English vowel", "h": "the h sounded (it is silent)",
+        "v": "an English v (Spanish v is a b)", "jg": "an English j sound (Spanish j and ge / gi are from the throat)", "ll": "ll said as l (it is like a y)",
+        "off": "sounds unlike the word",
+    ]
+
+    /// "Part 2", "Overall", "At 3:10" (partLabel).
+    public static func partLabel(_ part: YValue?, lower: Bool = false) -> String {
+        let raw = part?.str ?? ""
+        let t: String
+        if case .int = part { t = "Part \(raw)" } else if case .double = part { t = "Part \(raw)" }
+        else if raw.range(of: #"^\d+$"#, options: .regularExpression) != nil { t = "Part \(raw)" }
+        else if raw == "all" { t = "Overall" }
+        else if raw.range(of: #"^\d+:\d\d$"#, options: .regularExpression) != nil { t = "At \(raw)" }
+        else { t = raw }
+        return lower && !t.isEmpty ? t.prefix(1).lowercased() + t.dropFirst() : t
+    }
+
+    public struct Heard: Equatable, Sendable {
+        public struct Diff: Equatable, Sendable { public var said, meant, kind, part: String }
+        public struct Sound: Equatable, Sendable { public var kind, say: String; public var count: Int?; public var words: [String] }
+        /// Your share of the talking (0...1) and your seconds, when the recording had more than one voice.
+        public var mine: Double?
+        public var me: Double?
+        public var diffs: [Diff] = []
+        public var sounds: [Sound] = []
+        /// "Part 1: 92/min, 3 pauses (1 long), English: okay"
+        public var delivery: [String] = []
+        public var saidEar = false
+        public var soundsEar = false
+        public var earError = ""
+        public init() {}
+
+        /// "You spoke 64% of the time (3 min)."
+        public var talkLine: String? {
+            guard let mine, let me else { return nil }
+            return "You spoke \(Int((mine * 100).rounded()))% of the time (\(me < 60 ? "\(Int(me.rounded())) s" : "\(Int((me / 60).rounded())) min"))."
+        }
+    }
+
+    public static func heard(_ L: YValue?) -> Heard? {
+        guard let L, L.map != nil, L["ears"] != nil || L["talk"] != nil else { return nil }
+        var h = Heard()
+        if let t = L["talk"], t.map != nil { h.mine = num(t["mine"]); h.me = num(t["me"]) }
+        h.diffs = (L["diffs"]?.list ?? []).map { d in
+            Heard.Diff(said: d["said"]?.str ?? "", meant: d["meant"]?.str ?? "", kind: d["kind"]?.str ?? "", part: d["part"].map { partLabel($0, lower: true) } ?? "")
+        }
+        if let s = L["sounds"]?.map {
+            h.sounds = s.map { p in
+                Heard.Sound(kind: p.key, say: phoneIssue[p.key] ?? p.key, count: L["soundCounts"]?[p.key].flatMap { num($0) }.map { Int($0) },
+                            words: (p.value.list ?? []).map(\.str))
+            }
+        }
+        h.delivery = (L["delivery"]?.list ?? []).map { x in
+            let pauses = Int(num(x["pauses"]) ?? 0), long = Int(num(x["longPauses"]) ?? 0)
+            let eng = (x["english"]?.list ?? []).map(\.str)
+            return "\(partLabel(x["part"])): \(Int(num(x["wpm"]) ?? 0))/min, \(pauses) \(pauses == 1 ? "pause" : "pauses")" + (long > 0 ? " (\(long) long)" : "") + (eng.isEmpty ? "" : ", English: " + eng.joined(separator: ", "))
+        }
+        h.saidEar = L["ears"]?["said"]?.str == "true"
+        h.soundsEar = L["ears"]?["sounds"]?.str == "true"
+        h.earError = L["earError"]?.str ?? ""
+        return h
+    }
+
     // MARK: the picture bank (only the labels, for the titles)
 
     public struct Image: Equatable, Sendable { public var file, theme, topic, label, about: String }
