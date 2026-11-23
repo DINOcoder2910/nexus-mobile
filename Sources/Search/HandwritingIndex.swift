@@ -99,6 +99,15 @@ final class HandwritingIndex {
         DispatchQueue.main.asyncAfter(deadline: .now() + HandwritingIndex.settle, execute: work)
     }
 
+    /// The name this device shares the handwriting it read under, in each board's `handwriting.json` (HandwritingShare), so the
+    /// laptop's search finds it: the iPad only (Settings › Sync's name, else "iPad"); nil on the iPhone, so two devices never write
+    /// the same file. Asked on the main thread.
+    static func shareAs() -> String? {
+        if Device.isPhone { return nil }
+        let n = UserDefaults.standard.string(forKey: "sync.deviceName")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return n.isEmpty ? "iPad" : n
+    }
+
     /// Seconds a board must be left alone before its handwriting is read again.
     static let settle: Double = 20
     @ObservationIgnored private var pendingBoards: [String: DispatchWorkItem] = [:]
@@ -107,6 +116,7 @@ final class HandwritingIndex {
     func refresh(board path: String, root: URL) {
         // already waiting in the queue: that run reads the board as it is then
         guard worker.markWaiting(path) else { return }
+        let share = HandwritingIndex.shareAs()
         worker.queue.async { [weak self] in
             guard let self else { return }
             self.worker.dequeued(path)
@@ -114,7 +124,7 @@ final class HandwritingIndex {
             let np = HandwritingIndex.nameAndPlace(path)
             let ref = BoardRef(path: path, name: np.name, place: np.place)
             self.publish(indexing: true, done: 0, total: 1, current: ref.name)
-            let changed: Bool = autoreleasepool { self.worker.index(ref, root: root, force: false, reuse: [:], problem: self.publishProblem) }
+            let changed: Bool = autoreleasepool { self.worker.index(ref, root: root, force: false, reuse: [:], share: share, problem: self.publishProblem) }
             if changed { self.worker.save(problem: self.publishProblem) }
             self.publishAll(self.worker.entries)
             self.publish(indexing: false, done: 1, total: 1, current: nil)
@@ -123,6 +133,7 @@ final class HandwritingIndex {
 
     private func start(root: URL, force: Bool) {
         let gen = worker.generation.next()
+        let share = HandwritingIndex.shareAs()
         worker.queue.async { [weak self] in
             guard let self else { return }
             self.worker.use(root: root, publish: self.publishAll)
@@ -143,7 +154,7 @@ final class HandwritingIndex {
                 // a newer refresh was asked for: it carries on from here (what is done is kept)
                 if self.worker.generation.current != gen { return }
                 self.publish(indexing: true, done: i, total: refs.count, current: ref.name)
-                let changed: Bool = autoreleasepool { self.worker.index(ref, root: root, force: force, reuse: reuse, problem: self.publishProblem) }
+                let changed: Bool = autoreleasepool { self.worker.index(ref, root: root, force: force, reuse: reuse, share: share, problem: self.publishProblem) }
                 if changed {
                     self.worker.save(problem: self.publishProblem)
                     self.publishAll(self.worker.entries)
@@ -345,13 +356,20 @@ extension HandwritingIndex {
         }
 
         /// Reads one board if it changed (or `force`). True when its entry changed.
-        func index(_ ref: BoardRef, root: URL, force: Bool, reuse: [String: BoardEntry], problem: (String) -> Void) -> Bool {
+        func index(_ ref: BoardRef, root: URL, force: Bool, reuse: [String: BoardEntry], share: String?, problem: (String) -> Void) -> Bool {
             let url = root.appendingPathComponent(ref.path, isDirectory: true)
             guard let sig = Worker.signature(url) else {
                 // not a board (any more)
                 return entries.removeValue(forKey: ref.path) != nil
             }
+            // the handwriting read, for the laptop's search (HandwritingShare): a board read before this was shared gets its file now
+            func shareLines(_ lines: [Line]) {
+                guard let device = share else { return }
+                let hand = lines.filter { !$0.typed }.map { HandwritingShare.Line(text: $0.text, x: $0.x, y: $0.y, w: $0.w, h: $0.h) }
+                do { try HandwritingShare.write(hand, board: url, device: device) } catch { problem("Couldn't share \(ref.name)'s handwriting: \(error.localizedDescription)") }
+            }
             if !force, var e = entries[ref.path], e.signature == sig {
+                if !FileManager.default.fileExists(atPath: url.appendingPathComponent(HandwritingShare.file).path) { shareLines(e.lines) }
                 if e.name != ref.name || e.place != ref.place {
                     e.name = ref.name; e.place = ref.place; entries[ref.path] = e
                     return true
@@ -361,6 +379,7 @@ extension HandwritingIndex {
             if !force, var e = reuse[sig] {
                 e.path = ref.path; e.name = ref.name; e.place = ref.place
                 entries[ref.path] = e
+                if !FileManager.default.fileExists(atPath: url.appendingPathComponent(HandwritingShare.file).path) { shareLines(e.lines) }
                 return true
             }
             let content: BoardContent
@@ -375,6 +394,7 @@ extension HandwritingIndex {
             lines.append(contentsOf: hw.lines)
             entries[ref.path] = BoardEntry(path: ref.path, name: ref.name, place: ref.place, signature: sig, lines: lines, indexed: Date(),
                                            chunks: hw.chunks)
+            shareLines(hw.lines)
             return true
         }
 
