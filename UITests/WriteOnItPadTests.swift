@@ -37,8 +37,9 @@ final class WriteOnItPadTests: XCTestCase {
         e.tap()
     }
 
-    /// The sidebar's list (the one holding its Study row), not the first list on screen: a Study page has its own.
-    var sidebar: XCUIElement { app.collectionViews.containing(.button, identifier: "sidebar-Study").firstMatch }
+    /// The sidebar's list (labelled "Sidebar"), not the first list on screen: a Study page has its own. Not "the list holding
+    /// sidebar-Study": scrolled down to Search boards, the Study row isn't made, so that query finds nothing.
+    var sidebar: XCUIElement { app.collectionViews["Sidebar"].firstMatch }
 
     func openAcidsSheet() {
         tap("sidebar-Study", "no Study row", in: sidebar)
@@ -86,6 +87,9 @@ final class WriteOnItPadTests: XCTestCase {
         boardMs.tap()
         sleep(3)
         shot("write-board-markscheme")
+        // beside the pane the bar is tight: the Draw | Insert | View switch keeps its words (it was squeezed to letters)
+        let draw = el("board-mode-draw")
+        if draw.exists { XCTAssertGreaterThan(draw.frame.width, 40, "the Draw | Insert | View switch is squeezed beside the markscheme") }
         // with the markscheme beside, page 1's corner may be off the board: the icon moves inside the page
         let clean = el("printout-clean")
         XCTAssertTrue(clean.waitForExistence(timeout: 10), "no clean-PDF icon with the markscheme beside")

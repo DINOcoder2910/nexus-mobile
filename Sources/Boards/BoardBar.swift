@@ -29,6 +29,10 @@ final class BoardBar: UIView {
         }
     }
     private lazy var middleHeight = middleRow.heightAnchor.constraint(equalToConstant: 0)
+    /// Wide but not wide enough for everything in one top row (a board beside a second pane, the markscheme or a clean PDF):
+    /// the page and zoom pills move to the right of the row under it, so the Draw | Insert | View switch keeps its words.
+    var tight = false { didSet { if tight != oldValue { refresh() } } }
+    static let tightWidth: CGFloat = 780 // under a portrait iPad (820, 834), over a board beside a pane (about 700)
 
     weak var board: BoardController?
     var dark = false { didSet { if dark != oldValue { refresh() } } }

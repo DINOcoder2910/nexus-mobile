@@ -84,6 +84,7 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
     func layOutBar() {
         let top = view.safeAreaInsets.top
         bar.compact = view.bounds.width < BoardBar.compactWidth // a narrow screen gives the tools their own row
+        bar.tight = view.bounds.width < BoardBar.tightWidth // a pane beside: the page and zoom go down a row
         bar.frame = CGRect(x: 0, y: 0, width: view.bounds.width, height: top + bar.height)
         showBarsButton.frame = CGRect(x: view.bounds.width - view.safeAreaInsets.right - 56, y: top + 8, width: 44, height: 32)
         quickRing.isHidden = !QuickRingPrefs.on || readOnly

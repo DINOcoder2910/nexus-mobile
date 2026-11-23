@@ -119,8 +119,9 @@ extension BoardBar {
         let even = left.widthAnchor.constraint(equalTo: right.widthAnchor)
         even.priority = .init(200)
         even.isActive = true
-        // the page and zoom pills sit in the top row, so the row under it keeps its room for the tools, colours and sizes
-        if !readOnly {
+        // the page and zoom pills sit in the top row, so the row under it keeps its room for the tools, colours and sizes;
+        // when the bar is tight (a pane beside) they go to the right of the row under it instead
+        if !readOnly && !tight {
             if !b.pdfs.isEmpty {
                 pagePill.menu = b.pageMenu()
                 trail.insertArrangedSubview(pagePill, at: 0)
@@ -163,6 +164,14 @@ extension BoardBar {
             fillViewRow(b)
             toolRow.addArrangedSubview(rowScroll)
             toolRow.addArrangedSubview(spacer())
+        }
+        if tight {
+            if !b.pdfs.isEmpty {
+                pagePill.menu = b.pageMenu()
+                rightStack.addArrangedSubview(pagePill)
+            }
+            zoomPill.menu = b.zoomMenu()
+            rightStack.addArrangedSubview(zoomPill)
         }
         rightStack.addArrangedSubview(icon("chevron.up", "Fold the bar") { [weak self] in self?.setFolded(true) })
         toolRow.addArrangedSubview(rightStack)
@@ -407,6 +416,8 @@ final class ModePill: UIView {
             let b = UIButton(configuration: c, primaryAction: UIAction { [weak self] _ in self?.pick(m) })
             b.accessibilityLabel = m.title
             b.accessibilityIdentifier = "board-mode-" + m.title.lowercased()
+            // keeps its word: the board's name gives way first (Nov 23: beside the markscheme it was squeezed to letters)
+            b.setContentCompressionResistancePriority(.init(760), for: .horizontal)
             buttons.append(b)
             stack.addArrangedSubview(b)
         }
