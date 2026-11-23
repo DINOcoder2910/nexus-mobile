@@ -145,7 +145,11 @@ final class ExtrasPhoneTests: ExtrasTests {
         let mode = dark ? "dark" : "light"
         launch(["-NexusTestExtras", "-board.tool", "pen", "-board.penKind", "pen"], dark: dark)
         // the hook opens the block's Google Docs panel over the board: close it first
+        // (its look on the iPhone: the iPad's own test checks the rest of the panel)
         if el("gdocs-head").waitForExistence(timeout: 60) {
+            sleep(1)
+            shot("gdocs-\(mode)")
+            XCTAssertEqual(el("gdocs-head").label, "Redox notes", "the panel doesn't name the linked Doc")
             let done = app.navigationBars["Google Docs"].buttons["Done"].firstMatch
             if done.exists { done.tap() }
             sleep(2)
@@ -186,6 +190,9 @@ final class ExtrasPhoneTests: ExtrasTests {
         XCTAssertTrue(app.buttons["Insert space"].firstMatch.exists || app.staticTexts["Insert space"].firstMatch.exists, "+ has no Insert space")
     }
 
+    // the panel is checked and pictured by pill() on the iPhone: one launch less each
+    override func testGoogleDocsLight() {}
+    override func testGoogleDocsDark() {}
     func testPillLight() { pill(dark: false) }
     func testPillDark() { pill(dark: true) }
 }
