@@ -68,9 +68,9 @@ jobs:
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" NEXUS_BUILD="${GITHUB_SHA::7}" \
             build 2>&1 | grep -E "error:|warning: unre|BUILD|\*\*" | head -n 150
 
-      # Two downloads from the one build: the iPhone's carries the Live Activity extension (PlugIns/NexusLiveActivity.appex), which
-      # needs an App ID of its own under free signing; the iPad's (NexusMobile.ipa, the one the G14 hub fetches) leaves it out, so
-      # installing it is the same as before.
+      # Two downloads from the one build: NexusMobile-Live.ipa carries the Live Activity extension (PlugIns/NexusLiveActivity.appex),
+      # for the iPhone and the iPad, which needs an App ID of its own under free signing; NexusMobile.ipa (the one the G14 hub
+      # fetches) leaves it out, so installing it is the same as before (zsign can re-sign it with the old profile).
       - name: Package the .ipa files
         run: |
           set -e
@@ -78,17 +78,17 @@ jobs:
           test -d "$APP/PlugIns/NexusLiveActivity.appex" || { echo "the Live Activity extension isn't in the app"; ls -la "$APP"; exit 1; }
           rm -rf Payload && mkdir -p Payload
           cp -R "$APP" Payload/
-          zip -qry NexusMobile-iPhone.ipa Payload
+          zip -qry NexusMobile-Live.ipa Payload
           rm -rf Payload/NexusMobile.app/PlugIns
           zip -qry NexusMobile.ipa Payload
-          ls -la NexusMobile.ipa NexusMobile-iPhone.ipa
+          ls -la NexusMobile.ipa NexusMobile-Live.ipa
 
       - uses: actions/upload-artifact@v4
         with:
           name: NexusMobile-ipa
           path: |
             NexusMobile.ipa
-            NexusMobile-iPhone.ipa
+            NexusMobile-Live.ipa
 
   publish:
     needs: [build]
@@ -106,5 +106,5 @@ jobs:
           # each branch has its own preview (preview-<branch>), so one branch's build doesn't replace another's
           if [ "$GITHUB_REF_NAME" = "main" ]; then TAG=latest; TITLE="Latest build"; FLAG=""; else TAG="preview-${GITHUB_REF_NAME##*/}"; TITLE="Preview build ($GITHUB_REF_NAME)"; FLAG="--prerelease"; fi
           gh release delete "$TAG" --yes --cleanup-tag || true
-          gh release create "$TAG" NexusMobile.ipa NexusMobile-iPhone.ipa --title "$TITLE" $FLAG \
-            --notes "Built from ${GITHUB_SHA::7} on $GITHUB_REF_NAME. iPad: NexusMobile.ipa. iPhone: NexusMobile-iPhone.ipa (with the Lock Screen's Live Activities; one more App ID). Install with Sideloadly." --target "$GITHUB_SHA"
+          gh release create "$TAG" NexusMobile.ipa NexusMobile-Live.ipa --title "$TITLE" $FLAG \
+            --notes "Built from ${GITHUB_SHA::7} on $GITHUB_REF_NAME. NexusMobile-Live.ipa: the app with its Lock Screen Live Activity, for the iPhone and the iPad (one more App ID; Sideloadly only). NexusMobile.ipa: the same without it (the G14 hub's, and zsign's). Install with Sideloadly." --target "$GITHUB_SHA"

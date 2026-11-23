@@ -35,8 +35,10 @@ final class LiveActivities {
     static var on: Bool { UserDefaults.standard.object(forKey: settingKey) as? Bool ?? true }
     /// Settings › Lock Screen › Show my day: the card stays while nothing runs (the next task, the day's ticks).
     static var day: Bool { UserDefaults.standard.object(forKey: daySettingKey) as? Bool ?? true }
-    /// The iPhone has it; the iPad's download carries no extension (build.yml).
-    static var supported: Bool { Device.isPhone }
+    /// This install carries the extension that draws it: NexusMobile-Live.ipa does (the iPhone, and the iPad since Nov 23),
+    /// NexusMobile.ipa doesn't (build.yml).
+    static let supported: Bool = Bundle.main.builtInPlugInsURL
+        .map { FileManager.default.fileExists(atPath: $0.appendingPathComponent("NexusLiveActivity.appex").path) } ?? false
     /// iOS lets Nexus show it (Settings › Nexus › Live Activities).
     static var allowed: Bool { ActivityAuthorizationInfo().areActivitiesEnabled }
 
@@ -300,7 +302,7 @@ final class LiveActivities {
 
 }
 
-/// Settings › Lock Screen (the iPhone): the Live Activity on or off, whether it stays while nothing runs, what shows now, and how it
+/// Settings › Lock Screen (the iPhone, and the iPad with the extension): the Live Activity on or off, whether it stays while nothing runs, what shows now, and how it
 /// looks.
 struct LiveActivitySettings: View {
     @AppStorage(LiveActivities.settingKey) private var on = true
@@ -332,7 +334,7 @@ struct LiveActivitySettings: View {
                     }
                 }
             } header: { Text("Lock Screen") } footer: {
-                Text("One Nexus card on the Lock Screen and in the Dynamic Island: a recording or the running timer (with Stop and the tick), else the task up next (with Start), what comes after it, and today's ticks and time tracked. It starts while Nexus is open on this iPhone; a timer started on the laptop shows the next time you open Nexus here.")
+                Text("\(Device.isPhone ? "One Nexus card on the Lock Screen and in the Dynamic Island" : "One Nexus card on the Lock Screen"): a recording or the running timer (with Stop and the tick), else the task up next (with Start), what comes after it, and today's ticks and time tracked. It starts while Nexus is open on this \(Device.isPhone ? "iPhone" : "iPad"); a timer started on the laptop shows the next time you open Nexus here.")
             }
             .onAppear { live.apply() }
         }
@@ -354,10 +356,10 @@ struct LiveActivityPreview: View {
                             .background(LinearGradient(colors: [Color(red: 0.16, green: 0.22, blue: 0.36), Color(red: 0.38, green: 0.22, blue: 0.42)], startPoint: .topLeading, endPoint: .bottomTrailing),
                                         in: RoundedRectangle(cornerRadius: 28, style: .continuous))
                             .environment(\.colorScheme, .dark)
-                        island(x.1)
+                        if Device.isPhone { island(x.1) }
                     }
                 }
-                Text("Hold the Dynamic Island to open it: the card's rows and buttons. Tap the card to open its task, Recordings or Today.")
+                Text(Device.isPhone ? "Hold the Dynamic Island to open it: the card's rows and buttons. Tap the card to open its task, Recordings or Today." : "Tap the card to open its task, Recordings or Today; its buttons work from the Lock Screen.")
                     .font(.nx(.footnote)).foregroundStyle(.secondary)
             }
             .padding(.horizontal, 12).padding(.top, 20)
