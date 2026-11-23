@@ -178,10 +178,14 @@ final class SpanishPhoneTests: XCTestCase {
         sleep(1)
         XCTAssertTrue((el("spanish-piece").value as? String ?? "").contains("¿Qué tal todo?"), "the stem didn't go into the piece")
         shot("phone-spanish-write")
-        el("spanish-mark").tap()
+        // Mark it sits below the longer piece: lift it clear of the tab bar first (a press there lands on Today)
+        let mark = el("spanish-mark")
+        var lift = 0
+        while mark.frame.maxY > app.frame.height * 0.7 && lift < 4 { app.swipeUp(); lift += 1 }
+        mark.tap()
         XCTAssertTrue(el("spanish-grade-total").waitForExistence(timeout: 20), "the piece wasn't marked")
         XCTAssertTrue(el("spanish-graded-piece").waitForExistence(timeout: 5), "the marked piece isn't shown with its mistakes")
-        el("spanish-grade-total").swipeUp()
+        app.swipeUp()
         sleep(1)
         shot("phone-spanish-marked")
         back()
