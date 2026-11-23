@@ -14,6 +14,7 @@ struct BankTarget: Hashable, Identifiable {
 /// it hasn't sorted shows "Sort it on the laptop".
 struct BankView: View {
     @Environment(NexusStore.self) private var store
+    @Environment(\.horizontalSizeClass) private var size
     let workstreamId: String
     /// One paper only (its questions), or every paper.
     var paper: String?
@@ -139,12 +140,12 @@ struct BankView: View {
                     if paper == nil {
                         Button { openPaper = p.path } label: { Chip(text: Self.plural(p.questions, "question"), icon: "list.bullet", color: Theme.accent) }
                             .buttonStyle(.borderless)
-                            .accessibilityIdentifier("bank-paper-questions")
+                            .fixedSize().accessibilityIdentifier("bank-paper-questions")
                     }
                     if let q = p.bookmark {
                         Button { open = BankTarget(paper: p.path, q: q) } label: { Chip(text: "Go on at \(QuestionBank.qName(q))", icon: "bookmark.fill", color: Theme.accent) }
                             .buttonStyle(.borderless)
-                            .accessibilityIdentifier("bank-paper-continue")
+                            .fixedSize().accessibilityIdentifier("bank-paper-continue")
                     }
                 }
             }
@@ -174,19 +175,43 @@ struct BankView: View {
             }
             .padding(.horizontal, 10).padding(.vertical, 7)
             .background(Color(uiColor: .tertiarySystemFill), in: RoundedRectangle(cornerRadius: 9))
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    chip("Unit", $filter.unit, Self.unitOptions(b))
-                    chip("Type", $filter.type, Self.typeOptions)
-                    chip("Command", $filter.command, Self.commandOptions)
-                    chip("Marked", $filter.mark, Self.markOptions)
-                    chip("Written", $filter.written, Self.writtenOptions)
-                    chip("Difficulty", $filter.difficulty, Self.difficultyOptions)
-                    chip("From", $filter.source, Self.sourceOptions)
-                    chip("Level", $filter.level, Self.levelOptions)
+            if size == .regular {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        chip("Unit", $filter.unit, Self.unitOptions(b))
+                        chip("Type", $filter.type, Self.typeOptions)
+                        chip("Command", $filter.command, Self.commandOptions)
+                        chip("Marked", $filter.mark, Self.markOptions)
+                        chip("Written", $filter.written, Self.writtenOptions)
+                        chip("Difficulty", $filter.difficulty, Self.difficultyOptions)
+                        chip("From", $filter.source, Self.sourceOptions)
+                        chip("Level", $filter.level, Self.levelOptions)
+                    }
                 }
+            } else {
+                filterMenu(b)
             }
         }
+    }
+
+    /// The iPhone's filters: one Filter menu with each filter as a submenu (as the practice sheets have it there).
+    private func filterMenu(_ b: BankLibrary.Bank) -> some View {
+        let n = [filter.unit, filter.type, filter.command, filter.mark, filter.written, filter.difficulty, filter.source, filter.level].filter { !$0.isEmpty }.count
+        return Menu {
+            Menu("Unit") { Picker("Unit", selection: $filter.unit) { ForEach(Self.unitOptions(b), id: \.id) { Text($0.label).tag($0.id) } } }
+            Menu("Type") { Picker("Type", selection: $filter.type) { ForEach(Self.typeOptions, id: \.id) { Text($0.label).tag($0.id) } } }
+            Menu("Command") { Picker("Command", selection: $filter.command) { ForEach(Self.commandOptions, id: \.id) { Text($0.label).tag($0.id) } } }
+            Menu("Marked") { Picker("Marked", selection: $filter.mark) { ForEach(Self.markOptions, id: \.id) { Text($0.label).tag($0.id) } } }
+            Menu("Written") { Picker("Written", selection: $filter.written) { ForEach(Self.writtenOptions, id: \.id) { Text($0.label).tag($0.id) } } }
+            Menu("Difficulty") { Picker("Difficulty", selection: $filter.difficulty) { ForEach(Self.difficultyOptions, id: \.id) { Text($0.label).tag($0.id) } } }
+            Menu("From") { Picker("From", selection: $filter.source) { ForEach(Self.sourceOptions, id: \.id) { Text($0.label).tag($0.id) } } }
+            Menu("Level") { Picker("Level", selection: $filter.level) { ForEach(Self.levelOptions, id: \.id) { Text($0.label).tag($0.id) } } }
+        } label: {
+            Label(n == 0 ? "Filter" : "Filter (\(n))", systemImage: n == 0 ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+                .font(.nx(.callout, n == 0 ? .regular : .semibold))
+                .foregroundStyle(Theme.accent)
+        }
+        .accessibilityIdentifier("bank-filter")
     }
 
     typealias Options = [(id: String, label: String)]

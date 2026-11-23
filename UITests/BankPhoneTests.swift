@@ -31,7 +31,10 @@ final class BankPhoneTests: XCTestCase {
         while !e.exists && tries < 4 { list.swipeDown(); tries += 1 }
         tries = 0
         // into the top 70% of the screen, clear of the tab bar and the timer pill (docs/ci-lessons.md, Nov 22)
-        while !(e.exists && e.isHittable && e.frame.maxY < app.frame.height * 0.7) && tries < 8 { list.swipeUp(velocity: .slow); tries += 1 }
+        while !(e.exists && e.isHittable && e.frame.maxY < app.frame.height * 0.7) && tries < 8 {
+            if e.exists && e.frame.maxY < list.frame.minY + 100 { list.swipeDown(velocity: .slow) } else { list.swipeUp(velocity: .slow) }
+            tries += 1
+        }
         XCTAssertTrue(e.waitForExistence(timeout: 5), why)
         e.tap()
     }
