@@ -110,8 +110,9 @@ class WorkstreamsAndPlannerTests: XCTestCase {
         el("week-next").tap()
         sleep(1)
         XCTAssertNotEqual(el("week-range").label, before, "› didn't move the Month")
-        app.buttons["Today"].firstMatch.tap()
+        el("week-today").tap()
         sleep(1)
+        XCTAssertTrue(el("planner").exists, "Today left the Planner")
 
         span("Week")
         XCTAssertEqual(count("day-head"), 7, "Week isn't seven days")
@@ -192,7 +193,7 @@ class WorkstreamsAndPlannerTests: XCTestCase {
         let old = (field.value as? String) ?? ""
         if !old.isEmpty && old != field.placeholderValue { field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: old.count + 2)) }
         field.typeText(text)
-        alert.buttons[button].tap()
+        alert.buttons[button].firstMatch.tap()
         sleep(2)
     }
 

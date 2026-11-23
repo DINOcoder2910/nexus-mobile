@@ -112,6 +112,7 @@ struct PlannerView: View {
                         .accessibilityIdentifier("week-prev")
                     Button("Today") { withAnimation(Kit.spring) { start = nil } }
                         .font(.nx(.subheadline, .medium)).lineLimit(1).fixedSize().padding(.horizontal, 6)
+                        .accessibilityIdentifier("week-today")
                     Button { withAnimation(Kit.spring) { step(1) } } label: { Image(systemName: "chevron.right").frame(width: 30, height: 30) }
                         .accessibilityLabel("Later")
                         .accessibilityIdentifier("week-next")
