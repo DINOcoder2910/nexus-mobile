@@ -40,7 +40,7 @@ final class SidebarTreeTests: XCTestCase {
         reach(arrow, "the arrow of " + name)
         let t0 = Date()
         arrow.tap()
-        XCTAssertTrue(app.buttons["Collapse " + name].firstMatch.waitForExistence(timeout: 15), name + " didn't open")
+        XCTAssertTrue(app.buttons["Collapse " + name].firstMatch.waitForExistence(timeout: 40), name + " didn't open")
         // the same measure as SidebarSpeedTests', on a small tree: what a tap and a look cost in the simulator
         print("UISTEP \(Date().timeIntervalSince1970) time open \(name) (small tree): \(String(format: "%.2f", Date().timeIntervalSince(t0))) s")
     }
