@@ -123,8 +123,9 @@ final class BankPhoneTests: XCTestCase {
         XCTAssertTrue(added.waitForExistence(timeout: 10),
                       "no word that the question went into the bank (the toast: \(toast.exists ? toast.label : "none"))")
         shot("phone-bank-marked-on-board")
-        let close = app.navigationBars.buttons["Close"].firstMatch
-        if close.waitForExistence(timeout: 5) { close.tap() }
+        // the board's own back button (BoardBar: "Close the board"); there is no navigation bar Close over a board
+        let close = app.buttons["Close the board"].firstMatch
+        XCTAssertTrue(close.waitForExistence(timeout: 5), "the board has no Close the board"); close.tap()
         XCTAssertTrue(el("bq-count").waitForExistence(timeout: 15), "closing the board didn't come back to the question")
         sleep(1)
         shot("phone-bank-back-to-question")

@@ -133,8 +133,9 @@ final class BankTests: XCTestCase {
         shot("pad-bank-marked-on-board")
 
         // back from the board to the question
-        let close = app.navigationBars.buttons["Close"].firstMatch
-        if close.waitForExistence(timeout: 5) { close.tap() }
+        // the board's own back button (BoardBar: "Close the board"); there is no navigation bar Close over a board
+        let close = app.buttons["Close the board"].firstMatch
+        XCTAssertTrue(close.waitForExistence(timeout: 5), "the board has no Close the board"); close.tap()
         XCTAssertTrue(el("bq-count").waitForExistence(timeout: 15), "closing the board didn't come back to the question")
         sleep(2)
         shot("pad-bank-back-to-question")
