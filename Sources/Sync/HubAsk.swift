@@ -30,7 +30,8 @@ enum HubAsk {
         c?.path = route.hasPrefix("/") ? route : "/" + route
         if !query.isEmpty { c?.queryItems = query.map { URLQueryItem(name: $0.0, value: $0.1) } }
         // a + in a path must reach the hub as itself, not as a space
-        c?.percentEncodedQuery = c?.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
+        let encoded = c?.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
+        c?.percentEncodedQuery = encoded
         guard let url = c?.url else { throw Failure(kind: "hub", words: "That isn't a request the hub can take.") }
         var r = URLRequest(url: url)
         r.httpMethod = method
