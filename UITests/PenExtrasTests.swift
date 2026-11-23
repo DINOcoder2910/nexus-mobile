@@ -149,6 +149,23 @@ final class PenExtrasTests: XCTestCase {
         line(0.8)
         XCTAssertEqual(toolWidth() ?? 0, before, accuracy: 0.05, "Reset sizes should put Thick back")
 
+        // Insert › New page: an empty board beside this one, opened in its place. The lasso part runs there: this board is
+        // shared by every run on the simulator, so an earlier run's blue line would sit under the box too (Nov 23, ci-lessons).
+        tap(until: { self.button("New page").exists }) { self.button("Insert") }
+        let page = button("New page")
+        XCTAssertTrue(page.waitForExistence(timeout: 5), "no New page in Insert")
+        if !dark { shot("extras-insert-row") }
+        page.tap()
+        let title = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Untitled'")).firstMatch
+        XCTAssertTrue(title.waitForExistence(timeout: 15), "the new page didn't open")
+        sleep(2)
+        if !dark { shot("extras-new-page") }
+        hideSidebar()
+        tap(until: { self.button("Select").exists }) { self.button("Draw") }
+        tap(until: { self.button("Pen").isSelected }) { self.button("Pen") }
+        pick(colour: 1, width: "Fine")
+        line(0.45)
+
         // the Select tool: drag over the blue line (its box), then a colour and a size change it, with Undo
         tap(until: { self.button("Select").isSelected }) { self.button("Select") }
         let from = board().coordinate(withNormalizedOffset: CGVector(dx: 0.36, dy: 0.41))
@@ -172,18 +189,6 @@ final class PenExtrasTests: XCTestCase {
         sleep(1)
         shot("extras-lasso-undone-\(theme)")
 
-        // Insert › New page: an empty board beside this one, opened in its place
-        if !dark {
-            tap(until: { self.button("New page").exists }) { self.button("Insert") }
-            let page = button("New page")
-            XCTAssertTrue(page.waitForExistence(timeout: 5), "no New page in Insert")
-            shot("extras-insert-row")
-            page.tap()
-            let title = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Untitled'")).firstMatch
-            XCTAssertTrue(title.waitForExistence(timeout: 15), "the new page didn't open")
-            sleep(2)
-            shot("extras-new-page")
-        }
         app.terminate()
     }
 

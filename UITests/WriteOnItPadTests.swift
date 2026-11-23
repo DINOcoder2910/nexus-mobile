@@ -37,8 +37,11 @@ final class WriteOnItPadTests: XCTestCase {
         e.tap()
     }
 
+    /// The sidebar's list (the one holding its Study row), not the first list on screen: a Study page has its own.
+    var sidebar: XCUIElement { app.collectionViews.containing(.button, identifier: "sidebar-Study").firstMatch }
+
     func openAcidsSheet() {
-        tap("sidebar-Study", "no Study row")
+        tap("sidebar-Study", "no Study row", in: sidebar)
         sleep(2)
         tap("study-page-chemistry-hl", "no Study page row for Chemistry HL", in: app.collectionViews.element(boundBy: 1))
         let search = el("study-sheets-search")
@@ -101,7 +104,7 @@ final class WriteOnItPadTests: XCTestCase {
         shot("write-sheet-row-after")
 
         // search finds a PDF by its name, and opens it on its page
-        tap("sidebar-Search boards", "no Search boards row")
+        tap("sidebar-Search boards", "no Search boards row", in: sidebar)
         let field = app.searchFields.firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 10), "no search field")
         field.tap()
