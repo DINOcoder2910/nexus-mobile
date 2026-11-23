@@ -498,7 +498,8 @@ public enum QuestionBank {
         }
         if !f.type.isEmpty && r.type != f.type { return false }
         if !f.command.isEmpty && r.command != f.command { return false }
-        if !f.level.isEmpty && r.facts["level"]?.string != f.level { return false }
+        // a question's own level (a textbook's SL and HL blocks) over its paper's, as the laptop's bank.rs keep()
+        if !f.level.isEmpty && (r.sort["level"]?.string ?? r.facts["level"]?.string) != f.level { return false }
         switch f.mark {
         case "": break
         case "none": if r.mark != nil { return false }

@@ -252,6 +252,12 @@ struct BankQuestionView: View {
     }
 
     private func lookUpMarkscheme() async {
+        // a question imported with its answers' place (a textbook's answers pages: ms {page, y, path?}) has it stored, as on the laptop
+        if let m = lib.bank(workstreamId)?.questions[paper]?.merged(q)?["ms"], let page = m["page"]?.number, let y = m["y"]?.number {
+            ms = BankPdf.Spot(path: m["path"]?.string ?? paper, q: nil, page: Int(page), y: y)
+            msLooked = true
+            return
+        }
         guard paper.lowercased().hasSuffix(".pdf") else { msLooked = true; return }
         let root = store.folder, paper = paper, q = q
         let msPath = lib.bank(workstreamId)?.papers.first { $0.path == paper }?.markscheme

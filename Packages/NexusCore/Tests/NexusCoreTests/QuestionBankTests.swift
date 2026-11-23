@@ -268,6 +268,12 @@ final class QuestionBankTests: XCTestCase {
         var p = r
         p.sort = p.sort.setting("topics", .array([.string("A.1")]))
         XCTAssertTrue(QuestionBank.keep(p, f { $0.unit = "A" }))
+        // a textbook's question carries its own level, which counts over its paper's (the laptop's bank.rs, Nov 23)
+        var t = p
+        t.facts = .object([("kind", .string("textbook"))])
+        t.sort = t.sort.setting("level", .string("SL"))
+        XCTAssertTrue(QuestionBank.keep(t, f { $0.level = "SL" }))
+        XCTAssertFalse(QuestionBank.keep(t, f { $0.level = "HL" }))
         XCTAssertEqual(r.meta, "R1.2 · Short answer · Calculate · medium")
     }
 
