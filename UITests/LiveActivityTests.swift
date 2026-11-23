@@ -67,6 +67,12 @@ final class LiveActivityTests: XCTestCase {
         XCTAssertTrue(app.otherElements["live-preview-lock"].firstMatch.waitForExistence(timeout: 10), "See how it looks didn't open")
         sleep(1)
         shot("live-ipad-2-preview")
+        // back to Settings: the preview's example cards carry "Stop the timer" buttons of their own, which the pill check below
+        // would find (Nov 23, 4f15af9: the Lock Screen's Stop had worked)
+        let bar = app.navigationBars["Live Activity"].firstMatch
+        if bar.exists { bar.buttons.element(boundBy: 0).tap() }
+        let closed = XCTWaiter().wait(for: [expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: app.otherElements["live-preview-lock"].firstMatch)], timeout: 10)
+        XCTAssertEqual(closed, .completed, "See how it looks didn't close")
 
         // the Lock Screen's cards (Notification Centre, pulled down from the top)
         XCUIDevice.shared.press(.home)
