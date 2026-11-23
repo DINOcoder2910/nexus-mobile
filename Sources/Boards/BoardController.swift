@@ -361,6 +361,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
                 let md = content.texts[shownKey(it.id)] ?? ""
                 v.update(md: md, item: it)
                 v.marked = markedRanges(it.id)
+                v.spanish = spanishMarks(it, md)
                 v.setRenderScale(canvas.zoomScale)
                 textSizes[it.id] = v.frame.size
                 v.frame.origin = CGPoint(x: it.x + offset.x, y: it.y + offset.y)
