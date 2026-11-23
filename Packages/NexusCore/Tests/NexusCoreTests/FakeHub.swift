@@ -30,6 +30,18 @@ final class FakeHub: SyncTransport, @unchecked Sendable {
     var puts: [String] = []
     var deletes: [String] = []
     var downloads: [String] = []
+    /// The v2 features hello names (the Rust hub's `ops`, `feed`); empty: the Node hub's hello.
+    var features: [String] = []
+    /// The op id each write carried, in order (nil: none).
+    var opsSeen: [String?] = []
+    /// Answers already given, by op id (a hub with `ops` gives the same one again).
+    var answered: [String: PutResult] = [:]
+    var answeredDeletes: [String: DeleteResult] = [:]
+    /// The next write is done, but its answer is lost on the way back (the client sees it offline).
+    var loseNextAnswer = false
+    /// The open feeds: each change is written to them.
+    private var feeds: [AsyncThrowingStream<HubFeedEvent, Error>.Continuation] = []
+    var feedsOpened = 0
 
     func resetCounts() {
         puts = []
@@ -48,6 +60,7 @@ final class FakeHub: SyncTransport, @unchecked Sendable {
         files[path] = nil
         seq += 1
         log[path] = Entry(hash: nil, size: nil, deleted: true, seq: seq, device: device)
+        tellFeeds()
     }
 
     func text(_ path: String) -> String? { files[path].map { String(decoding: $0, as: UTF8.self) } }
@@ -59,7 +72,18 @@ final class FakeHub: SyncTransport, @unchecked Sendable {
         blobs[h] = d
         seq += 1
         log[path] = Entry(hash: h, size: Int64(d.count), deleted: false, seq: seq, device: device)
+        tellFeeds()
         return h
+    }
+
+    private func tellFeeds() {
+        for f in feeds { f.yield(.changes(folderId: folderId, seq: seq)) }
+    }
+
+    /// The answer of a write the hub did, unless it is lost on the way back.
+    private func deliver<T>(_ t: T) throws -> T {
+        if loseNextAnswer { loseNextAnswer = false; throw SyncError.offline("The answer was lost.") }
+        return t
     }
 
     private func online() throws {
@@ -70,7 +94,24 @@ final class FakeHub: SyncTransport, @unchecked Sendable {
 
     func hello() async throws -> HubHello {
         try online()
-        return HubHello(hub: "nexus-hub", protocolVersion: 1, folderId: folderId, seq: seq)
+        return HubHello(hub: "nexus-hub", protocolVersion: 1, folderId: folderId, seq: seq,
+                        v2: features.isEmpty ? nil : HubV2(features: features, hub: .init(impl: "rust", version: "0.1.0", build: "test")))
+    }
+
+    func feed(since: Int, psig: String) -> AsyncThrowingStream<HubFeedEvent, Error> {
+        AsyncThrowingStream { c in
+            if offline { c.finish(throwing: SyncError.offline("The fake hub is offline.")); return }
+            guard features.contains("feed") else { c.finish(throwing: SyncError.notFound); return }
+            feedsOpened += 1
+            c.yield(.changes(folderId: folderId, seq: seq))
+            feeds.append(c)
+        }
+    }
+
+    /// The hub closes every open feed (as the real one does every 10 minutes).
+    func closeFeeds() {
+        for f in feeds { f.finish() }
+        feeds = []
     }
 
     func changes(since: Int, wait: Int?) async throws -> HubChanges {
@@ -90,7 +131,25 @@ final class FakeHub: SyncTransport, @unchecked Sendable {
         return SyncHash.data(d)
     }
 
-    func put(path: String, base: String?, body: SyncBody, hash: String) async throws -> PutResult {
+    func put(path: String, base: String?, body: SyncBody, hash: String, op: String?) async throws -> PutResult {
+        try online()
+        opsSeen.append(op)
+        if let op, features.contains("ops"), let first = answered[op] { return try deliver(first) }
+        let r = try doPut(path: path, base: base, body: body, hash: hash)
+        if let op, features.contains("ops") { answered[op] = r }
+        return try deliver(r)
+    }
+
+    func delete(path: String, base: String, op: String?) async throws -> DeleteResult {
+        try online()
+        opsSeen.append(op)
+        if let op, features.contains("ops"), let first = answeredDeletes[op] { return try deliver(first) }
+        let r = try doDelete(path: path, base: base)
+        if let op, features.contains("ops") { answeredDeletes[op] = r }
+        return try deliver(r)
+    }
+
+    private func doPut(path: String, base: String?, body: SyncBody, hash: String) throws -> PutResult {
         try online()
         let d: Data
         switch body {
@@ -120,7 +179,7 @@ final class FakeHub: SyncTransport, @unchecked Sendable {
         return PutResult(result: "conflict", hash: liveHash, seq: seq, conflictPath: cp)
     }
 
-    func delete(path: String, base: String) async throws -> DeleteResult {
+    private func doDelete(path: String, base: String) throws -> DeleteResult {
         try online()
         deletes.append(path)
         guard let live = files[path] else { return DeleteResult(result: "ok", seq: seq) }
