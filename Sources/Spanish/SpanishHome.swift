@@ -78,9 +78,9 @@ struct SpanishHomeContent: View {
                 }
                 .frame(maxWidth: .infinity)
                 VStack(alignment: .leading, spacing: 20) {
-                    card { oral }
                     card { writing }
                     card { skills }
+                    card { oral }
                 }
                 .frame(width: twoColumns ? 360 : nil)
                 .frame(maxWidth: twoColumns ? nil : .infinity)
