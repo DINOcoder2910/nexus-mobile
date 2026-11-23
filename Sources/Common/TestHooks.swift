@@ -236,8 +236,9 @@ enum TestHooks {
 
     /// `-NexusTestDayOrder`: sample data, then today's order as if dragged on the laptop (`nexus-day-order.yaml`): "Try the iPad
     /// planner" before "Redox worksheet", against their file order (UITests/DayOrderTests).
-    /// `-NexusTestDayEdges`: sample data, then a task tonight at 21:30 for 3 hours (past the day's 10 pm line) and five tasks crowded
-    /// into tomorrow morning, so the day's hours must reach midnight and Tomorrow's strip labels must not overlap (UITests/TodayEdgesTests).
+    /// `-NexusTestDayEdges`: sample data, then a task tonight at 21:30 for 3 hours (past the day's 10 pm line), five tasks crowded
+    /// into tomorrow morning and one alone in the evening, so the day's hours must reach midnight, Tomorrow's strip labels must not
+    /// overlap, and a label with room must still show (UITests/TodayEdgesTests).
     static func dayEdges(_ store: NexusStore) {
         if !store.snapshot.isDataFolder { store.makeSample() }
         let tomorrow = Days.add(store.today, 1)
@@ -248,6 +249,7 @@ enum TestHooks {
             ("Advisory form", tomorrow, "11:30", "30m"),
             ("Flex reading", tomorrow, "12:00", "45m"),
             ("MathAA problem set", tomorrow, "13:00", "1h"),
+            ("Evening run", tomorrow, "19:00", "1h"),
         ]
         for (title, day, time, est) in adds where !store.snapshot.tasks.values.contains(where: { $0.text == title }) {
             _ = store.add(title: title, workstream: "physics-hl", plan: [PlanEntry(day: day, time: time)], est: est)

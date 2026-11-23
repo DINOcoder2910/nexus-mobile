@@ -269,6 +269,10 @@ final class NexusStore {
     func delete(_ t: NexusTask) { perform { try $0.delete(t, in: $1) } }
     /// Moves a task with its subtasks to another subject's list (nil: the Inbox): the task panel's subject menu.
     func moveTask(_ t: NexusTask, to workstream: String?) { perform { try $0.moveTask(t, to: workstream, in: $1) } }
+    /// The checklist's moves: under the one above, back out after its parent, up or down among the ones beside it.
+    func nest(_ t: NexusTask) { perform { try $0.nest(t, in: $1) } }
+    func unnest(_ t: NexusTask) { perform { try $0.unnest(t, in: $1) } }
+    func shift(_ t: NexusTask, by step: Int) { perform { try $0.shift(t, by: step, in: $1) } }
 
     /// Adds a task to a workstream (nil = the Inbox) or under `parent`. Returns its id. `extras` (a typed repeat, waiting on, #tags)
     /// are written straight after, in the same Undo.

@@ -251,6 +251,8 @@ struct RootView: View {
         // the quick page (the Action button), over everything; recording shows its bar on every screen
         .fullScreenCover(isPresented: $quickOpen) { QuickPage(close: { quickOpen = false }).environment(store).recordingCovers(pill: false) }
         .recordingCovers(pill: !Device.isPhone && screen != .recordings)
+        // the UI check's Spanish demo, with the folder (here, not in the sidebar: the iPhone shows its sidebar only under More)
+        .task(id: store.snapshot.loadedAt) { SpanishDemo.prepare(store) }
         .task {
             AppServices.start()
             if router.front == nil { router.front = windowId }
