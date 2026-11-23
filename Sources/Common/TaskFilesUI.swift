@@ -26,19 +26,56 @@ extension NexusStore {
         })
     }
 
-    /// Write on it: the PDF's board beside it (`<name>.board`, its pages down the board as a printout of the PDF where it is,
-    /// as the laptop keeps a PDF's writing), made the first time, then opened.
-    func writeOn(pdf path: String) {
+    /// The board a PDF is written on, as the laptop finds it (nexus board.rs `board_for`): the paper's board in its subject's
+    /// notebook (Papers › its unit folder), then a board there that holds it, then the old board beside it. Nil: none yet.
+    func boardFor(pdf path: String) -> String? {
+        let fm = FileManager.default
+        func exists(_ b: String) -> Bool { fm.fileExists(atPath: folder.appendingPathComponent(b + "/board.json").path) }
+        if let p = papersBoard(pdf: path), exists(p.board) { return p.board }
+        if let w = subject(of: path) {
+            let nbs = BankBoards.subjectNotebooks(root: folder, subject: w.id).filter { $0.subject == w.id }
+            if let b = BankBoards.boardsWith(root: folder, pdf: path, notebooks: nbs, folder: w.folder).first { return b }
+        }
+        let beside = QuestionBank.besideBoard(path)
+        return exists(beside) ? beside : nil
+    }
+
+    /// The workstream whose folder holds a path (the deepest).
+    func subject(of path: String) -> Workstream? {
+        snapshot.groups.flatMap { snapshot.workstreams(in: $0) }
+            .filter { !$0.folder.isEmpty && (path == $0.folder || path.hasPrefix($0.folder + "/")) }
+            .max { $0.folder.count < $1.folder.count }
+    }
+
+    /// Where a PDF of a subject gets its board: the subject's notebook › Papers › the unit folder it sits in under the sheets folder.
+    func papersBoard(pdf path: String) -> (board: String, subject: Workstream)? {
+        guard let w = subject(of: path) else { return nil }
+        let cfg = StudyUnits.parseConfig(try? FolderAccess.read(folder.appendingPathComponent(StudyFolder.studyPath(w) + "/study.yaml")))
+        let nb = QuestionBank.subjectNotebook(BankBoards.subjectNotebooks(root: folder, subject: w.id), subject: w.id, name: w.name)
+        return (QuestionBank.papersBoard(pdf: path, sheetsRoot: w.folder + "/" + cfg.sheets, notebook: nb), w)
+    }
+
+    /// Write on it: the PDF's board (`boardFor`), made the first time with the PDF as its printout: in a subject, in the subject's
+    /// notebook › Papers (the notebook made and filed under the subject when it has none), else beside the PDF. Then opened.
+    func writeOn(pdf path: String, focus: CGRect? = nil) {
         let name = (path as NSString).lastPathComponent
-        let dir = (path as NSString).deletingLastPathComponent
-        let rel = (dir.isEmpty ? "" : dir + "/") + (name as NSString).deletingPathExtension + ".board"
-        let board = folder.appendingPathComponent(rel, isDirectory: true)
-        if !FileManager.default.fileExists(atPath: board.appendingPathComponent("board.json").path) {
+        var rel = boardFor(pdf: path) ?? ""
+        if rel.isEmpty {
+            let paper = papersBoard(pdf: path)
+            rel = paper?.board ?? QuestionBank.besideBoard(path)
+            let board = folder.appendingPathComponent(rel, isDirectory: true)
             do {
+                if let w = paper?.subject, let nb = rel.hasPrefix("notebooks/") ? rel.split(separator: "/").dropFirst().first.map(String.init) : nil {
+                    let meta = folder.appendingPathComponent("notebooks/\(nb)/notebook.json")
+                    if !FileManager.default.fileExists(atPath: meta.path) {
+                        try FolderAccess.write(meta, JSONValue.object([("format", .string("nexus-notebook/1")), ("subject", .string(w.id))]).text + "\n")
+                    }
+                }
                 try FolderAccess.write(board.appendingPathComponent("board.json"), BoardFormat.boardJSON())
                 var c = BoardContent()
-                c.items = [BoardItem(id: "pdf1", type: "pdf", x: 60, y: 60, fields: [
-                    ("src", .string("../" + name)), ("w", .number(BoardFormat.pdfWidth)), ("gap", .number(BoardFormat.pdfGap)),
+                let src = paper == nil ? "../" + name : QuestionBank.relTo(board: rel, path)
+                c.items = [BoardItem(id: "pdf1", type: "pdf", x: paper == nil ? 60 : 0, y: paper == nil ? 60 : 0, fields: [
+                    ("src", .string(src)), ("w", .number(BoardFormat.pdfWidth)), ("gap", .number(BoardFormat.pdfGap)),
                 ])]
                 _ = try BoardFiles.save(c, to: board, write: { u, t in try FolderAccess.write(u, t) })
                 boardsChanged(listChanged: true)
@@ -50,9 +87,9 @@ extension NexusStore {
         // from the task panel: the panel goes first, then the board opens
         if openTaskId != nil {
             openTaskId = nil
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [self] in openBoard = .init(path: rel, focus: nil) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [self] in openBoard = .init(path: rel, focus: focus) }
         } else {
-            openBoard = .init(path: rel, focus: nil)
+            openBoard = .init(path: rel, focus: focus)
         }
     }
 }

@@ -12,7 +12,7 @@ enum BarMode: Int, CaseIterable {
 /// - **open (A)**: the top row has the way back, the board's name, the Draw | Insert | View switch in the middle, the page and
 ///   zoom pills, undo, redo and the board's buttons; the row under it holds the switch's choice. Draw: the tools, every colour and
 ///   every size, always in view for one-tap switching, the tool's own options, the picked item's actions, and ︿ to fold.
-///   Insert: text, a picture, a PDF printout, a scan, shapes, Insert space, a tool card. View: the background, dark board,
+///   Insert: text, a picture, a PDF printout, a scan, shapes, Insert space, a tool card, Mark as question. View: the background, dark board,
 ///   fingers, the ruler, the quick ring, contents, hiding the bars.
 /// - **folded (B)**: one bar: "Draw ▾" (its menu switches to Insert or View, which opens the bar again), the tools, the first four
 ///   colours and two sizes, undo, redo, ⋯ and ﹀. The rest of the colours and sizes are a tap on ﹀ away. Swipe the bar up to
@@ -320,6 +320,10 @@ extension BoardBar {
             b?.bar.setMode(.draw)
         })!)
         rowStack.addArrangedSubview(rowButton(UIAction(title: "Tool card", image: UIImage(systemName: "square.grid.2x2")) { [weak b] _ in b?.toggleToolPanel() })!)
+        // the question bank (BoardController+Question.swift): box a question to put it in the subject's bank
+        let mark = rowButton(UIAction(title: "Mark as question", image: UIImage(systemName: "list.number")) { [weak b] _ in b?.markQuestion() })!
+        mark.accessibilityIdentifier = "insert-question"
+        rowStack.addArrangedSubview(mark)
     }
 
     func fillViewRow(_ b: BoardController) {

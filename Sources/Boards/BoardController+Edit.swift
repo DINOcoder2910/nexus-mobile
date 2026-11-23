@@ -275,6 +275,8 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
         if ScanCamera.isSupported { // HandoutScan.swift
             items.append(UIAction(title: "Scan a handout…", image: UIImage(systemName: "doc.viewfinder")) { [weak self] _ in self?.scanHandout() })
         }
+        // the question bank (BoardController+Question.swift), as on the iPad's Insert row
+        items.append(UIAction(title: "Mark as question", image: UIImage(systemName: "list.number")) { [weak self] _ in self?.markQuestion() })
         return UIMenu(children: items + [shapes])
     }
 

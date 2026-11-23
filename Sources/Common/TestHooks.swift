@@ -14,6 +14,7 @@ enum TestHooks {
         if ProcessInfo.processInfo.arguments.contains("-NexusTestTime") { timeSessions(store); return }
         if ProcessInfo.processInfo.arguments.contains("-NexusTestDayOrder") { dayOrder(store); return }
         if ProcessInfo.processInfo.arguments.contains("-NexusTestDayEdges") { dayEdges(store); return }
+        if ProcessInfo.processInfo.arguments.contains("-NexusTestBank") { questionBank(store); return }
         guard ProcessInfo.processInfo.arguments.contains("-NexusTestPdfBoard") else { return }
         if !store.snapshot.isDataFolder { store.makeSample() }
         sharedPens(store)
@@ -264,6 +265,81 @@ enum TestHooks {
         for (title, day, time, est) in adds where !store.snapshot.tasks.values.contains(where: { $0.text == title }) {
             _ = store.add(title: title, workstream: "physics-hl", plan: [PlanEntry(day: day, time: time)], est: est)
         }
+    }
+
+    /// `-NexusTestBank`: sample data, then Chemistry HL's question bank as the laptop leaves it (UITests/BankTests, BankPhoneTests): three
+    /// sample papers sorted (`study/questions.yaml`, written fresh at each launch), a mark, Review later, a pin and a bookmark
+    /// (`study/question-marks.yaml`), and the Acids paper's board in a notebook filed under the subject (notebook.json), with
+    /// writing under question 2. The notebook is "Bank check", never a "Chemistry" one (SidebarTreeTests expects none at the top).
+    static func questionBank(_ store: NexusStore) {
+        if !store.snapshot.isDataFolder { store.makeSample() }
+        let chem = "classes/chemistry-hl", sheets = chem + "/files/Sheets"
+        let acids = sheets + "/08 Reactivity 3 — Acids and bases/Acids — Paper 2 structured, 40 mk [2025]/Acids paper 2.pdf"
+        let atomic = sheets + "/01 Structure 1 — Models of matter/Mole & Atomic Structure — HL test, 40 mk, 60 min [pre-2025]/Atomic structure test.pdf"
+        let energetics = sheets + "/05 Reactivity 1 — Energetics/Energetics — HL test, 30 mk, no MS [2025]/Energetics test.pdf"
+        func j(_ s: String) -> String { JSONValue.string(s).text }
+        // where the sample PDFs' lines are (SampleFolder.pdf: 18 pt title at 770, then a line every 26 pt on a 842 pt page)
+        let one = #"{"page":0,"y":0.1057}"#, two = #"{"page":0,"y":0.1366}"#, end = #"{"page":0,"y":1.0}"#
+        let questions = """
+        # Written by Nexus (Study › Question bank): each question of your papers, sorted once per paper.
+        # facts = the paper's year, session, paper and level; questions = the sort (by the decision model or Claude, with how sure);
+        # mine = what you changed by hand, which a new sort never overwrites.
+        papers:
+          \(j(acids)):
+            facts: {"year":2025,"session":"May","paper":"2","level":"HL","sorted":"2026-11-22","by":"decider+claude"}
+            questions:
+              "1": {"topics":["R3.1"],"type":"short","difficulty":3.0,"marks":1,"command":"calculate","sure":0.93,"by":"decider","from":\(one),"to":\(two)}
+              "2": {"topics":["R3.1"],"type":"structured","difficulty":5.5,"marks":2,"command":"explain","by":"claude","model":{"topics":["R3.2"],"sure":0.41},"from":\(two),"to":\(end)}
+          \(j(atomic)):
+            facts: {"year":2023,"session":"November","paper":"2","level":"HL","sorted":"2026-11-21","by":"decider"}
+            questions:
+              "1": {"topics":["S1.4"],"type":"short","difficulty":2.0,"marks":2,"command":"calculate","sure":0.97,"by":"decider","from":\(one),"to":\(two)}
+              "2": {"topics":["S1.3"],"type":"short","difficulty":4.0,"marks":1,"command":"state","sure":0.88,"by":"decider","from":\(two),"to":\(end)}
+          \(j(energetics)):
+            facts: {"level":"HL","sorted":"2026-11-22","by":"decider"}
+            questions:
+              "1": {"topics":["R1.1"],"type":"short","difficulty":3.5,"marks":2,"command":"define","sure":0.9,"by":"decider","from":\(one),"to":\(two)}
+              "2": {"topics":["R1.2"],"type":"data","difficulty":7.0,"marks":4,"command":"draw","sure":0.86,"by":"decider","from":\(two),"to":\(end)}
+            mine:
+              "2": {"type":"structured"}
+
+        """
+        let marks = """
+        # Written by Nexus (Study › Question bank): your marks on questions ("<paper>#<question>": done, hard or review),
+        # the sheets you pinned as Working on, and where you stopped on each (bookmarks). One line each.
+        marks:
+          \(j(atomic + "#1")): {"mark":"done","at":"\(Days.add(Days.today(), -1))"}
+          \(j(energetics + "#2")): {"mark":"review","at":"\(Days.today())"}
+        pins:
+          \(j(acids)): "\(Days.today())"
+        bookmarks:
+          \(j(acids)): "2"
+
+        """
+        try? FolderAccess.write(store.folder.appendingPathComponent(chem + "/study/questions.yaml"), questions)
+        try? FolderAccess.write(store.folder.appendingPathComponent(chem + "/study/question-marks.yaml"), marks)
+        // the Acids paper's board, as the laptop's Write on it makes it, with an answer written under question 2
+        let nb = "notebooks/Bank check"
+        let rel = nb + "/Papers/08 Reactivity 3 — Acids and bases/Acids paper 2.board"
+        let board = store.folder.appendingPathComponent(rel, isDirectory: true)
+        try? FolderAccess.write(store.folder.appendingPathComponent(nb + "/notebook.json"), #"{"format":"nexus-notebook/1","subject":"chemistry-hl"}"# + "\n")
+        guard !FileManager.default.fileExists(atPath: board.appendingPathComponent("board.json").path) else { store.didWrite(listChanged: true); return }
+        try? FolderAccess.write(board.appendingPathComponent("board.json"), BoardFormat.boardJSON())
+        var c = BoardContent()
+        c.items = [BoardItem(id: "pdf1", type: "pdf", x: 0, y: 0, fields: [
+            ("src", .string(QuestionBank.relTo(board: rel, acids))), ("w", .number(BoardFormat.pdfWidth)), ("gap", .number(BoardFormat.pdfGap)),
+        ])]
+        // three lines of handwriting under question 2 (page y 0.15 to 0.25 of an 820-wide page)
+        for (k, y) in [205.0, 245.0, 285.0].enumerated() {
+            var pts: [[Double]] = []
+            for i in 0..<60 {
+                let x = 90 + Double(i) * 7
+                pts.append([x, y + sin(Double(i) * 0.9) * 9, 1, 0, Double.pi / 2, Double(i) * 0.01, 2.2, 2.2, 1])
+            }
+            c.strokes.append(BoardStroke(id: "bank\(k)", ink: "com.apple.ink.pen", color: "#1F3A93FF", points: pts))
+        }
+        _ = try? BoardFiles.save(c, to: board, write: { u, t in try FolderAccess.write(u, t) })
+        store.boardsChanged(listChanged: true)
     }
 
     static func dayOrder(_ store: NexusStore) {
