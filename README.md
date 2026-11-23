@@ -79,6 +79,8 @@ There is no Mac in the loop: every push builds on a GitHub-hosted Mac (`.github/
 - Push in batches rather than commit by commit: each push to a branch cancels that branch's older runs, but they've often already held a Mac.
 - Don't add `pull_request` triggers: the builds run on pushes, and the repo is public.
 
+**The shared Rust core.** NexusCore links the laptop's Rust core (nexus `core/`, through UniFFI) as a built static library, `Packages/NexusCore/Rust/NexusCoreFFI.xcframework`, with its Swift in `Packages/NexusCore/Sources/NexusRust`. Only the built library is here (nexus is private): `sh tools/rust-core/copy.sh ../nexus` rebuilds it from a nexus checkout (Linux or a Mac with rustup, about 2 minutes) and copies the shared cases with it. CI uses it as committed, so the Mac jobs do no Rust. Today the tutor reads its replies, checks its drawing steps and takes its drawing guide from the core, and Check my maths is the core's; `SharedCasesTests` runs every shared case through both NexusCore's Swift and the core.
+
 Every CI or build failure on the iPad or iPhone gets its cause and fix written in [docs/ci-lessons.md](docs/ci-lessons.md); read it before pushing.
 
 ## Installing

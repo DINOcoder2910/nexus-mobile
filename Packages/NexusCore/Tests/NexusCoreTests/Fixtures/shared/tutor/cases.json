@@ -1,0 +1,33 @@
+{
+  "rule": "tutor",
+  "about": "The tutor's brain: its reply read as it streams in (renderer/src/tutor/reply.js, the core's tutor/reply.rs, NexusCore TutorReply.swift), one drawing step checked (steps.js checkStep, tutor/steps.rs, TutorSteps.swift), and Check my maths (only the core: tutor/maths.rs, which the laptop's new app and the iPad call). reply: the reply arrives in 'pieces'; 'said' is every sentence the voice says, in order; 'steps' every step drawn, in order (each listed field must match; a colour name becomes its hex); 'order' the events as 'say' and 'step'; 'problems' what was left out and why. steps: a raw step and the clean one ('step', exactly) or why it is refused ('problem'). maths: lines of working (blank ones keep their place); 'ok' per line (true follows from the line before, false the slip, null not compared or blank), 'first' the first slip's line or null, 'answer' the first equation's solutions or null. Worked out from the rules in the files' headers and STEPS_PROMPT.",
+  "reply": [
+    { "about": "a sentence, a step after it, a sentence cut across two pieces", "pieces": ["First we factorise. <step>{\"type\":\"math\",\"tex\":\"x^2\"}</step> Th", "en we solve."], "said": ["First we factorise.", "Then we solve."], "steps": [{ "type": "math", "tex": "x^2" }], "order": ["say", "step", "say"], "problems": [] },
+    { "about": "an abbreviation does not end a sentence", "pieces": ["Use e.g. the quadratic formula. Then check."], "said": ["Use e.g. the quadratic formula.", "Then check."], "steps": [], "order": ["say", "say"], "problems": [] },
+    { "about": "a decimal point does not end a sentence", "pieces": ["It is 3.5 metres. Yes."], "said": ["It is 3.5 metres.", "Yes."], "steps": [], "order": ["say", "say"], "problems": [] },
+    { "about": "markdown is not read aloud", "pieces": ["**Good** — the `x` term cancels."], "said": ["Good — the x term cancels."], "steps": [], "order": ["say"], "problems": [] },
+    { "about": "a step mid-sentence leaves the sentence whole, drawn before it is said", "pieces": ["The slope <step>{\"type\":\"math\",\"tex\":\"m=2\"}</step> is two."], "said": ["The slope is two."], "steps": [{ "type": "math", "tex": "m=2" }], "order": ["step", "say"], "problems": [] },
+    { "about": "a step split across pieces", "pieces": ["Look. <st", "ep>{\"type\":\"text\",\"text\":\"hi\",\"color\":\"red\"}</st", "ep>"], "said": ["Look."], "steps": [{ "type": "text", "text": "hi", "color": "#D93025" }], "order": ["say", "step"], "problems": [] },
+    { "about": "a step that is not JSON is left out", "pieces": ["<step>{bad</step>Done."], "said": ["Done."], "steps": [], "order": ["say"], "problems": [{ "problem": "not JSON", "text": "{bad" }] },
+    { "about": "a step cut off at the end is left out", "pieces": ["Look here. <step>{\"type\":\"text\""], "said": ["Look here."], "steps": [], "order": ["say"], "problems": [{ "problem": "cut off", "text": "<step>{\"type\":\"text\"" }] },
+    { "about": "a step of a type there is none of is left out", "pieces": ["First. <step>{\"type\":\"teleport\"}</step>"], "said": ["First."], "steps": [], "order": ["say"], "problems": [{ "problem": "unknown type \"teleport\"", "text": "{\"type\":\"teleport\"}" }] }
+  ],
+  "steps": [
+    { "about": "a colour name becomes its hex", "raw": { "type": "text", "text": "hi", "color": "red" }, "step": { "type": "text", "color": "#D93025", "text": "hi" } },
+    { "about": "a hex colour stays", "raw": { "type": "text", "text": "hi", "color": "#123456" }, "step": { "type": "text", "color": "#123456", "text": "hi" } },
+    { "about": "maths", "raw": { "type": "math", "tex": "x^2" }, "step": { "type": "math", "tex": "x^2" } },
+    { "about": "an arrow between two ids", "raw": { "type": "arrow", "from": "a", "to": "b" }, "step": { "type": "arrow", "from": "a", "to": "b" } },
+    { "about": "a graph's functions as plain text become objects", "raw": { "type": "graph", "fns": ["x^2"] }, "step": { "type": "graph", "fns": [{ "fn": "x^2" }] } },
+    { "about": "text needs its words", "raw": { "type": "text" }, "problem": "text needs text" },
+    { "about": "a circle needs a target", "raw": { "type": "circle", "on": "eq1" }, "problem": "circle needs target: an id, [x, y, w, h], [x, y] or {\"in\": id, \"part\"|\"at\": ...}" },
+    { "about": "an unknown type", "raw": { "type": "teleport" }, "problem": "unknown type \"teleport\"" }
+  ],
+  "maths": [
+    { "about": "a sign slip in the last line, a blank line kept in place", "lines": ["2x + 6 = 14", "", "2x = 8", "x = -4"], "ok": [null, null, true, false], "first": 3, "answer": "x = 4" },
+    { "about": "every line follows", "lines": ["2x + 6 = 14", "2x = 8", "x = 4"], "ok": [null, true, true], "first": null, "answer": "x = 4" },
+    { "about": "expanding a bracket", "lines": ["(x+1)^2", "x^2 + 2x + 1"], "ok": [null, true], "first": null, "answer": null },
+    { "about": "a lost middle term", "lines": ["(x+1)^2", "x^2 + x + 1"], "ok": [null, false], "first": 1, "answer": null },
+    { "about": "dividing by x loses x = 0", "lines": ["x^2 = 4x", "x = 4"], "ok": [null, false], "first": 1, "answer": "x = 0 or x = 4" },
+    { "about": "LaTeX as the board writes it", "lines": ["\\frac{6x}{2} = 9", "3x = 9", "x = 3"], "ok": [null, true, true], "first": null, "answer": "x = 3" }
+  ]
+}
