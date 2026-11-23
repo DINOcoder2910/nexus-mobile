@@ -99,6 +99,7 @@ struct TaskDetailView: View {
                 VStack(alignment: .leading, spacing: 4) { TaskTimeSection(task: t, editable: editable) }
                     .font(.nx(.callout))
                 notes(t, editable: editable)
+                TaskActivitySection(task: t) // what happened to it (TaskActivitySection.swift)
                 if let e = t.email {
                     Label(e.hasPrefix("gmail/") ? "From a Gmail message" : e.hasPrefix("outlook/") ? "From an Outlook message" : e, systemImage: "envelope")
                         .font(.nx(.footnote)).foregroundStyle(Kit.muted)

@@ -11,7 +11,8 @@ let package = Package(
     dependencies: [.package(url: "https://github.com/jpsim/Yams.git", from: "5.1.0")],
     targets: [
         // Resources/richcore.js: the laptop's rich-text converters (tools/richtext/build.mjs), run by RichWords.swift in JavaScriptCore
-        .target(name: "NexusCore", dependencies: ["Yams"], resources: [.copy("Resources/richcore.js")]),
+        // Resources/activitycore.js: the laptop's task Activity wording (tools/activity/build.mjs), run by TaskActivity.swift
+        .target(name: "NexusCore", dependencies: ["Yams"], resources: [.copy("Resources/richcore.js"), .copy("Resources/activitycore.js")]),
         .testTarget(name: "NexusCoreTests", dependencies: ["NexusCore"], resources: [.copy("Fixtures")]),
     ]
 )
