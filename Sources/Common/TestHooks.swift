@@ -16,6 +16,7 @@ enum TestHooks {
         if ProcessInfo.processInfo.arguments.contains("-NexusTestDayEdges") { dayEdges(store); return }
         guard ProcessInfo.processInfo.arguments.contains("-NexusTestPdfBoard") else { return }
         if !store.snapshot.isDataFolder { store.makeSample() }
+        sharedPens(store)
         let dir = "notebooks/PDF zoom"
         let url = store.folder.appendingPathComponent(dir, isDirectory: true)
         // made by an earlier test on this simulator: open it again (UITests/PenOptionsTests runs after PdfZoomTests)
@@ -25,6 +26,36 @@ enum TestHooks {
         }
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         try? NotebookActions().newBoard(pdfData: finePrint(), named: "Zoom test", in: dir, store)
+    }
+
+    /// With `-NexusTestPdfBoard`: `-NexusTestSharedPens` puts a pens file in the data folder as the laptop writes it (the pen red at
+    /// Bold, Bold set wider on the laptop, the highlighter at Fine, the eraser on part of a stroke, a part only the laptop knows;
+    /// UITests/SharedPensTests); without it, a pens file an earlier test left is taken away, so every other test starts with none.
+    static func sharedPens(_ store: NexusStore) {
+        let url = store.folder.appendingPathComponent(Pens.file)
+        guard BoardTools.testShared else { try? FileManager.default.removeItem(at: url); return }
+        let text = """
+        {
+          "format": "nexus-pens/1",
+          "pen": {
+            "color": "#D93025FF",
+            "step": 4
+          },
+          "marker": {
+            "color": "#9BE7A0FF",
+            "step": 1
+          },
+          "widths": {
+            "pen": [1.0, 1.5, 3.0, 4.5, 8.0, 10.0]
+          },
+          "eraser": "part",
+          "ring": {
+            "tools": ["pen"]
+          }
+        }
+
+        """
+        try? FolderAccess.write(url, text)
     }
 
     /// `-NexusTestNestedNotebooks`: sample data, then notebooks nested three deep with boards at each level and notebook.json
@@ -215,8 +246,9 @@ enum TestHooks {
 
     /// `-NexusTestDayOrder`: sample data, then today's order as if dragged on the laptop (`nexus-day-order.yaml`): "Try the iPad
     /// planner" before "Redox worksheet", against their file order (UITests/DayOrderTests).
-    /// `-NexusTestDayEdges`: sample data, then a task tonight at 21:30 for 3 hours (past the day's 10 pm line) and five tasks crowded
-    /// into tomorrow morning, so the day's hours must reach midnight and Tomorrow's strip labels must not overlap (UITests/TodayEdgesTests).
+    /// `-NexusTestDayEdges`: sample data, then a task tonight at 21:30 for 3 hours (past the day's 10 pm line), five tasks crowded
+    /// into tomorrow morning and one alone in the evening, so the day's hours must reach midnight, Tomorrow's strip labels must not
+    /// overlap, and a label with room must still show (UITests/TodayEdgesTests).
     static func dayEdges(_ store: NexusStore) {
         if !store.snapshot.isDataFolder { store.makeSample() }
         let tomorrow = Days.add(store.today, 1)
@@ -227,6 +259,7 @@ enum TestHooks {
             ("Advisory form", tomorrow, "11:30", "30m"),
             ("Flex reading", tomorrow, "12:00", "45m"),
             ("MathAA problem set", tomorrow, "13:00", "1h"),
+            ("Evening run", tomorrow, "19:00", "1h"),
         ]
         for (title, day, time, est) in adds where !store.snapshot.tasks.values.contains(where: { $0.text == title }) {
             _ = store.add(title: title, workstream: "physics-hl", plan: [PlanEntry(day: day, time: time)], est: est)

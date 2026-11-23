@@ -3,7 +3,9 @@ import PencilKit
 import NexusCore
 
 /// The board's tools, in the bar (the redesign's Option B): what the Pencil does, each pen's colour and width, and the board
-/// settings that go with them. Kept between boards and launches (UserDefaults), the same on every board.
+/// settings that go with them. Kept between boards and launches (UserDefaults), the same on every board. The pens themselves (each
+/// ink's colour and size step, the colour rows, the sizes set on the laptop, the eraser) are shared with the laptop through the data
+/// folder's nexus-pens.json (NexusCore Pens): read when a board opens and whenever the file changes, written a moment after a change.
 enum BoardTool: String, CaseIterable {
     case hand, pen, pencil, highlighter, eraser, lasso, shapes, text, space
 
@@ -102,10 +104,11 @@ final class BoardTools {
         guard c.indices.contains(i) else { return }
         c[i] = hex
         d.set(c, forKey: t == .highlighter ? "board.markerColors" : "board.penColors")
+        shareSoon()
     }
 
     func colorIndex(_ t: BoardTool) -> Int { min(colors(t).count - 1, max(0, d.integer(forKey: "board.color." + t.rawValue))) }
-    func setColorIndex(_ t: BoardTool, _ i: Int) { d.set(i, forKey: "board.color." + t.rawValue) }
+    func setColorIndex(_ t: BoardTool, _ i: Int) { d.set(i, forKey: "board.color." + t.rawValue); shareSoon() }
 
     /// The width picked for `t`: its step in widths(t). The six steps are kept under "board.widthStep."; a width kept from before
     /// (three steps, "board.width.") is read into its place among the six. The eraser keeps its three.
@@ -115,10 +118,17 @@ final class BoardTools {
         let old = min(2, max(0, d.object(forKey: "board.width." + t.rawValue) as? Int ?? 1))
         return t == .eraser ? old : BoardTools.oldWidthSteps(t)[old]
     }
-    func setWidthIndex(_ t: BoardTool, _ i: Int) { d.set(i, forKey: (t == .eraser ? "board.width." : "board.widthStep.") + t.rawValue) }
+    func setWidthIndex(_ t: BoardTool, _ i: Int) { d.set(i, forKey: (t == .eraser ? "board.width." : "board.widthStep.") + t.rawValue); shareSoon() }
 
     func color(_ t: BoardTool) -> String { colors(t)[colorIndex(t)] }
-    func width(_ t: BoardTool) -> CGFloat { BoardTools.drawnWidths(t, ink: inkType(t))[widthIndex(t)] }
+    func width(_ t: BoardTool) -> CGFloat { BoardTools.drawnWidths(t, ink: inkType(t), widths: ownWidths(t))[widthIndex(t)] }
+
+    /// The six widths of `t` with the sizes set on the laptop laid over them (shapes draw with the pen's); the built-in ones otherwise.
+    func ownWidths(_ t: BoardTool) -> [CGFloat] {
+        let base = BoardTools.widths(t)
+        guard let k = BoardTools.sharedInk(t == .shapes ? .pen : t), let v = d.array(forKey: "board.inkWidths." + k) as? [Double], v.count == base.count else { return base }
+        return v.map { CGFloat($0) }
+    }
 
     /// The PencilKit ink `t` writes with (nil for the eraser and the tools that don't draw).
     func inkType(_ t: BoardTool) -> PKInkingTool.InkType? {
@@ -133,8 +143,8 @@ final class BoardTools {
     /// The widths of `t` as they are drawn: inside the ink's valid range (PencilKit would clamp them), and each step at least a fifth
     /// wider than the one before, so no two steps of the row draw the same. The ranges, from the UI check (iOS 26 simulator): pen
     /// 0.88–25.7, even line (monoline) 0.5–4, fountain pen 1.5–14, pencil 2.4–16, marker 7.5–60; so the even line, the fountain pen and the highlighter move their thinnest steps up.
-    static func drawnWidths(_ t: BoardTool, ink: PKInkingTool.InkType?) -> [CGFloat] {
-        var v = widths(t)
+    static func drawnWidths(_ t: BoardTool, ink: PKInkingTool.InkType?, widths own: [CGFloat]? = nil) -> [CGFloat] {
+        var v = own ?? widths(t)
         guard let ink else { return v }
         let r = ink.validWidthRange
         v = v.map { min(max($0, r.lowerBound), r.upperBound) }
@@ -154,7 +164,7 @@ final class BoardTools {
     /// The eraser rubs out part of a stroke (pixel) or whole strokes.
     var eraserPixel: Bool {
         get { d.bool(forKey: "board.eraserPixel") }
-        set { d.set(newValue, forKey: "board.eraserPixel") }
+        set { d.set(newValue, forKey: "board.eraserPixel"); shareSoon() }
     }
 
     /// Insert space on a PDF page opens the page up there (true, the default) or moves the whole page down.
@@ -203,6 +213,96 @@ final class BoardTools {
     var hintShown: Bool {
         get { d.bool(forKey: "board.hintShown") }
         set { d.set(newValue, forKey: "board.hintShown") }
+    }
+
+    // MARK: shared with the laptop (nexus-pens.json)
+
+    /// The file's name for the ink `t` draws (the highlighter is the laptop's marker); nil for the tools it doesn't share.
+    static func sharedInk(_ t: BoardTool) -> String? { t == .pen ? "pen" : t == .pencil ? "pencil" : t == .highlighter ? "marker" : nil }
+    static let sharedTools: [BoardTool] = [.pen, .pencil, .highlighter]
+
+    private var folder: URL?
+    private var stamp: Date?
+    /// The pens as they were when last read from the file or written to it: a save names only what changed since.
+    private var base: Pens.Shared?
+    private var pending: DispatchWorkItem?
+    /// For the UI check (`-NexusTestSharedPens`): the file as last read or written.
+    private(set) var lastFileText: String?
+    static let testShared = ProcessInfo.processInfo.arguments.contains("-NexusTestSharedPens")
+
+    private var fileURL: URL? { folder?.appendingPathComponent(Pens.file) }
+    private static func modified(_ u: URL) -> Date? { (try? FileManager.default.attributesOfItem(atPath: u.path))?[.modificationDate] as? Date }
+
+    /// The pens as the file has them (the iPad doesn't change the laptop's sizes, so they are not here).
+    func shared() -> Pens.Shared {
+        var s = Pens.Shared()
+        for t in BoardTools.sharedTools {
+            if let k = BoardTools.sharedInk(t), let c = Pens.color(color(t)) { s.inks[k] = Pens.Ink(color: c, step: widthIndex(t)) }
+        }
+        let pen = colors(.pen).compactMap(Pens.color), marker = colors(.highlighter).compactMap(Pens.color)
+        if pen.count == 10 { s.colors["pen"] = pen }
+        if marker.count == 8 { s.colors["marker"] = marker }
+        s.eraser = eraserPixel ? "part" : "stroke"
+        return s
+    }
+
+    /// Reads the data folder's pens file when it changed (or the folder did) and puts it in place; true when the pens changed.
+    @discardableResult
+    func refresh(_ root: URL?) -> Bool {
+        guard let root else { return false }
+        if root != folder { saveShared(); folder = root; stamp = nil; base = nil }
+        guard let url = fileURL else { return false }
+        if base != nil, BoardTools.modified(url) == stamp { return false }
+        saveShared() // a change still waiting goes out first, laid over what came in
+        let text = try? FolderAccess.read(url)
+        stamp = BoardTools.modified(url)
+        lastFileText = text
+        let before = (shared(), BoardTools.sharedTools.map(ownWidths))
+        if let text { take(Pens.read(text)) } else { for k in Pens.inks { d.removeObject(forKey: "board.inkWidths." + k) } } // (only ever from the file)
+        base = shared()
+        return before.0 != base || before.1 != BoardTools.sharedTools.map(ownWidths)
+    }
+
+    /// The file's pens in place: the rows first, so an ink's colour is found in its row; a colour that isn't in it is left as it is.
+    private func take(_ s: Pens.Shared) {
+        if let r = s.colors["pen"] { d.set(r.map(Pens.short), forKey: "board.penColors") }
+        if let r = s.colors["marker"] { d.set(r.map(Pens.short), forKey: "board.markerColors") }
+        for t in BoardTools.sharedTools {
+            guard let k = BoardTools.sharedInk(t) else { continue }
+            if let i = s.inks[k] {
+                if let at = colors(t).firstIndex(where: { Pens.color($0) == i.color }) { d.set(at, forKey: "board.color." + t.rawValue) }
+                d.set(i.step, forKey: "board.widthStep." + t.rawValue)
+            }
+            if let w = Pens.scaled(s.widths[k], ink: k, own: BoardTools.widths(t).map { Double($0) }) { d.set(w, forKey: "board.inkWidths." + k) }
+            else { d.removeObject(forKey: "board.inkWidths." + k) }
+        }
+        if let e = s.eraser { d.set(e == "part", forKey: "board.eraserPixel") }
+    }
+
+    /// A pen changed in the bar: saved to the file a moment later (a colour being picked changes many times a second).
+    private func shareSoon() {
+        guard base != nil else { return }
+        pending?.cancel()
+        let w = DispatchWorkItem { [weak self] in self?.saveShared() }
+        pending = w
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: w)
+    }
+
+    /// Writes what changed since the file was last read or written, laid over the file as it is now. Its stamp is forgotten, so the
+    /// next look takes in what the laptop had changed meanwhile.
+    func saveShared() {
+        pending?.cancel(); pending = nil
+        guard let url = fileURL, let base else { return }
+        let now = shared()
+        let set = Pens.changes(from: base, to: now)
+        guard !set.isEmpty else { return }
+        let text = Pens.merge(try? FolderAccess.read(url), set)
+        do {
+            try FolderAccess.write(url, text)
+            self.base = now; stamp = nil; lastFileText = text
+        } catch {
+            HangWatch.note("pens: couldn't write \(Pens.file): \(error.localizedDescription)")
+        }
     }
 
     /// The PencilKit tool for `t` (nil for tools that don't draw). In a dark board the colour is given as it shows on dark, the way
