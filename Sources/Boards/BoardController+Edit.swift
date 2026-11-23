@@ -61,6 +61,8 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
 
     func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
         if g === hold || other === hold { return true }
+        // the lasso's tracer only watches
+        if g.name == "lassoTrace" || other.name == "lassoTrace" { return true }
         // the quiet tap goes along with the board's own gestures (it only keeps PencilKit's taps from showing their callout)
         if g.name == "quietTap" { return !isCanvasMenuGesture(other) }
         if other.name == "quietTap" { return !isCanvasMenuGesture(g) }

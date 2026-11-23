@@ -118,6 +118,8 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     let undoToast = UndoToast()
     /// Each printout PDF's markscheme, looked up once (BoardController+Sheets.swift).
     var msLookup: [String: String?] = [:]
+    /// The size each stroke drawn this session was drawn with, by its path's creation date (BoardController+PenExtras.swift).
+    var drawnWith: [Date: (step: Int, width: Double)] = [:]
 
     init(root: URL, path: String, focus: CGRect?) {
         self.root = root
@@ -491,6 +493,7 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
             strokeLanded()
             if !tutorIsBusy, let k = canvas.drawing.strokes.last { lastStroke = (k.renderBounds.offsetBy(dx: -offset.x, dy: -offset.y), Date(), false) }
             if TestHooks.isPenProbeRun { penProbe() }
+            noteDrawnWith()
         }
         strokeCount = canvas.drawing.strokes.count
         lassoDrawingChanged()

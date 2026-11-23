@@ -49,8 +49,16 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
         spaceTap.delegate = self
         canvas.addGestureRecognizer(spaceTap)
 
-        // the lasso's path, for restyling what it holds (BoardController+PenExtras.swift)
-        canvas.drawingGestureRecognizer.addTarget(self, action: #selector(lassoTraced(_:)))
+        // the lasso's path, for restyling what it holds (BoardController+PenExtras.swift): a pan of its own beside PencilKit's
+        // gestures (the lasso isn't PencilKit's drawing gesture), which takes nothing from them
+        let trace = UIPanGestureRecognizer(target: self, action: #selector(lassoTraced(_:)))
+        trace.name = "lassoTrace"
+        trace.allowedTouchTypes = BoardController.anyTouch
+        trace.maximumNumberOfTouches = 1
+        trace.cancelsTouchesInView = false
+        trace.delaysTouchesEnded = false
+        trace.delegate = self
+        canvas.addGestureRecognizer(trace)
 
         quickRing.board = self
         quickRing.frame = view.bounds
@@ -99,6 +107,7 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
         case "quietTap": return t == .lasso && lassoTapIsEmpty(g)
         case "tap": return (t == .text || t == .space) && !readOnly ? false : nil
         case "itemPan": return t == .space ? false : nil
+        case "lassoTrace": return t == .lasso
         default: return nil
         }
     }

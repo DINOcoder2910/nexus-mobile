@@ -60,8 +60,10 @@ extension BoardController {
         for (id, p) in pdfs {
             guard let first = p.frames.first else { continue }
             let r = screenRect(first)
-            let at = CGRect(x: r.maxX + 8, y: r.minY, width: 32, height: 32)
-            guard at.intersects(vis) else { continue }
+            guard r.intersects(vis) else { continue }
+            // beside page 1's top corner; when that is off the screen (zoomed in, or a pane beside), inside the page's corner
+            let x = r.maxX + 8 + 32 <= vis.maxX ? r.maxX + 8 : max(r.minX + 8, vis.maxX - 44)
+            let at = CGRect(x: x, y: r.minY, width: 32, height: 32)
             let b = o.button("clean:" + id) {
                 var c = UIButton.Configuration.filled()
                 c.cornerStyle = .capsule

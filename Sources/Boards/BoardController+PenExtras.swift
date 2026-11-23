@@ -37,7 +37,7 @@ extension BoardController {
         return p.ours || canvasHasSelection ? p : nil
     }
 
-    /// The drawing gesture moved (any tool): with the Select tool, its path is the lasso's.
+    /// The lasso tracer moved (any tool): with the Select tool, its path is the lasso's.
     @objc func lassoTraced(_ g: UIGestureRecognizer) {
         guard BoardTools.shared.tool == .lasso else { if !lassoTrace.isEmpty { lassoTrace = [] }; return }
         let z = max(canvas.zoomScale, 0.1)
@@ -45,7 +45,9 @@ extension BoardController {
         let p = CGPoint(x: at.x / z, y: at.y / z)
         switch g.state {
         case .began:
-            lassoTrace = [p]
+            // a pan begins a little way in: start where the finger or Pencil first touched
+            let moved = (g as? UIPanGestureRecognizer)?.translation(in: canvas) ?? .zero
+            lassoTrace = [CGPoint(x: (at.x - moved.x) / z, y: (at.y - moved.y) / z), p]
             lassoMoved = false
             hidePickBox()
         case .changed:
@@ -253,6 +255,14 @@ extension BoardController {
         showCopied(canvas.drawing.strokes[i])
     }
 
+    /// A stroke just drawn: the size and width it was drawn with, so Copy from a stroke picks that size (by its path's creation
+    /// date, for this session).
+    func noteDrawnWith() {
+        guard let k = canvas.drawing.strokes.last, let ink = canvas.tool as? PKInkingTool, ink.inkType == k.ink.inkType else { return }
+        let t = BoardTools.tool(of: k.ink.inkType)
+        drawnWith[k.path.creationDate] = (BoardTools.shared.widthIndex(t), Double(ink.width))
+    }
+
     /// The topmost stroke within `reach` of `p` (the drawing's units), if any.
     func strokeIndex(at p: CGPoint, reach: CGFloat) -> Int? {
         let strokes = canvas.drawing.strokes
@@ -271,11 +281,14 @@ extension BoardController {
     func showCopied(_ k: PKStroke) {
         let tools = BoardTools.shared
         let t = BoardTools.tool(of: k.ink.inkType)
-        let w = strokeWidth(k)
+        // drawn here this session: the size it was drawn with; else read from its points (PencilKit's point sizes follow the
+        // tool's width only roughly, and for touches hardly at all, so a step read from them can be off)
+        let known = drawnWith[k.path.creationDate]
+        let w = known?.width ?? strokeWidth(k)
         let hex = Pens.short(Pens.color(InkConvert.hex(k.ink.color)) ?? "#1B1B1B")
         let words = PenExtras.strokeText(ink: t == .highlighter ? "Highlighter" : t.title, width: w, color: hex)
         let row = BoardTools.drawnWidths(t, ink: k.ink.inkType, widths: tools.ownWidths(t)).map { Double($0) }
-        let step = PenExtras.nearestStep(w, in: row)
+        let step = known?.step ?? PenExtras.nearestStep(w, in: row)
         let range = k.ink.inkType.validWidthRange
 
         let z = max(canvas.zoomScale, 0.1)

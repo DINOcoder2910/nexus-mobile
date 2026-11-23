@@ -83,7 +83,10 @@ final class WriteOnItPadTests: XCTestCase {
         boardMs.tap()
         sleep(3)
         shot("write-board-markscheme")
-        el("printout-clean").tap()
+        // with the markscheme beside, page 1's corner may be off the board: the icon moves inside the page
+        let clean = el("printout-clean")
+        XCTAssertTrue(clean.waitForExistence(timeout: 10), "no clean-PDF icon with the markscheme beside")
+        if clean.exists { clean.tap() }
         sleep(3)
         shot("write-board-clean-pdf")
 
