@@ -568,6 +568,7 @@ struct PlannerView: View {
                     .overlay(alignment: .bottom) { if f == on { Rectangle().fill(Theme.accent).frame(height: 2).offset(y: 3) } }
                 }
                 .buttonStyle(.plain)
+                .accessibilityAddTraits(f == on ? .isSelected : [])
                 .accessibilityIdentifier("bank-filter-\(f.rawValue)")
             }
         }

@@ -33,7 +33,7 @@ extension BoardController {
         guard let store else { return nil }
         let studies = StudyLibrary.shared
         if studies.studies.isEmpty { studies.load(store) }
-        if let w = store.subject(of: path), studies.study(w.id) != nil { return w.id }
+        if let id = WriteOnIt.subject(of: path, store.writeSubjects()), studies.study(id) != nil { return id }
         guard path.hasPrefix("notebooks/"), let nb = path.split(separator: "/").dropFirst().first.map(String.init) else { return nil }
         let meta = (try? FolderAccess.read(root.appendingPathComponent("notebooks/\(nb)/notebook.json"))).flatMap { try? JSONValue.parse($0) }
         if let id = meta?["subject"]?.string, studies.study(id) != nil { return id }

@@ -88,7 +88,8 @@ extension BoardBar {
             trail.addArrangedSubview(icon("arrow.uturn.forward", "Redo") { [weak b] in b?.redo() })
         }
         b.extraBarButtons().forEach { trail.addArrangedSubview($0) }
-        trail.addArrangedSubview(menuButton("ellipsis.circle", "Board menu", b.boardMenu()))
+        // tight (a pane beside): the board menu goes in "Draw ▾" with the name's menu, since the buttons fill the row
+        if !(tight && !readOnly && !folded) { trail.addArrangedSubview(menuButton("ellipsis.circle", "Board menu", b.boardMenu())) }
 
         if folded {
             // B: one bar
@@ -109,18 +110,24 @@ extension BoardBar {
         }
 
         // A: the top row, with the switch in the middle
-        titleButton.configuration = titleConfig(b)
-        titleButton.menu = b.titleMenu()
-        topRow.addArrangedSubview(titleButton)
+        // tight (a pane beside, about 600 points): no room for the name and the three-way switch beside the buttons, so
+        // "Draw ▾" stands for both, as on the folded bar (its menu has the modes and the board's own menu)
+        let short = tight && !readOnly
+        if !short {
+            titleButton.configuration = titleConfig(b)
+            titleButton.menu = b.titleMenu()
+            topRow.addArrangedSubview(titleButton)
+        }
         let left = spacer(), right = spacer()
         topRow.addArrangedSubview(left)
-        if !readOnly { topRow.addArrangedSubview(modePill) }
+        if !readOnly { topRow.addArrangedSubview(short ? modeMenu(b, boardMenu: true) : modePill) }
         topRow.addArrangedSubview(right)
         let even = left.widthAnchor.constraint(equalTo: right.widthAnchor)
         even.priority = .init(200)
         even.isActive = true
-        // the page and zoom pills sit in the top row, so the row under it keeps its room for the tools, colours and sizes
-        if !readOnly {
+        // the page and zoom pills sit in the top row, so the row under it keeps its room for the tools, colours and sizes;
+        // when the bar is tight (a pane beside) they go to the right of the row under it instead
+        if !readOnly && !tight {
             if !b.pdfs.isEmpty {
                 pagePill.menu = b.pageMenu()
                 trail.insertArrangedSubview(pagePill, at: 0)
@@ -164,6 +171,14 @@ extension BoardBar {
             toolRow.addArrangedSubview(rowScroll)
             toolRow.addArrangedSubview(spacer())
         }
+        if tight {
+            if !b.pdfs.isEmpty {
+                pagePill.menu = b.pageMenu()
+                rightStack.addArrangedSubview(pagePill)
+            }
+            zoomPill.menu = b.zoomMenu()
+            rightStack.addArrangedSubview(zoomPill)
+        }
         rightStack.addArrangedSubview(icon("chevron.up", "Fold the bar") { [weak self] in self?.setFolded(true) })
         toolRow.addArrangedSubview(rightStack)
         updatePills()
@@ -187,11 +202,12 @@ extension BoardBar {
         return tc
     }
 
-    /// The tools, each ink tool with a line of its colour under it. Insert space and what + used to hold are in Insert's row, so
-    /// Draw's row has room for every colour and size.
+    /// The tools, each ink tool with a line of its colour under it, and Insert space last (Murtaza, Nov 23: it was too far away in
+    /// Insert's row alone; Insert keeps it too). What + used to hold is in Insert's row, so Draw's row has room for every colour
+    /// and size.
     func fillTools(_ b: BoardController) {
         let tools = BoardTools.shared
-        for t in BoardTool.allCases where t != .space || tools.tool == .space {
+        for t in BoardTool.allCases {
             let on = tools.tool == t
             let button = icon(t.symbol, t.title, selected: on) { [weak b] in b?.selectTool(t) }
             button.accessibilityIdentifier = "board-tool-" + t.rawValue
@@ -248,7 +264,7 @@ extension BoardBar {
     }
 
     /// "Draw ▾" on the folded bar: Draw, Insert or View (the last two open the bar), then the board's own title menu.
-    func modeMenu(_ b: BoardController) -> UIButton {
+    func modeMenu(_ b: BoardController, boardMenu: Bool = false) -> UIButton {
         var c = UIButton.Configuration.plain()
         c.title = mode.title
         c.image = UIImage(systemName: "chevron.down", withConfiguration: UIImage.SymbolConfiguration(pointSize: 10, weight: .semibold))
@@ -265,10 +281,13 @@ extension BoardBar {
         let modes = BarMode.allCases.map { m in
             UIAction(title: m.title, state: m == mode ? .on : .off) { [weak self] _ in self?.setMode(m) }
         }
-        button.menu = UIMenu(children: [
+        var sections = [
             UIMenu(options: .displayInline, children: modes),
             UIMenu(title: b.boardName, options: .displayInline, children: b.titleMenu().children),
-        ])
+        ]
+        // the tight bar's: the board menu too, as a submenu (its ⋯ has no room there)
+        if boardMenu { sections.append(UIMenu(options: .displayInline, children: [UIMenu(title: "Board menu", image: UIImage(systemName: "ellipsis.circle"), children: b.boardMenu().children)])) }
+        button.menu = UIMenu(children: sections)
         button.showsMenuAsPrimaryAction = true
         button.accessibilityLabel = "Bar: " + mode.title
         button.accessibilityIdentifier = "board-mode-menu"
@@ -411,6 +430,8 @@ final class ModePill: UIView {
             let b = UIButton(configuration: c, primaryAction: UIAction { [weak self] _ in self?.pick(m) })
             b.accessibilityLabel = m.title
             b.accessibilityIdentifier = "board-mode-" + m.title.lowercased()
+            // keeps its word: the board's name gives way first (Nov 23: beside the markscheme it was squeezed to letters)
+            b.setContentCompressionResistancePriority(.init(760), for: .horizontal)
             buttons.append(b)
             stack.addArrangedSubview(b)
         }

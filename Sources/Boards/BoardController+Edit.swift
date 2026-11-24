@@ -61,6 +61,8 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
 
     func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
         if g === hold || other === hold { return true }
+        // the lasso's tracer only watches
+        if g.name == "lassoTrace" || other.name == "lassoTrace" { return true }
         // the quiet tap goes along with the board's own gestures (it only keeps PencilKit's taps from showing their callout)
         if g.name == "quietTap" { return !isCanvasMenuGesture(other) }
         if other.name == "quietTap" { return !isCanvasMenuGesture(g) }
@@ -277,7 +279,32 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
         }
         // the question bank (BoardController+Question.swift), as on the iPad's Insert row
         items.append(UIAction(title: "Mark as question", image: UIImage(systemName: "list.number")) { [weak self] _ in self?.markQuestion() })
-        return UIMenu(children: items + [shapes])
+        let page = UIAction(title: "New page", image: UIImage(systemName: "doc.badge.plus")) { [weak self] _ in self?.newPage() }
+        return UIMenu(children: items + [shapes, page])
+    }
+
+    /// Insert › New page: an empty board beside this one, in the same notebook folder, opened in its place (as on the laptop).
+    func newPage() {
+        guard !replay else { return }
+        saveNow()
+        let dir = (path as NSString).deletingLastPathComponent
+        let folder = dir.isEmpty ? root : root.appendingPathComponent(dir, isDirectory: true)
+        let name = BoardFormat.freeName("Untitled", taken: NotebookActions.names(in: folder), suffix: ".board")
+        do {
+            try FolderAccess.write(folder.appendingPathComponent(name, isDirectory: true).appendingPathComponent("board.json"), BoardFormat.boardJSON())
+        } catch {
+            toast("No new page: \(error.localizedDescription)")
+            return
+        }
+        let rel = (dir.isEmpty ? "" : dir + "/") + name
+        store?.boardsChanged(listChanged: true)
+        // the main board changes in place; a board pushed from a link or in the side pane opens over it, with a way back
+        let pushed = navigationController.map { $0.viewControllers.first !== self } ?? false
+        if (isSidePane || pushed), navigationController != nil {
+            openBoard(rel, end: nil)
+        } else if let store {
+            store.openBoard = .init(path: rel, focus: nil)
+        }
     }
 
     var allIds: Set<String> { Set(content.items.map(\.id)).union(content.strokes.map(\.id)) }

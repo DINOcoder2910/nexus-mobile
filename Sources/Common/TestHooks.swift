@@ -148,6 +148,10 @@ enum TestHooks {
     /// `-NexusTestPenProbe`: each stroke drawn shows its ink and width in a label (BoardController+Bench.swift penProbe,
     /// UITests/PenOptionsTests), so the check reads the width written instead of guessing it from a picture.
     static var isPenProbeRun: Bool { ProcessInfo.processInfo.arguments.contains("-NexusTestPenProbe") }
+    /// `-NexusTestLassoBox`: XCUITest can only drag in straight lines, so with the Select tool a straight drag picks the strokes in
+    /// the box it spans, as a lasso round them would (BoardController+PenExtras.swift; UITests/PenExtrasTests). PencilKit's own
+    /// lasso holds nothing then, so the pick is the board's own, as after a restyle.
+    static var isLassoBoxRun: Bool { ProcessInfo.processInfo.arguments.contains("-NexusTestLassoBox") }
 
     static func bigBoard(_ store: NexusStore) {
         if !store.snapshot.isDataFolder { store.makeSample() }
