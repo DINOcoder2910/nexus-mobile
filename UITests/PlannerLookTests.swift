@@ -49,6 +49,11 @@ class PlannerLookTests: XCTestCase {
         }
         XCTAssertTrue(el("planner").waitForExistence(timeout: 15), "the Planner isn't up")
         sleep(2)
+        // the span and the Show row are kept on the device: back to the whole week, everything shown
+        if el("show-all").exists { el("show-all").tap() }
+        let week = el("plan-span").buttons["Week"].firstMatch
+        if week.exists && week.isHittable { week.tap() }
+        sleep(1)
     }
 
     func run(dark: Bool) {

@@ -220,12 +220,14 @@ public enum WeekPlan {
         public var overDays: [Day] { days.filter(\.over) }
     }
 
-    public static func week(_ p: Planning, start: String, now: Int, events: (String) -> [TodayPlan.Span]) -> Week {
+    /// `days`: how many days from `start` (the Planner's 2 days, 3 days, Week, or Month: 35).
+    public static func week(_ p: Planning, start: String, now: Int, days count: Int = 7, events: (String) -> [TodayPlan.Span]) -> Week {
         let today = p.today
         var days: [Day] = []
         var lanes: [String: Lane] = [:]
         var laneOrder: [String] = []
-        for i in 0..<7 {
+        let count = max(1, count)
+        for i in 0..<count {
             let d = Days.add(start, i)
             let rows = d >= today ? p.planned(on: d) : []
             let busy = TodayPlan.busy(rows, on: d, events: events(d))
@@ -234,7 +236,7 @@ public enum WeekPlan {
                             free: free.reduce(0) { $0 + $1.minutes }, past: d < today))
             for t in rows {
                 let k = t.workstream ?? ""
-                if lanes[k] == nil { laneOrder.append(k); lanes[k] = Lane(workstream: t.workstream, days: Array(repeating: [], count: 7)) }
+                if lanes[k] == nil { laneOrder.append(k); lanes[k] = Lane(workstream: t.workstream, days: Array(repeating: [], count: count)) }
                 lanes[k]!.days[i].append(t)
             }
         }
