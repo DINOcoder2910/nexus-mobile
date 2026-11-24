@@ -99,6 +99,12 @@ final class WriteOnItPadTests: XCTestCase {
         // Markscheme button stays on screen
         XCTAssertTrue(el("board-mode-menu").waitForExistence(timeout: 5), "no Draw ▾ on the tight bar beside the markscheme")
         XCTAssertTrue(el("board-ms").isHittable, "the Markscheme button is off the bar beside the markscheme")
+        // the board menu (⋯ has no room there) is in Draw ▾
+        el("board-mode-menu").tap()
+        XCTAssertTrue(labelled("Board menu").waitForExistence(timeout: 5), "no Board menu in Draw ▾ on the tight bar")
+        shot("write-board-tight-menu")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.6)).tap() // put the menu away, over the markscheme
+        sleep(1)
         // with the markscheme beside, page 1's corner may be off the board: the icon moves inside the page
         let clean = el("printout-clean")
         XCTAssertTrue(clean.waitForExistence(timeout: 10), "no clean-PDF icon with the markscheme beside")

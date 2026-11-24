@@ -88,7 +88,8 @@ extension BoardBar {
             trail.addArrangedSubview(icon("arrow.uturn.forward", "Redo") { [weak b] in b?.redo() })
         }
         b.extraBarButtons().forEach { trail.addArrangedSubview($0) }
-        trail.addArrangedSubview(menuButton("ellipsis.circle", "Board menu", b.boardMenu()))
+        // tight (a pane beside): the board menu goes in "Draw ▾" with the name's menu, since the buttons fill the row
+        if !(tight && !readOnly && !folded) { trail.addArrangedSubview(menuButton("ellipsis.circle", "Board menu", b.boardMenu())) }
 
         if folded {
             // B: one bar
@@ -119,7 +120,7 @@ extension BoardBar {
         }
         let left = spacer(), right = spacer()
         topRow.addArrangedSubview(left)
-        if !readOnly { topRow.addArrangedSubview(short ? modeMenu(b) : modePill) }
+        if !readOnly { topRow.addArrangedSubview(short ? modeMenu(b, boardMenu: true) : modePill) }
         topRow.addArrangedSubview(right)
         let even = left.widthAnchor.constraint(equalTo: right.widthAnchor)
         even.priority = .init(200)
@@ -263,7 +264,7 @@ extension BoardBar {
     }
 
     /// "Draw ▾" on the folded bar: Draw, Insert or View (the last two open the bar), then the board's own title menu.
-    func modeMenu(_ b: BoardController) -> UIButton {
+    func modeMenu(_ b: BoardController, boardMenu: Bool = false) -> UIButton {
         var c = UIButton.Configuration.plain()
         c.title = mode.title
         c.image = UIImage(systemName: "chevron.down", withConfiguration: UIImage.SymbolConfiguration(pointSize: 10, weight: .semibold))
@@ -280,10 +281,13 @@ extension BoardBar {
         let modes = BarMode.allCases.map { m in
             UIAction(title: m.title, state: m == mode ? .on : .off) { [weak self] _ in self?.setMode(m) }
         }
-        button.menu = UIMenu(children: [
+        var sections = [
             UIMenu(options: .displayInline, children: modes),
             UIMenu(title: b.boardName, options: .displayInline, children: b.titleMenu().children),
-        ])
+        ]
+        // the tight bar's: the board menu too, as a submenu (its ⋯ has no room there)
+        if boardMenu { sections.append(UIMenu(options: .displayInline, children: [UIMenu(title: "Board menu", image: UIImage(systemName: "ellipsis.circle"), children: b.boardMenu().children)])) }
+        button.menu = UIMenu(children: sections)
         button.showsMenuAsPrimaryAction = true
         button.accessibilityLabel = "Bar: " + mode.title
         button.accessibilityIdentifier = "board-mode-menu"
