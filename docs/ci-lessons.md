@@ -68,6 +68,8 @@ Every iPad or iPhone CI or build failure goes here, with its cause and fix, so i
 - **Nov 23: then "Failed to swipe down CollectionView … containing sidebar-Study"** (ui-check on 8ad1033; PenExtrasTests passed). The fix above found the sidebar by the row it holds, but once the sidebar was scrolled down to Search boards the Study row wasn't made any more, so the query found no list. Fix: the sidebar's list by its own label (`app.collectionViews["Sidebar"]`). Find a scrolling list by itself, never by a row that scrolling can take away.
 - **Nov 24: then "no Search boards row" again** (ui-check on c882aa0). The Study sheets search field still had the keyboard up, so only the sidebar's top 266 points showed, and the swipes landed on the keyboard (the field read "acidsqqqqqqqq"). Fix: Return after typing, and put the keyboard away before scrolling the sidebar. After typing in a test, put the keyboard away before any swipe.
 
+- **Nov 24: phone-check's iPhone job failed `LiveActivityPhoneTests` "Failed to get matching snapshot … 'Stop the timer'"** (run 45302874374 on PR #62, which touches no timer or Live Activity code; ui-check, which runs the same iPhone class, was green on the same commit). The loop checks `stop.exists`, then taps it, and the Lock Screen's Live Activity can redraw (or end, after the first press worked) between the two, so the second query finds nothing. Not fixed yet: the loop should re-query after each press and stop once the activity is gone, not trust an `exists` from before the tap.
+
 ## Workflows
 
 - **Nov 23: `[ui-only: ATests+BTests]` runs several classes** (ui-check reads a `+` list; each class's iPhone twin runs when it has one). Before, a branch with two new test classes needed two pushes or a full run.
