@@ -99,29 +99,50 @@ struct SpanishTextBox: UIViewRepresentable {
             text.components(separatedBy: "\n").filter { SpanishBlock.worth($0) && BlockFacts.lang(nil, $0) != "en" }
         }
 
-        /// The underlines over the words as they are now.
+        /// The underlines over the words as they are now. The text storage is touched only when they differ from what it shows: an
+        /// edit to it while the keyboard is typing resets the keyboard and can lose a key (a long piece typed into Writing's box lost
+        /// a letter every line or two), and the underlines it has already move with the words.
         func restyle() {
             guard let v = view else { return }
             let s = v.textStorage
-            let all = NSRange(location: 0, length: s.length)
-            s.beginEditing()
-            s.removeAttribute(BlockStyler.spanishKey, range: all)
+            let text = v.text ?? ""
+            var want: [(NSRange, String)] = []
             if BoardSpanish.liveOn {
-                let ok = Set(Self.lines(v.text ?? ""))
+                let ok = Set(Self.lines(text))
                 var at = 0
-                for line in (v.text ?? "").components(separatedBy: "\n") {
+                for line in text.components(separatedBy: "\n") {
                     let n = (line as NSString).length
                     if ok.contains(line) {
                         for m in BoardSpanish.shared.known.get(line) ?? [] where m.s >= 0 && m.e > m.s && m.e <= n {
-                            s.addAttribute(BlockStyler.spanishKey, value: m.kind, range: NSRange(location: at + m.s, length: m.e - m.s))
+                            want.append((NSRange(location: at + m.s, length: m.e - m.s), m.kind))
                         }
                     }
                     at += n + 1
                 }
             }
-            s.endEditing()
-            v.setNeedsDisplay()
+            if Self.runs(s) != Self.runs(want, length: s.length) {
+                let all = NSRange(location: 0, length: s.length)
+                s.beginEditing()
+                s.removeAttribute(BlockStyler.spanishKey, range: all)
+                for (r, kind) in want where NSMaxRange(r) <= s.length { s.addAttribute(BlockStyler.spanishKey, value: kind, range: r) }
+                s.endEditing()
+                v.setNeedsDisplay()
+            }
             dump()
+        }
+
+        /// The underlined runs a text shows (adjacent marks of one kind read as one run, as the storage keeps them).
+        static func runs(_ s: NSAttributedString) -> [String] {
+            var out: [String] = []
+            s.enumerateAttribute(BlockStyler.spanishKey, in: NSRange(location: 0, length: s.length)) { val, r, _ in
+                if let val { out.append("\(r.location):\(r.length):\(val)") }
+            }
+            return out
+        }
+        static func runs(_ marks: [(NSRange, String)], length: Int) -> [String] {
+            let a = NSMutableAttributedString(string: String(repeating: " ", count: length))
+            for (r, kind) in marks where NSMaxRange(r) <= length { a.addAttribute(BlockStyler.spanishKey, value: kind, range: r) }
+            return runs(a)
         }
 
         /// Read the new paragraphs after a pause (again from the start at each change).
@@ -208,8 +229,10 @@ struct SpanishTextBox: UIViewRepresentable {
                 w.addSubview(l)
                 return l
             }()
+            let said = "es box:\(n) checks:\(BoardSpanish.shared.checks) live:\(BoardSpanish.liveOn ? "on" : "off")"
+            guard label.accessibilityLabel != said else { return }
             w.bringSubviewToFront(label)
-            label.accessibilityLabel = "es box:\(n) checks:\(BoardSpanish.shared.checks) live:\(BoardSpanish.liveOn ? "on" : "off")"
+            label.accessibilityLabel = said
         }
     }
 }
