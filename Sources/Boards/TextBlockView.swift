@@ -44,6 +44,21 @@ final class TextBlockView: UIView {
     private(set) var layout: TextBlockLayout?
     /// Words that comments sit on (markdown ranges), underlined softly.
     var marked: [NSRange] = [] { didSet { if marked != oldValue { setNeedsDisplay() } } }
+    /// Spanish mistakes' words (markdown ranges, "error" | "accent"), underlined wavy (BoardSpanish.swift).
+    var spanish: [(range: NSRange, kind: String)] = [] {
+        didSet {
+            let was = oldValue.map { "\($0.range.location):\($0.range.length):\($0.kind)" }, now = spanish.map { "\($0.range.location):\($0.range.length):\($0.kind)" }
+            if was != now { applySpanish(); setNeedsDisplay() }
+        }
+    }
+
+    /// The underlines onto the laid-out words (drawn by MDLayoutManager with the glyphs).
+    private func applySpanish() {
+        guard let st = layout?.text.storage else { return }
+        let n = st.length
+        st.removeAttribute(BlockStyler.spanishKey, range: NSRange(location: 0, length: n))
+        for s in spanish where s.range.length > 0 && NSMaxRange(s.range) <= n { st.addAttribute(BlockStyler.spanishKey, value: s.kind, range: s.range) }
+    }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -74,6 +89,7 @@ final class TextBlockView: UIView {
     func update(md: String, item: BoardItem) {
         let l = TextBlockLayout(TextBlockRender.layout(md, item: item))
         layout = l
+        applySpanish()
         if item.json["chip"]?.bool == true {
             let c = BlockFacts.chip(item, md)
             chip = c

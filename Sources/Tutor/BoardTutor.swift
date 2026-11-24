@@ -349,7 +349,8 @@ final class BoardTutor {
     // MARK: the picture of the board
 
     /// The board on screen, with a faint grid of the turn's coordinates (every 100 units, numbered), as a JPEG at most 1568 px long.
-    private func snapshot(visible: CGRect, frame: [Double], area: CGRect) -> Data? {
+    /// (`grid: false`: the board alone, for Check my maths to read.)
+    func snapshot(visible: CGRect, frame: [Double], area: CGRect, grid: Bool = true) -> Data? {
         let v = board.view!
         let bounds = area
         guard bounds.width > 0, bounds.height > 0 else { return nil }
@@ -364,6 +365,7 @@ final class BoardTutor {
             UIColor.white.setFill()
             ctx.fill(CGRect(origin: .zero, size: bounds.size))
             v.drawHierarchy(in: CGRect(x: -bounds.minX, y: -bounds.minY, width: v.bounds.width, height: v.bounds.height), afterScreenUpdates: true)
+            guard grid else { return }
             // the grid: board x = frame x + k * 100
             let per = bounds.width / visible.width
             let g = ctx.cgContext

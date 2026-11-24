@@ -77,6 +77,12 @@ struct StudyPage: View {
                         Label("Spanish: checker, tutor, writing, skills", systemImage: "character.bubble")
                     }
                     .accessibilityIdentifier("study-spanish")
+                    NavigationLink {
+                        OralPage(workstreamId: workstreamId)
+                    } label: {
+                        Label("Oral practice: past orals, add a recording, the listening test", systemImage: "mic")
+                    }
+                    .accessibilityIdentifier("study-oral-page")
                 }
             }
             UnitsSection(study: s, openTheme: $openTheme, openUnit: $openUnit)
