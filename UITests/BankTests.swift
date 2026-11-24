@@ -42,6 +42,7 @@ final class BankTests: XCTestCase {
             } else {
                 l.swipeUp()
             }
+            sleep(1) // let the list settle: a tap while it glides only stops it (BankPhoneTests, Nov 24)
         }
         XCTAssertTrue(e.waitForExistence(timeout: 5), why)
         e.tap()

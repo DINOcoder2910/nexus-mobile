@@ -35,11 +35,13 @@ final class BankPhoneTests: XCTestCase {
         // a list only keeps the rows on screen: a row that is gone may be above (the page is still scrolled down), so look up first, then down
         let list = app.collectionViews.firstMatch
         var tries = 0
-        while !e.exists && tries < 4 { list.swipeDown(); tries += 1 }
+        while !e.exists && tries < 4 { list.swipeDown(); sleep(1); tries += 1 }
         tries = 0
-        // into the top 70% of the screen, clear of the tab bar and the timer pill (docs/ci-lessons.md, Nov 22)
+        // into the top 70% of the screen, clear of the tab bar and the timer pill (docs/ci-lessons.md, Nov 22). Each swipe is let
+        // settle: a tap while the list still glides only stops it (6de89d9, Nov 24: Go on at was tapped mid-glide and nothing opened)
         while !(e.exists && e.isHittable && e.frame.maxY < app.frame.height * 0.7) && tries < 8 {
             if e.exists && e.frame.maxY < list.frame.minY + 100 { list.swipeDown(velocity: .slow) } else { list.swipeUp(velocity: .slow) }
+            sleep(1)
             tries += 1
         }
         XCTAssertTrue(e.waitForExistence(timeout: 5), why)
