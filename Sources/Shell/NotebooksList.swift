@@ -8,8 +8,9 @@ import NexusCore
 /// under `notebooks/` is a notebook, to any depth; a `<name>.board` folder in one is a board. The sidebar shows them as a tree
 /// (NexusCore NotebookTree): each notebook with an arrow to open it, and inside it its notebooks, then its boards, in the notebook
 /// page's order (notebook.json `order`, OneNote's, then by name). Tapping a notebook opens its page (NotebookPage); tapping a board
-/// opens the board, and the open board's row is the one selected. Press and hold a notebook for Rename, Move, Colour, New notebook
-/// inside, Delete, a board for Open in a new window, Rename, Move, Delete; drop a board on a notebook to move it there.
+/// opens the board, and the open board's row is the one selected. Press and hold a notebook for Pin, Rename, Move, Colour, New
+/// notebook inside, Delete, a board for Open in a new window, Pin, Rename, Move, Delete; drop a board on a notebook to move it there.
+/// Opening a notebook closes the ones beside it (NotebookTree.opening), so one branch is open at a time.
 struct NotebooksList: View {
     @Environment(NexusStore.self) private var store
     @Bindable var actions: NotebookActions
@@ -24,7 +25,10 @@ struct NotebooksList: View {
     var body: some View {
         ForEach(tree.rows(store.folder, open: NotebookTree.parse(openList))) { r in
             NotebookTreeLine(row: r, nb: r.kind == .notebook ? tree.notebook(r.path) : nil, pushes: pushes, actions: actions) {
-                withAnimation(.snappy(duration: 0.25)) { openList = NotebookTree.setting(r.path, open: !r.isOpen, in: openList) }
+                // opening one closes the notebooks beside it (one branch open at a time), so the tree stays short
+                withAnimation(.snappy(duration: 0.25)) {
+                    openList = r.isOpen ? NotebookTree.setting(r.path, open: false, in: openList) : NotebookTree.opening(r.path, in: openList)
+                }
             }
             // the iPad's selection: a notebook's page, or the board (selected while it is open)
             .tag(r.kind == .board ? SidebarItem.board(r.path) : SidebarItem.screen(.notebook(r.path)))
@@ -133,8 +137,7 @@ private extension View {
     @ViewBuilder
     func notebookRowExtras(_ nb: Notebook?, actions: NotebookActions, store: NexusStore) -> some View {
         if let nb {
-            self.contextMenu { NotebookMenu(nb: nb, actions: actions) }
-                .dropDestination(for: String.self) { paths, _ in actions.move(paths, into: nb.path, store) }
+            self.notebookRowMenu(nb, actions: actions, store: store)
         } else {
             self
         }
@@ -142,14 +145,64 @@ private extension View {
 
     /// A board row's long-press menu (the card's main ones), and it can be dragged onto a notebook.
     func boardRowExtras(_ b: Notebook.BoardRef, actions: NotebookActions) -> some View {
+        self.boardRowMenu(b, actions: actions)
+    }
+}
+
+extension View {
+    /// A notebook's long-press menu (the tree's row, a found or pinned one), and a board dropped on it moves there.
+    func notebookRowMenu(_ nb: Notebook, actions: NotebookActions, store: NexusStore) -> some View {
+        self.contextMenu { NotebookMenu(nb: nb, actions: actions) }
+            .dropDestination(for: String.self) { paths, _ in actions.move(paths, into: nb.path, store) }
+    }
+
+    /// A board's long-press menu (the card's main ones), and it can be dragged onto a notebook.
+    func boardRowMenu(_ b: Notebook.BoardRef, actions: NotebookActions) -> some View {
         self.draggable(b.path)
             .contextMenu {
                 NewWindowButton(start: .board(b.path))
+                PinButton(path: b.path)
                 Button { actions.ask(.rename, in: b.path, name: b.name) } label: { Label("Rename…", systemImage: "pencil") }
                 Button { actions.moving = b.path } label: { Label("Move to…", systemImage: "folder") }
                 Divider()
                 Button(role: .destructive) { actions.removing = b } label: { Label("Delete…", systemImage: "trash") }
             }
+    }
+}
+
+/// The pinned notebooks and boards: the sidebar's Pinned section, above Recent ("a|b" in this device's settings, in the order
+/// pinned; they follow a move or a rename, RecentBoards.renamed).
+enum NotebookPins {
+    static let key = "pinnedNotebooks"
+}
+
+/// Pin to the top / Unpin, in a notebook's or a board's menu.
+struct PinButton: View {
+    let path: String
+    @AppStorage(NotebookPins.key) private var pinned = ""
+
+    var body: some View {
+        let on = PathList.parse(pinned).contains(path)
+        Button {
+            withAnimation(Kit.spring) { pinned = PathList.toggling(path, in: pinned) }
+        } label: {
+            Label(on ? "Unpin" : "Pin to the top", systemImage: on ? "pin.slash" : "pin")
+        }
+    }
+}
+
+/// The notebooks moved into lately (Move to…'s Recent; this device's own), newest first.
+enum MovePlaces {
+    static let key = "recentMovePlaces"
+
+    static func list(_ root: URL) -> [String] {
+        PathList.parse(UserDefaults.standard.string(forKey: key) ?? "").filter {
+            $0 == BoardFormat.notebooks || FileManager.default.fileExists(atPath: root.appendingPathComponent($0).path)
+        }
+    }
+
+    static func add(_ path: String) {
+        UserDefaults.standard.set(PathList.adding(path, to: UserDefaults.standard.string(forKey: key) ?? "", max: 8), forKey: key)
     }
 }
 
@@ -159,6 +212,7 @@ struct NotebookMenu: View {
     @Bindable var actions: NotebookActions
 
     var body: some View {
+        PinButton(path: nb.path)
         Button { actions.ask(.rename, in: nb.path, name: nb.name) } label: { Label("Rename…", systemImage: "pencil") }
         Button { actions.moving = nb.path } label: { Label("Move to…", systemImage: "folder") }
         if nb.depth == 0 {
@@ -196,6 +250,12 @@ enum RecentBoards {
             return p
         }
         UserDefaults.standard.set(l, forKey: key)
+        // the pinned ones and Move to…'s recent places follow it too
+        for k in [NotebookPins.key, MovePlaces.key] {
+            let text = UserDefaults.standard.string(forKey: k) ?? ""
+            let followed = PathList.renaming(from, to: to, in: text)
+            if followed != text { UserDefaults.standard.set(followed, forKey: k) }
+        }
         // the sidebar's open notebooks follow a renamed or moved notebook
         let open = UserDefaults.standard.string(forKey: "openNotebooks") ?? ""
         let moved = NotebookTree.renaming(from, to: to, in: open)
@@ -369,6 +429,7 @@ final class NotebookActions {
                 try FileManager.default.moveItem(at: src, to: dir.appendingPathComponent(n, isDirectory: true))
                 RecentBoards.renamed(from, to + "/" + n)
                 moved = true
+                MovePlaces.add(to)
             } catch { problem = error.localizedDescription }
         }
         if moved { store.boardsChanged(listChanged: true) }
@@ -473,38 +534,161 @@ private func deleteMessage(_ shown: Notebook?, root: URL) -> String {
     return head + " They go from this iPad, and from your other devices when they sync."
 }
 
-/// Move to…: every notebook as a tree; tap one to move the board or notebook there.
+/// Move to… (Nov 24 2026: the list of every notebook, all open, was too long to scroll): a search field over every notebook by name
+/// and place, the notebooks moved into lately (Recent), then the notebooks as a tree opened where the board or notebook is now
+/// (one branch open at a time, as the sidebar's), with Notebooks (top level) for a notebook. Tap a name to move it there; where it
+/// is now, itself and what is inside it can't be picked.
 struct MoveSheet: View {
     let path: String
     @Bindable var actions: NotebookActions
     @Environment(NexusStore.self) private var store
     @Environment(\.dismiss) private var dismiss
+    @State private var query = ""
+    /// The tree's open notebooks; at first the ones that hold the board or notebook being moved.
+    @State private var open: Set<String> = []
+    @State private var started = false
+
+    private var isBoard: Bool { path.lowercased().hasSuffix(".board") }
+    /// The notebook it is in now.
+    private var here: String { (path as NSString).deletingLastPathComponent }
+    private var itemName: String {
+        let last = (path as NSString).lastPathComponent
+        return isBoard ? String(last.dropLast(6)) : last
+    }
 
     var body: some View {
-        let isBoard = path.lowercased().hasSuffix(".board")
-        let all = store.notebooks().flatMap(\.allNotebooks)
+        let tree = store.notebooks()
         NavigationStack {
-            List {
-                if !isBoard {
-                    row("Notebooks (top level)", BoardFormat.notebooks, depth: -1)
+            ScrollViewReader { proxy in
+                List {
+                    if NotebookFind.fold(query).isEmpty {
+                        Text(here == BoardFormat.notebooks ? "Now at the top level" : "Now in " + NotebookFind.Entry(kind: .notebook, path: here).placeAndName)
+                            .font(.nx(.footnote))
+                            .foregroundStyle(Kit.muted)
+                            .listRowBackground(Color.clear)
+                            .accessibilityIdentifier("move-now-in")
+                        let recent = MovePlaces.list(store.folder).filter { allowed($0) }.prefix(5)
+                        if !recent.isEmpty {
+                            Section("Recent") {
+                                ForEach(Array(recent), id: \.self) { p in placeRow(p) }
+                            }
+                        }
+                        Section("All notebooks") {
+                            if !isBoard { placeRow(BoardFormat.notebooks) }
+                            ForEach(NotebookTree.rows(notebooks: tree, open: open)) { r in treeRow(r) }
+                        }
+                    } else {
+                        let hits = NotebookFind.search(query, in: NotebookFind.entries(notebooks: tree.flatMap(\.allNotebooks).map(\.path), boards: []),
+                                                       recent: MovePlaces.list(store.folder), limit: 40)
+                        Section {
+                            if hits.isEmpty {
+                                Text("No notebook called “\(query.trimmingCharacters(in: .whitespaces))”")
+                                    .font(.nx(.subheadline)).foregroundStyle(Kit.muted)
+                                    .accessibilityIdentifier("move-none")
+                            }
+                            ForEach(hits) { h in placeRow(h.path) }
+                        }
+                    }
                 }
-                ForEach(all) { nb in row(nb.name, nb.path, depth: nb.depth) }
+                .onAppear {
+                    guard !started else { return }
+                    started = true
+                    open = Set(NotebookTree.ancestors(of: path))
+                    // the tree opens where it is now: that row comes into view
+                    DispatchQueue.main.async { proxy.scrollTo(here, anchor: .center) }
+                }
             }
-            .navigationTitle("Move “\(((path as NSString).lastPathComponent as NSString).deletingPathExtension)” to")
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Find a notebook")
+            .navigationTitle("Move “\(itemName)” to")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
         }
     }
 
-    private func row(_ name: String, _ to: String, depth: Int) -> some View {
-        let ok = Notebook.canMove(path, into: to)
-        return Button {
-            actions.move([path], into: to, store)
-            actions.moving = nil
-        } label: {
-            Label(name, systemImage: depth < 0 ? "books.vertical" : "book.closed")
-                .padding(.leading, CGFloat(max(0, depth)) * 18)
+    /// May it go into `to`? Not where it is now, into itself or below itself, and a board never straight into notebooks/.
+    private func allowed(_ to: String) -> Bool {
+        Notebook.canMove(path, into: to) && !(isBoard && to == BoardFormat.notebooks)
+    }
+
+    private func move(to: String) {
+        actions.move([path], into: to, store)
+        actions.moving = nil
+    }
+
+    private func toggle(_ p: String) {
+        withAnimation(Kit.spring) {
+            if open.contains(p) {
+                open.remove(p)
+            } else {
+                open = NotebookTree.parse(NotebookTree.opening(p, in: NotebookTree.join(open)))
+            }
+        }
+    }
+
+    /// A notebook by its name with where it sits under it (Recent, the search, the top level).
+    private func placeRow(_ p: String) -> some View {
+        let top = p == BoardFormat.notebooks
+        let e = NotebookFind.Entry(kind: .notebook, path: p)
+        let ok = allowed(p)
+        return Button { move(to: p) } label: {
+            HStack(spacing: 10) {
+                Image(systemName: top ? "books.vertical" : "book.closed").foregroundStyle(Color.secondary).frame(width: 20)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(top ? "Notebooks (top level)" : e.name).lineLimit(1).foregroundStyle(ok ? Kit.ink : Kit.muted)
+                    if !top && !e.place.isEmpty {
+                        Text(e.place).font(.nx(.caption)).foregroundStyle(Kit.muted).lineLimit(1).truncationMode(.head)
+                    }
+                }
+                Spacer(minLength: 4)
+                if p == here { Text("Here now").font(.nx(.caption)).foregroundStyle(Kit.muted) }
+            }
+            .contentShape(Rectangle())
         }
         .disabled(!ok)
+        .accessibilityIdentifier("move-place-" + (top ? "top" : e.name))
+    }
+
+    /// A notebook in the tree: its arrow (when it holds notebooks), then its name to move there, and how many boards it holds.
+    private func treeRow(_ r: NotebookTreeRow) -> some View {
+        let ok = allowed(r.path)
+        return HStack(spacing: 2) {
+            if r.depth > 0 { Color.clear.frame(width: CGFloat(r.depth) * NotebookTreeLine.step, height: 1) }
+            if r.hasChildren {
+                Button { toggle(r.path) } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.nx(.caption, .semibold))
+                        .foregroundStyle(Color.secondary)
+                        .rotationEffect(.degrees(r.isOpen ? 90 : 0))
+                        .frame(width: NotebookTreeLine.arrowWidth, height: 30)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel((r.isOpen ? "Collapse " : "Expand ") + r.name)
+                .accessibilityIdentifier("move-arrow-" + r.name)
+            } else {
+                Color.clear.frame(width: NotebookTreeLine.arrowWidth, height: 1)
+            }
+            Button { move(to: r.path) } label: {
+                HStack(spacing: 8) {
+                    if let c = r.color {
+                        Circle().fill(Color(uiColor: InkConvert.color(c))).frame(width: 9, height: 9).frame(width: 18)
+                    } else {
+                        Image(systemName: "book.closed").foregroundStyle(Color.secondary).font(.nx(.footnote)).frame(width: 18)
+                    }
+                    Text(r.name).lineLimit(1).foregroundStyle(ok ? Kit.ink : Kit.muted)
+                    Spacer(minLength: 4)
+                    if r.path == here {
+                        Text("Here now").font(.nx(.caption)).foregroundStyle(Kit.muted)
+                    } else if let n = r.boardCount, n > 0 {
+                        Text("\(n)").font(.nx(.caption)).foregroundStyle(Color.secondary).monospacedDigit()
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
+            .disabled(!ok)
+            .accessibilityIdentifier("move-to-" + r.name)
+        }
+        .id(r.path)
     }
 }

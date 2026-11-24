@@ -14,6 +14,10 @@ final class NotebookTreeModel {
     /// Goes up when what the rows show changed (a level read again, new counts): the tree draws again.
     private(set) var version = 0
     private(set) var counts: [String: Int] = [:]
+    /// Every notebook and board by name, from the same walk (the sidebar's find field: NexusCore NotebookFind).
+    private(set) var findEntries: [NotebookFind.Entry] = []
+    /// The walk has run once for this folder (until then the find field says it is reading).
+    private(set) var scanned = false
 
     @ObservationIgnored private var root: URL?
     @ObservationIgnored private var top: [String]?
@@ -76,17 +80,20 @@ final class NotebookTreeModel {
         checking = Task.detached(priority: .utility) { [weak self] in
             // the stamps first (a stat per notebook): nothing more when nothing changed
             if let old, old.changed(root).isEmpty {
-                await self?.done(root, nil)
+                await self?.done(root, nil, [])
                 return
             }
             let now = NotebookScan.read(root)
-            await self?.done(root, now)
+            let entries = now.findEntries
+            await self?.done(root, now, entries)
         }
     }
 
-    private func done(_ root: URL, _ now: NotebookScan?) {
+    private func done(_ root: URL, _ now: NotebookScan?, _ entries: [NotebookFind.Entry]) {
         checking = nil
         if let now, root == self.root {
+            if entries != findEntries { findEntries = entries }
+            if !scanned { scanned = true }
             var redraw = false
             if let old = scan {
                 for p in now.changed(from: old) {
@@ -108,6 +115,8 @@ final class NotebookTreeModel {
         top = nil
         scan = nil
         if !counts.isEmpty { counts = [:] }
+        if !findEntries.isEmpty { findEntries = [] }
+        if scanned { scanned = false }
         checking?.cancel()
         checking = nil
         // counted after this draw

@@ -640,6 +640,8 @@ public struct Notebook: Identifiable, Hashable {
     }
     /// Itself and every notebook inside it, depth first.
     public var allNotebooks: [Notebook] { [self] + notebooks.flatMap(\.allNotebooks) }
+    /// How many boards it holds, in the notebooks inside it too.
+    public var boardTotal: Int { boards.count + notebooks.reduce(0) { $0 + $1.boardTotal } }
 
     /// The notebook at `path` in a tree, or nil.
     public static func find(_ tree: [Notebook], _ path: String) -> Notebook? {

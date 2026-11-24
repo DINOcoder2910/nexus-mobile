@@ -7,6 +7,10 @@ import NexusCore
 /// tapping its **name** steps inside: the sidebar becomes just that subject, the places shrink to small icons on top, and the
 /// subject's page opens; Back (or Esc) returns to the full list. Claude, Ideas, Time, Files, Settings and the guide sit as icons at
 /// the foot. The notebooks are a tree with their boards (NotebooksList).
+/// Quick to get around a big notebooks folder (Nov 24 2026: the sidebar had grown too long to scroll): **Find a notebook or board**
+/// at the top (every notebook and board by name, from the tree's walk: NexusCore NotebookFind), **Pinned** notebooks and boards
+/// (a row's menu › Pin to the top; each device its own), the tree keeps one branch open at a time (opening a notebook closes the
+/// ones beside it: NotebookTree.opening), and the Notebooks section folds away like a group.
 /// On the iPhone the same list is the More tab (`pushes`: its rows push onto the tab's stack) and, cut to the subjects and the
 /// notebooks, the Subjects tab (`subjectsTab`).
 struct Sidebar: View {
@@ -30,6 +34,11 @@ struct Sidebar: View {
     /// The notebook tree's view of the folder, read lazily (NotebookTreeModel).
     @State private var notebookTree = NotebookTreeModel()
     @Environment(\.scenePhase) private var phase
+    /// What the find field at the top holds; while it holds something, the sidebar lists what it finds.
+    @State private var find = ""
+    @FocusState private var findFocused: Bool
+    /// The pinned notebooks and boards ("a|b", in the order pinned; PinButton).
+    @AppStorage(NotebookPins.key) private var pinned = ""
 
     var body: some View {
         let s = store.snapshot
@@ -52,7 +61,8 @@ struct Sidebar: View {
             .onChange(of: store.openBoard?.path, initial: true) { _, p in
                 guard let p else { return }
                 RecentBoards.add(p)
-                let shown = NotebookTree.revealing(p, in: openNotebooks)
+                // its notebooks open, each closing the ones beside it, so the tree shows where it is and stays short
+                let shown = NotebookTree.focusing(p, in: openNotebooks)
                 if shown != openNotebooks { openNotebooks = shown }
                 // a board opened from elsewhere (search, Recent, a link): its row comes into view, ready for the next tap
                 if !pushes { DispatchQueue.main.async { proxy.scrollTo(p) } }
@@ -108,8 +118,23 @@ struct Sidebar: View {
 
     // MARK: the full list
 
+    /// The find field shows on the iPad's sidebar and the iPhone's Subjects tab (where the notebooks are), not in the iPhone's More.
+    private var showsFind: Bool { store.snapshot.isDataFolder && (!pushes || subjectsTab) }
+
     @ViewBuilder
     private var sections: some View {
+        if showsFind {
+            Section { findField }
+        }
+        if showsFind && !NotebookFind.fold(find).isEmpty {
+            findResults
+        } else {
+            listSections
+        }
+    }
+
+    @ViewBuilder
+    private var listSections: some View {
         let p = store.planning
         let s = store.snapshot
         // the iPhone's More: where this phone stands with the hub, on top (the iPad has it at the sidebar's foot)
@@ -169,8 +194,20 @@ struct Sidebar: View {
             }
         }
 
+        if s.isDataFolder {
+            let pins = pinnedPaths
+            if !pins.isEmpty {
+                Section("Pinned") {
+                    ForEach(pins, id: \.self) { p in
+                        entryRow(NotebookFind.Entry(kind: p.lowercased().hasSuffix(".board") ? .board : .notebook, path: p))
+                    }
+                }
+            }
+        }
+
         if !subjectsTab, s.isDataFolder {
-            let recent = RecentBoards.list(store.folder)
+            let pins = Set(pinnedPaths)
+            let recent = RecentBoards.list(store.folder).filter { !pins.contains($0) }
             if !recent.isEmpty {
                 Section("Recent") {
                     ForEach(recent, id: \.self) { p in
@@ -182,9 +219,12 @@ struct Sidebar: View {
             }
         }
 
-        Section("Notebooks") {
+        // folds away like a group (remembered with them)
+        Section(isExpanded: open(Self.notebooksSection)) {
             if s.isDataFolder { NotebooksList(actions: notebookActions, pushes: pushes, tree: notebookTree) }
             row(.boardSearch, "Search boards", "text.magnifyingglass", count: nil)
+        } header: {
+            Text("Notebooks")
         }
 
         if pushes && !subjectsTab {
@@ -196,6 +236,116 @@ struct Sidebar: View {
             } footer: {
                 if s.readOnlyReason != nil { Label("Read-only", systemImage: "lock").font(.nx(.caption)) }
             }
+        }
+    }
+
+    // MARK: find, pinned
+
+    /// The closed-groups key the Notebooks section folds with (no group id starts with "_").
+    static let notebooksSection = "_notebooks"
+
+    /// The pinned paths that are still there.
+    private var pinnedPaths: [String] {
+        PathList.parse(pinned).filter { FileManager.default.fileExists(atPath: store.folder.appendingPathComponent($0).path) }
+    }
+
+    /// "Find a notebook or board": every notebook and board by its name (and where it sits), as you type.
+    private var findField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass").font(.nx(.subheadline)).foregroundStyle(Kit.muted)
+            TextField("Find a notebook or board", text: $find)
+                .font(.nx(.body))
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.go)
+                .focused($findFocused)
+                .onSubmit { if let first = findHits.first { openEntry(first) } }
+                .accessibilityIdentifier("notebook-find")
+            if !find.isEmpty {
+                Button {
+                    find = ""
+                    findFocused = false
+                } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(Kit.muted)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Clear the find field")
+                .accessibilityIdentifier("notebook-find-clear")
+            }
+        }
+        .padding(.horizontal, 10)
+        .frame(minHeight: 36)
+        .background(Kit.hover, in: RoundedRectangle(cornerRadius: Kit.controlRadius, style: .continuous))
+        .listRowInsets(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12))
+        .listRowBackground(Color.clear)
+    }
+
+    /// The most the find field lists.
+    private static let findLimit = 40
+
+    private var findHits: [NotebookFind.Entry] {
+        NotebookFind.search(find, in: notebookTree.findEntries, recent: RecentBoards.list(store.folder) + pinnedPaths, limit: Self.findLimit)
+    }
+
+    /// What the find field found: boards and notebooks with where each sits, best first.
+    @ViewBuilder
+    private var findResults: some View {
+        let hits = findHits
+        Section {
+            if hits.isEmpty {
+                Text(notebookTree.scanned ? "No notebook or board called “\(find.trimmingCharacters(in: .whitespaces))”" : "Reading the notebooks…")
+                    .font(.nx(.subheadline))
+                    .foregroundStyle(Kit.muted)
+                    .accessibilityIdentifier("notebook-find-none")
+            }
+            ForEach(hits) { h in entryRow(h) }
+        } header: {
+            if !hits.isEmpty {
+                Text(hits.count >= Self.findLimit ? "The first \(Self.findLimit): type more to narrow it" : hits.count == 1 ? "1 found" : "\(hits.count) found")
+            }
+        }
+    }
+
+    /// Opens a found or pinned board or notebook (on the iPad a notebook's page shows in place of the open board).
+    private func openEntry(_ e: NotebookFind.Entry) {
+        findFocused = false
+        if e.kind == .board {
+            store.openBoard = .init(path: e.path, focus: nil)
+        } else if !pushes {
+            store.openBoard = nil
+            selection = .notebook(e.path)
+        }
+    }
+
+    /// A found or pinned board or notebook: its name, and where it sits under it. Its menu is the tree row's (Pin, Move to…).
+    @ViewBuilder
+    private func entryRow(_ e: NotebookFind.Entry) -> some View {
+        let showing = e.kind == .board && store.openBoard?.path == e.path
+        let label = HStack(spacing: 10) {
+            // Color's grey, not .secondary: in a button that is the tint's (green) secondary
+            Image(systemName: e.kind == .board ? "scribble" : "book.closed")
+                .font(.nx(.footnote)).foregroundStyle(Color.secondary).frame(width: 20)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(e.name).lineLimit(1).foregroundStyle(showing ? Theme.accent : Kit.ink)
+                if !e.place.isEmpty {
+                    Text(e.place).font(.nx(.caption)).foregroundStyle(Kit.muted).lineLimit(1).truncationMode(.head)
+                }
+            }
+            Spacer(minLength: 4)
+        }
+        .contentShape(Rectangle())
+        if e.kind == .notebook {
+            Group {
+                if pushes {
+                    NavigationLink(value: Screen.notebook(e.path)) { label }
+                } else {
+                    Button { openEntry(e) } label: { label }
+                }
+            }
+            .notebookRowMenu(notebookTree.notebook(e.path), actions: notebookActions, store: store)
+        } else {
+            Button { openEntry(e) } label: { label }
+                .boardRowMenu(Notebook.BoardRef(name: e.name, path: e.path), actions: notebookActions)
         }
     }
 
@@ -292,7 +442,9 @@ struct Sidebar: View {
             } else {
                 ForEach(notebookTree.rows(store.folder, top: nbs, open: NotebookTree.parse(openNotebooks))) { r in
                     NotebookTreeLine(row: r, nb: r.kind == .notebook ? notebookTree.notebook(r.path) : nil, pushes: false, actions: notebookActions) {
-                        withAnimation(Kit.spring) { openNotebooks = NotebookTree.setting(r.path, open: !r.isOpen, in: openNotebooks) }
+                        withAnimation(Kit.spring) {
+                            openNotebooks = r.isOpen ? NotebookTree.setting(r.path, open: false, in: openNotebooks) : NotebookTree.opening(r.path, in: openNotebooks)
+                        }
                     }
                     // indented from the subject's own notebook, wherever it sits in the folder
                     .padding(.leading, pad + 18 - CGFloat(depth(of: nbs, r.path)) * NotebookTreeLine.step)

@@ -141,4 +141,48 @@ final class NotebookTreeTests: XCTestCase {
                        "notebooks/B/A|notebooks/B/A/C|notebooks/Z")
         XCTAssertEqual(NotebookTree.renaming("notebooks/Q", to: "notebooks/R", in: "notebooks/A"), "notebooks/A")
     }
+
+    /// One branch open at each level (Nov 24 2026: the sidebar had grown too long to scroll): opening a notebook closes the ones
+    /// beside it and what was open inside them, and keeps what is open inside itself.
+    func testOpeningClosesTheNotebooksBesideIt() {
+        let open = "notebooks/A|notebooks/A/B|notebooks/A/B/C|notebooks/A/D|notebooks/Z|notebooks/Z/Y"
+        XCTAssertEqual(NotebookTree.opening("notebooks/A/D", in: open), "notebooks/A|notebooks/A/D|notebooks/Z|notebooks/Z/Y",
+                       "B and C (beside D) close; Z, in another branch higher up, isn't beside D")
+        XCTAssertEqual(NotebookTree.opening("notebooks/Z", in: open), "notebooks/Z|notebooks/Z/Y",
+                       "a top-level notebook closes every other top-level branch, and keeps its own insides")
+        XCTAssertEqual(NotebookTree.opening("notebooks/A", in: "notebooks/A"), "notebooks/A", "nothing changed: the same text")
+        XCTAssertEqual(NotebookTree.opening("notebooks/Q", in: ""), "notebooks/Q")
+    }
+
+    /// A board opened from anywhere opens its notebooks, closing the ones beside each, and keeps what is open in its own notebook
+    /// (SidebarTreeTests: switching to another board of R3 Energetics keeps Week 1 open).
+    func testFocusingABoardKeepsOnlyItsBranch() {
+        let open = "notebooks/School|notebooks/School/Chemistry|notebooks/School/Chemistry/R3|notebooks/School/Chemistry/R3/Week 1|notebooks/School/Biology|notebooks/Art"
+        XCTAssertEqual(NotebookTree.focusing("notebooks/School/Chemistry/R3/Bond.board", in: open),
+                       "notebooks/School|notebooks/School/Chemistry|notebooks/School/Chemistry/R3|notebooks/School/Chemistry/R3/Week 1")
+        XCTAssertEqual(NotebookTree.focusing("notebooks/Art/Sketch.board", in: open), "notebooks/Art")
+        XCTAssertEqual(NotebookTree.focusing("boards/x.board", in: open), open, "not in a notebook: nothing changes")
+    }
+
+    func testMoveToTreeIsNotebooksOnly() {
+        let all = Notebook.list(dir)
+        XCTAssertEqual(NotebookTree.rows(notebooks: all, open: []).map(line), ["  Art", "> School"],
+                       "Art holds only a board, so it has no arrow in a tree of notebooks")
+        let rows = NotebookTree.rows(notebooks: all, open: ["notebooks/School", "notebooks/School/Chemistry"])
+        XCTAssertEqual(rows.map(line), ["  Art", "v School", "  v Chemistry", "    > R3 Energetics", "    Maths"])
+        XCTAssertEqual(rows[1].boardCount, 5)
+        XCTAssertEqual(rows[1].color, "#007F43")
+        XCTAssertEqual(rows[3].boardCount, 4)
+    }
+
+    func testScanListsEveryBoardAndNotebook() {
+        let scan = NotebookScan.read(dir)
+        XCTAssertEqual(Set(scan.boards), Set(Notebook.list(dir).flatMap { $0.allBoards.map { $0.board.path } }))
+        XCTAssertEqual(scan.boards.count, 6)
+        XCTAssertEqual(scan.notebooks.first, "notebooks/Art")
+        XCTAssertTrue(scan.notebooks.contains("notebooks/School/Chemistry/R3 Energetics/Week 1"))
+        let hits = NotebookFind.search("calor", in: scan.findEntries)
+        XCTAssertEqual(hits.map(\.path), ["notebooks/School/Chemistry/R3 Energetics/Week 1/Calorimetry.board"])
+        XCTAssertEqual(hits.first?.place, "School › Chemistry › R3 Energetics › Week 1")
+    }
 }
