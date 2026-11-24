@@ -328,6 +328,7 @@ extension BoardController {
         if let p = links.passage {
             o.add(UIBezierPath(roundedRect: screenRect(p.box), cornerRadius: 2), fill: UIColor.systemYellow.withAlphaComponent(0.28), stroke: .systemOrange)
         }
+        paintPrintoutIcons(o, visible: vis)
         o.end()
         // a link still growing out of its end: draw again next frame
         if growing { DispatchQueue.main.asyncAfter(deadline: .now() + 1.0 / 60) { [weak self] in self?.paintLinks() } }

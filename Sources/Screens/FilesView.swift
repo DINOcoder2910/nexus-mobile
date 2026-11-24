@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 import NexusCore
 
 /// Files: the data folder as it is on disk, the laptop's Files mode for the iPhone and the iPad. Folders open in place; a board opens
-/// as a board; anything else (PDF, picture, Word, Excel, PowerPoint, text, YAML, markdown, audio, video) opens in the system's viewer.
+/// as a board; a PDF on its page (PdfPage: Write on it, its markscheme, its boards and tasks); anything else (picture, Word, Excel, PowerPoint, text, YAML, markdown, audio, video) opens in the system's viewer.
 /// Hold a file for Share, Rename and Delete; + makes a folder or brings files in from the Files app. The files Nexus itself is built
 /// on (nexus.yaml, a workstream's tasks.yaml…) and boards can be opened and shared here but not renamed or deleted: their own
 /// screens do that, so links and the laptop stay right. The iPad shows a size and date column; the iPhone keeps rows to one line.
@@ -17,6 +17,7 @@ struct FilesView: View {
 
     @State private var entries: [FileEntry] = []
     @State private var preview: URL?
+    @State private var pdf: PdfOpen?
     @State private var renaming: FileEntry?
     @State private var newName = ""
     @State private var deleting: FileEntry?
@@ -66,6 +67,7 @@ struct FilesView: View {
         .task(id: "\(path)|\(store.snapshot.loadedAt)|\(store.notebooksVersion)|\(showHidden)") { reload() }
         .refreshable { reload() }
         .quickLookPreview($preview)
+        .pdfPage($pdf)
         .alert("Rename", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField("Name", text: $newName)
             Button("Rename") { if let e = renaming { rename(e, to: newName) } }
@@ -114,6 +116,10 @@ struct FilesView: View {
     @ViewBuilder
     private func menu(_ e: FileEntry) -> some View {
         if !e.isFolder || e.isBoard { Button { open(e) } label: { Label("Open", systemImage: "arrow.up.forward.square") } }
+        if !e.isFolder && PdfOpen.isPDF(e.url) {
+            Button { store.writeOn(pdf: e.rel) } label: { Label("Write on it", systemImage: "pencil.and.scribble") }
+                .disabled(store.snapshot.readOnlyReason != nil)
+        }
         if !e.isFolder { ShareLink(item: e.url) { Label("Share…", systemImage: "square.and.arrow.up") } }
         if e.canChange {
             Button { newName = e.name; renaming = e } label: { Label("Rename…", systemImage: "pencil") }
@@ -128,6 +134,8 @@ struct FilesView: View {
     private func open(_ e: FileEntry) {
         if e.isBoard { store.openBoard = .init(path: e.rel, focus: nil); return }
         if e.isFolder { return } // its row is a link
+        // a PDF opens on its page (Write on it, its markscheme, what it goes with), anything else in Quick Look
+        if PdfOpen.isPDF(e.url) { pdf = PdfOpen(path: e.rel); return }
         preview = e.url
     }
 
