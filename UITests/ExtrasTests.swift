@@ -46,12 +46,25 @@ class ExtrasTests: XCTestCase {
         XCTWaiter().wait(for: [expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: e)], timeout: timeout) == .completed
     }
 
+    /// Whether `e` is on screen (inside `box`, else the window), from its frame. `isHittable` threw now and then on the iPad
+    /// ("Activation point invalid", "No matches found for … Alert") and failed the test with it (docs/ci-lessons.md, Nov 24).
+    func shown(_ e: XCUIElement, in box: XCUIElement? = nil) -> Bool {
+        guard e.exists else { return false }
+        let f = e.frame
+        guard !f.isEmpty else { return false }
+        // the window less its bars (a navigation bar at the top, a tab bar at the foot of the iPhone) or the box's own frame
+        let w = app.windows.firstMatch.frame
+        let area = box.map { $0.exists ? $0.frame.insetBy(dx: 0, dy: 8) : .zero }
+            ?? CGRect(x: w.minX, y: w.minY + 100, width: w.width, height: max(0, w.height - 200))
+        return area.contains(CGPoint(x: f.midX, y: f.midY))
+    }
+
     /// Swipes up (then down) until `e` is on screen and can be tapped, bounded.
     func reveal(_ e: XCUIElement) {
         var n = 0
-        while !(e.exists && e.isHittable) && n < 8 { app.swipeUp(velocity: .slow); n += 1 }
+        while !shown(e) && n < 8 { app.swipeUp(velocity: .slow); n += 1 }
         n = 0
-        while !(e.exists && e.isHittable) && n < 8 { app.swipeDown(velocity: .slow); n += 1 }
+        while !shown(e) && n < 8 { app.swipeDown(velocity: .slow); n += 1 }
     }
 
     // MARK: Google Docs
@@ -71,13 +84,13 @@ class ExtrasTests: XCTestCase {
         let list = app.collectionViews.containing(NSPredicate(format: "identifier BEGINSWITH 'gdocs-'")).firstMatch
         let versions = el("gdocs-version-0")
         var n = 0
-        while !(versions.exists && versions.isHittable) && n < 6 && list.exists { list.swipeUp(velocity: .slow); n += 1 }
+        while !shown(versions, in: list) && n < 6 && list.exists { list.swipeUp(velocity: .slow); n += 1 }
         XCTAssertTrue(versions.waitForExistence(timeout: 15), "the Doc's recent edits didn't show")
         shot("gdocs-versions-\(mode)")
         // back up to Sync now, which went out of the list on the way down
         let sync = el("gdocs-sync")
         n = 0
-        while !(sync.exists && sync.isHittable) && n < 6 && list.exists { list.swipeDown(velocity: .slow); n += 1 }
+        while !shown(sync, in: list) && n < 6 && list.exists { list.swipeDown(velocity: .slow); n += 1 }
         XCTAssertTrue(sync.exists, "no Sync now")
         if sync.exists { sync.tap() }
         sleep(2)
@@ -130,7 +143,7 @@ class ExtrasTests: XCTestCase {
         openSettings()
         let copy = el("widget-copy-key")
         var n = 0
-        while !(copy.exists && copy.isHittable) && n < 16 { app.swipeUp(velocity: .slow); n += 1 }
+        while !shown(copy) && n < 16 { app.swipeUp(velocity: .slow); n += 1 }
         XCTAssertTrue(copy.exists, "Settings has no Home Screen widgets section (is the extension in the app?)")
         guard copy.exists else { shot("widgets-missing-\(mode)"); return }
         copy.tap()
@@ -138,7 +151,7 @@ class ExtrasTests: XCTestCase {
         // the switch sits under the copy row, below the screen's edge when the section is the last thing scrolled to
         let on = el("widget-on")
         n = 0
-        while !(on.exists && on.isHittable) && n < 6 { app.swipeUp(velocity: .slow); n += 1 }
+        while !shown(on) && n < 6 { app.swipeUp(velocity: .slow); n += 1 }
         XCTAssertTrue(on.waitForExistence(timeout: 5), "no Keep the widgets up to date")
         shot("widgets-\(mode)")
         // off again: the next tests on this simulator (the Live Activity's) run without the widget file being written
