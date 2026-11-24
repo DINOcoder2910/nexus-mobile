@@ -45,6 +45,12 @@ final class SyncService {
     private(set) var working = false
     /// Goes up whenever a file came into Drop/ or went out from it (the Drop screen and its count look again).
     private(set) var dropVersion = 0
+    /// While offline: the changes here the hub hasn't got (the chip's "Offline · N waiting").
+    private(set) var waitingHere = 0
+    /// Which hub answered last: "rust" for the Rust hub, nil for the Node hub.
+    private(set) var hubImpl: String?
+    /// `-NexusTestSyncChip <state>` (UITests/SyncChipTests): the chip as it would be, with no hub.
+    private let testChip: SyncChip? = SyncService.testChipFromLaunch()
 
     @ObservationIgnored private weak var store: NexusStore?
     @ObservationIgnored private var client: SyncClient?
@@ -252,7 +258,11 @@ final class SyncService {
                 switch next {
                 case .longPoll:
                     guard let client else { return }
-                    await waitFor { _ = try await client.waitForHub(seconds: 25) }
+                    // the Rust hub's change feed tells the moment something changes, so a cycle every 5 minutes is only the backstop;
+                    // the long poll of the Node hub comes back every 25 s
+                    let feeds = await client.followsFeed
+                    let seconds = feeds ? 300 : 25
+                    await waitFor { _ = try await client.waitForHub(seconds: seconds) }
                 case .after(let seconds):
                     await waitFor { try await Task.sleep(for: .seconds(seconds)) }
                 }
@@ -297,6 +307,8 @@ final class SyncService {
         do {
             let outcome = try await client.cycle(progress: { p in _ = Task { @MainActor in self.showProgress(p) } })
             failures = 0
+            waitingHere = 0
+            hubImpl = await client.hubImpl
             switch outcome {
             case .synced(let r):
                 conflictCopies = r.conflictCopies
@@ -330,7 +342,12 @@ final class SyncService {
         } catch let e as SyncError {
             if e.isTransient {
                 failures += 1
-                if case .offline = e { status = .offline } else { status = .problem(e.plainWords) }
+                if case .offline = e {
+                    status = .offline
+                    waitingHere = await client.waitingHere()
+                } else {
+                    status = .problem(e.plainWords)
+                }
                 return .after(min(60, pow(2, Double(failures))))
             }
             status = .problem(e.plainWords)
@@ -434,6 +451,40 @@ final class SyncService {
         case .problem, .paused, .notDataFolder: return Theme.late
         case .offline, .choose, .hubEmpty: return Theme.soon
         default: return .secondary
+        }
+    }
+
+    /// The sync chip (the iPad's sidebar foot, the top of the iPhone's More), in the laptop's words (NexusCore SyncChip).
+    var chip: SyncChip {
+        if let testChip { return testChip }
+        let state: SyncChip.State
+        switch status {
+        case .off: state = .off
+        case .notSetUp: state = .notSetUp
+        case .connecting: state = .connecting
+        case .upToDate: state = .inSync
+        case .syncing(let n): state = .syncing(n)
+        case .offline: state = .offline
+        case .problem(let why): state = .problem(why)
+        case .paused(let paths): state = .deletionsHeld(paths.count)
+        case .choose: state = .waiting("Waiting for you to choose how to start, in Settings › Sync.")
+        case .notDataFolder: state = .waiting("This folder has no nexus.yaml.")
+        case .hubEmpty: state = .waiting("The hub is empty. Sync the laptop with it first.")
+        }
+        return SyncChip.of(state, waiting: waitingHere, conflicts: conflictCopies.count, lastSynced: lastSynced)
+    }
+
+    /// `-NexusTestSyncChip insync|syncing|offline|conflicts|problem` (UITests/SyncChipTests).
+    nonisolated private static func testChipFromLaunch() -> SyncChip? {
+        let args = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: "-NexusTestSyncChip"), i + 1 < args.count else { return nil }
+        switch args[i + 1] {
+        case "insync": return SyncChip.of(.inSync, lastSynced: Date().addingTimeInterval(-120))
+        case "syncing": return SyncChip.of(.syncing(3))
+        case "offline": return SyncChip.of(.offline, waiting: 3)
+        case "conflicts": return SyncChip.of(.inSync, conflicts: 2)
+        case "problem": return SyncChip.of(.problem("The hub didn't accept the token. Copy it again from the hub."))
+        default: return nil
         }
     }
 

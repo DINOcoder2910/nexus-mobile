@@ -2,7 +2,7 @@ import XCTest
 @testable import NexusCore
 
 /// The sync client against an in-process hub (FakeHub), on a data folder in a temp directory.
-final class SyncTests: XCTestCase {
+class SyncTests: XCTestCase {
     var root: URL!
     var dir: URL!
     var stateURL: URL!

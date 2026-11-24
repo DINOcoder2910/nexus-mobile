@@ -109,6 +109,17 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     var onSidebar: (() -> Void)?
     /// The board in Side by side's second pane (its bar's close button closes the pane).
     var isSidePane = false
+    // the pen panel's extras (BoardController+PenExtras.swift): the lasso's path being drawn, the strokes it holds, copying a pen
+    var lassoTrace: [CGPoint] = []
+    var lassoMoved = false
+    var lassoPick: LassoPick?
+    var copyBanner: UIView?
+    let pickRing = CAShapeLayer()
+    let undoToast = UndoToast()
+    /// Each printout PDF's markscheme, looked up once (BoardController+Sheets.swift).
+    var msLookup: [String: String?] = [:]
+    /// The size each stroke drawn this session was drawn with, by its path's creation date (BoardController+PenExtras.swift).
+    var drawnWith: [Date: (step: Int, width: Double)] = [:]
 
     init(root: URL, path: String, focus: CGRect?) {
         self.root = root
@@ -175,6 +186,12 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         NotificationCenter.default.addObserver(self, selector: #selector(saveNowSelector), name: UIApplication.willResignActiveNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(otherPaneSaved(_:)), name: BoardController.savedNote, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(mathDrawn), name: BlockStyler.mathReady, object: nil)
+        if TestHooks.extras {
+            NotificationCenter.default.addObserver(forName: TestHooks.openGooglePanel, object: nil, queue: .main) { [weak self] n in
+                guard let id = n.object as? String else { return }
+                MainActor.assumeIsolated { self?.openGooglePanel(id) }
+            }
+        }
         poll = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.checkOutside() }
         setUpLive()
     }
@@ -483,8 +500,10 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
             strokeLanded()
             if !tutorIsBusy, let k = canvas.drawing.strokes.last { lastStroke = (k.renderBounds.offsetBy(dx: -offset.x, dy: -offset.y), Date(), false) }
             if TestHooks.isPenProbeRun { penProbe() }
+            noteDrawnWith()
         }
         strokeCount = canvas.drawing.strokes.count
+        lassoDrawingChanged()
         recordingDrawingChanged()
         if selected != nil { selected = nil }
         growIfNeeded()

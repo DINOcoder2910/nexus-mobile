@@ -137,3 +137,60 @@ enum NexusLive {
         return "\(m)m"
     }
 }
+
+/// The Home Screen widgets (Widgets/NexusHomeWidget.swift, Nov 23 2026): they live in the Live Activity's extension, so they need no
+/// App ID or sideload slot of their own. Free signing gives the app and the extension no shared folder, so the app puts the day's card
+/// (the same state the Live Activity shows) into the data folder's `widgets/<device>.json`, sync carries it to the hub, and the widget
+/// reads it from the hub with a widget key (the hub's address and token) pasted once into Edit Widget.
+enum NexusWidgetShare {
+    static let dir = "widgets"
+    /// The data folder's file for a device ("widgets/iphone.json").
+    static func path(device: String) -> String { dir + "/" + device.lowercased() + ".json" }
+
+    /// What the file and the key say, in JSON with ISO dates.
+    static let encoder: JSONEncoder = {
+        let e = JSONEncoder()
+        e.dateEncodingStrategy = .iso8601
+        e.outputFormatting = [.sortedKeys]
+        return e
+    }()
+    static let decoder: JSONDecoder = {
+        let d = JSONDecoder()
+        d.dateDecodingStrategy = .iso8601
+        return d
+    }()
+
+    /// The file: `{"format": "nexus-widget/1", "device", "updated", "state"}`.
+    struct File: Codable {
+        var format = "nexus-widget/1"
+        var device: String
+        var updated: Date
+        var state: NexusLiveState
+    }
+
+    /// The widget key: the hub's address, its token and which device's card to show, as one line to paste.
+    struct Key: Codable, Equatable {
+        var hub: String
+        var token: String
+        var device: String
+
+        static let prefix = "nexus-widget:"
+
+        var text: String {
+            let data = (try? NexusWidgetShare.encoder.encode(self)) ?? Data()
+            return Key.prefix + data.base64EncodedString()
+        }
+
+        /// What was pasted: the key's line (spaces and line breaks the paste added are dropped); nil if it isn't one.
+        init?(_ text: String) {
+            var t = text.components(separatedBy: .whitespacesAndNewlines).joined()
+            guard t.hasPrefix(Key.prefix) else { return nil }
+            t.removeFirst(Key.prefix.count)
+            guard let data = Data(base64Encoded: t), let k = try? NexusWidgetShare.decoder.decode(Key.self, from: data),
+                  !k.hub.isEmpty, !k.token.isEmpty else { return nil }
+            self = k
+        }
+
+        init(hub: String, token: String, device: String) { self.hub = hub; self.token = token; self.device = device }
+    }
+}

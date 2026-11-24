@@ -50,9 +50,10 @@ final class NewLookTests: XCTestCase {
         reach(arrow, "Chemistry HL's arrow")
         arrow.tap()
         let folderStudy = el("subject-study-chemistry-hl")
-        // its parts open under it: scroll them in if the folder opened near the foot
+        // its parts open under it: scroll them in if the folder opened near the foot; a stalled simulator can take half a minute to
+        // open it (SidebarTreeTests' "School", Nov 20 and 23): a pass costs nothing extra
         if !folderStudy.waitForExistence(timeout: 5) { app.collectionViews.firstMatch.swipeUp(velocity: .slow) }
-        XCTAssertTrue(folderStudy.waitForExistence(timeout: 5), "Chemistry HL didn't open as a folder")
+        XCTAssertTrue(folderStudy.waitForExistence(timeout: 40), "Chemistry HL didn't open as a folder")
         sleep(1)
         shot("look-sidebar-folder-\(mode)")
         app.buttons["Collapse Chemistry HL"].firstMatch.tap()

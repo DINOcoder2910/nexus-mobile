@@ -85,7 +85,16 @@ final class WritingViewController: UIViewController, UITableViewDataSource, UITa
         let left = UIStackView(arrangedSubviews: [backButton, titleLabel])
         left.spacing = 8
         left.alignment = .center
-        let right = UIStackView(arrangedSubviews: [count, outlineButton, commentsButton, historyButton, draftsButton, done])
+        // the block's Google Doc (BoardController+GoogleDocs.swift): its panel, as the laptop's Writing view has
+        var gdocConf = UIButton.Configuration.gray()
+        gdocConf.image = UIImage(systemName: "doc.text")
+        let gdocButton = UIButton(configuration: gdocConf, primaryAction: UIAction { [weak self] _ in
+            guard let self, let b = self.board else { return }
+            b.openGooglePanel(self.session.id)
+        })
+        gdocButton.accessibilityLabel = "Google Docs"
+        gdocButton.accessibilityIdentifier = "writing-gdocs"
+        let right = UIStackView(arrangedSubviews: [count, outlineButton, commentsButton, historyButton, draftsButton, gdocButton, done])
         right.spacing = 10
         right.alignment = .center
         for v in [left, right] as [UIView] { v.translatesAutoresizingMaskIntoConstraints = false; top.addSubview(v) }

@@ -130,6 +130,55 @@ final class BoardTools {
         return v.map { CGFloat($0) }
     }
 
+    /// Whether `t` has sizes of its own (set on the iPad with Save as my default, or on the laptop).
+    func hasOwnWidths(_ t: BoardTool) -> Bool { ownWidths(t) != BoardTools.widths(t == .shapes ? .pen : t) }
+
+    /// Save as my default: step `i` of `t`'s row drawn `w` wide (board units) from now on, on this iPad and the laptop (the file
+    /// keeps it in the laptop's units, Pens.unscaled). Shapes set the pen's.
+    func setOwnWidth(_ t: BoardTool, _ i: Int, _ w: CGFloat) {
+        let k = t == .shapes ? BoardTool.pen : t
+        guard let ink = BoardTools.sharedInk(k) else { return }
+        var row = ownWidths(k)
+        guard row.indices.contains(i) else { return }
+        row[i] = w
+        d.set(row.map { Double($0) }, forKey: "board.inkWidths." + ink)
+        shareSoon()
+    }
+
+    /// Reset sizes: `t`'s six widths back to the built-in ones, here and on the laptop.
+    func resetWidths(_ t: BoardTool) {
+        let k = t == .shapes ? BoardTool.pen : t
+        guard let ink = BoardTools.sharedInk(k) else { return }
+        d.removeObject(forKey: "board.inkWidths." + ink)
+        shareSoon()
+    }
+
+    /// The tool a stroke of this PencilKit ink was drawn with (the pen for the pen's kinds).
+    static func tool(of ink: PKInkingTool.InkType) -> BoardTool {
+        switch ink {
+        case .marker: return .highlighter
+        case .pencil: return .pencil
+        default: return .pen
+        }
+    }
+
+    /// Draw with it: `t` in this colour and step from now on. A colour that isn't in the row takes the picked colour's place
+    /// (true when it did, so the board can say so).
+    @discardableResult
+    func take(_ t: BoardTool, color hex: String, step: Int) -> Bool {
+        var replaced = false
+        let row = colors(t)
+        if let i = row.firstIndex(where: { Pens.color($0) == Pens.color(hex) }) {
+            setColorIndex(t, i)
+        } else {
+            setColor(t, at: colorIndex(t), hex)
+            replaced = true
+        }
+        setWidthIndex(t, min(BoardTools.widths(t).count - 1, max(0, step)))
+        tool = t
+        return replaced
+    }
+
     /// The PencilKit ink `t` writes with (nil for the eraser and the tools that don't draw).
     func inkType(_ t: BoardTool) -> PKInkingTool.InkType? {
         switch t {
@@ -233,11 +282,14 @@ final class BoardTools {
     private var fileURL: URL? { folder?.appendingPathComponent(Pens.file) }
     private static func modified(_ u: URL) -> Date? { (try? FileManager.default.attributesOfItem(atPath: u.path))?[.modificationDate] as? Date }
 
-    /// The pens as the file has them (the iPad doesn't change the laptop's sizes, so they are not here).
+    /// The pens as the file has them. The sizes are always named, in the laptop's units (Pens.unscaled), so a size set here or
+    /// put back with Reset sizes reaches the laptop; only those that changed are saved.
     func shared() -> Pens.Shared {
         var s = Pens.Shared()
         for t in BoardTools.sharedTools {
             if let k = BoardTools.sharedInk(t), let c = Pens.color(color(t)) { s.inks[k] = Pens.Ink(color: c, step: widthIndex(t)) }
+            if let k = BoardTools.sharedInk(t),
+               let w = Pens.unscaled(ownWidths(t).map { Double($0) }, ink: k, own: BoardTools.widths(t).map { Double($0) }) { s.widths[k] = w }
         }
         let pen = colors(.pen).compactMap(Pens.color), marker = colors(.highlighter).compactMap(Pens.color)
         if pen.count == 10 { s.colors["pen"] = pen }

@@ -25,36 +25,6 @@ extension NexusStore {
             return nil
         })
     }
-
-    /// Write on it: the PDF's board beside it (`<name>.board`, its pages down the board as a printout of the PDF where it is,
-    /// as the laptop keeps a PDF's writing), made the first time, then opened.
-    func writeOn(pdf path: String) {
-        let name = (path as NSString).lastPathComponent
-        let dir = (path as NSString).deletingLastPathComponent
-        let rel = (dir.isEmpty ? "" : dir + "/") + (name as NSString).deletingPathExtension + ".board"
-        let board = folder.appendingPathComponent(rel, isDirectory: true)
-        if !FileManager.default.fileExists(atPath: board.appendingPathComponent("board.json").path) {
-            do {
-                try FolderAccess.write(board.appendingPathComponent("board.json"), BoardFormat.boardJSON())
-                var c = BoardContent()
-                c.items = [BoardItem(id: "pdf1", type: "pdf", x: 60, y: 60, fields: [
-                    ("src", .string("../" + name)), ("w", .number(BoardFormat.pdfWidth)), ("gap", .number(BoardFormat.pdfGap)),
-                ])]
-                _ = try BoardFiles.save(c, to: board, write: { u, t in try FolderAccess.write(u, t) })
-                boardsChanged(listChanged: true)
-            } catch {
-                problem = "Couldn't make a board for \(name): \(error.localizedDescription)"
-                return
-            }
-        }
-        // from the task panel: the panel goes first, then the board opens
-        if openTaskId != nil {
-            openTaskId = nil
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [self] in openBoard = .init(path: rel, focus: nil) }
-        } else {
-            openBoard = .init(path: rel, focus: nil)
-        }
-    }
 }
 
 /// A task's files as small chips (a PDF opens to write on, anything else in Quick Look), and Write on it for its first PDF.

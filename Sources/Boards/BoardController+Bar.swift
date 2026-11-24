@@ -49,6 +49,17 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
         spaceTap.delegate = self
         canvas.addGestureRecognizer(spaceTap)
 
+        // the lasso's path, for restyling what it holds (BoardController+PenExtras.swift): a pan of its own beside PencilKit's
+        // gestures (the lasso isn't PencilKit's drawing gesture), which takes nothing from them
+        let trace = UIPanGestureRecognizer(target: self, action: #selector(lassoTraced(_:)))
+        trace.name = "lassoTrace"
+        trace.allowedTouchTypes = BoardController.anyTouch
+        trace.maximumNumberOfTouches = 1
+        trace.cancelsTouchesInView = false
+        trace.delaysTouchesEnded = false
+        trace.delegate = self
+        canvas.addGestureRecognizer(trace)
+
         quickRing.board = self
         quickRing.frame = view.bounds
         quickRing.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -73,6 +84,7 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
     func layOutBar() {
         let top = view.safeAreaInsets.top
         bar.compact = view.bounds.width < BoardBar.compactWidth // a narrow screen gives the tools their own row
+        bar.tight = view.bounds.width < BoardBar.tightWidth // a pane beside: the page and zoom go down a row
         bar.frame = CGRect(x: 0, y: 0, width: view.bounds.width, height: top + bar.height)
         showBarsButton.frame = CGRect(x: view.bounds.width - view.safeAreaInsets.right - 56, y: top + 8, width: 44, height: 32)
         quickRing.isHidden = !QuickRingPrefs.on || readOnly
@@ -81,7 +93,15 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
         if let p = toolPanel?.view, p.superview == view { view.bringSubviewToFront(p) } // the Tools card sits over the ring
         view.bringSubviewToFront(bar)
         view.bringSubviewToFront(showBarsButton)
+        // an upright iPhone's tools, at the foot of the board
+        if bar.pill || bar.phonePill.superview != nil {
+            bar.phonePill.syncShown()
+            bar.phonePill.place(in: view)
+        }
     }
+
+    /// How much of the foot of the screen the iPhone's tools pill covers, under the safe area's own.
+    var bottomInset: CGFloat { view.safeAreaInsets.bottom + bar.phonePill.coveredHeight }
 
     /// How much of the top of the screen the bar covers.
     var topInset: CGFloat { bar.isHidden ? view.safeAreaInsets.top : view.safeAreaInsets.top + bar.height }
@@ -96,6 +116,7 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
         case "quietTap": return t == .lasso && lassoTapIsEmpty(g)
         case "tap": return (t == .text || t == .space) && !readOnly ? false : nil
         case "itemPan": return t == .space ? false : nil
+        case "lassoTrace": return t == .lasso
         default: return nil
         }
     }
@@ -106,12 +127,14 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
 
     func selectTool(_ t: BoardTool) {
         if writing != nil, t != .text { endWriting() }
+        if copyingStroke { endCopyFromStroke() }
         BoardTools.shared.tool = t
         toolChanged()
     }
 
     /// A tool, colour, width or kind changed in the bar.
     func toolChanged() {
+        if BoardTools.shared.tool != .lasso { clearLassoPick() }
         applyTool()
         bar.refresh()
         quickRing.refresh()
@@ -299,7 +322,7 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
         tools.tintColor = toolPanel != nil ? .tintColor : .label
         tools.accessibilityLabel = "Tools"
         tools.toolTip = "Tools"
-        return [tools] + boardExtraButtons() + linkBarButtons()
+        return [tools] + boardExtraButtons() + sheetBarButtons() + linkBarButtons()
     }
 
     var pageLabel: String { currentPage.isEmpty ? "" : currentPage }

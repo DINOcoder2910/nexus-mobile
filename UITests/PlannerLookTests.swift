@@ -49,6 +49,11 @@ class PlannerLookTests: XCTestCase {
         }
         XCTAssertTrue(el("planner").waitForExistence(timeout: 15), "the Planner isn't up")
         sleep(2)
+        // the span and the Show row are kept on the device: back to the whole week, everything shown
+        if el("show-all").exists { el("show-all").tap() }
+        let week = el("plan-span").buttons["Week"].firstMatch
+        if week.exists && week.isHittable { week.tap() }
+        sleep(1)
     }
 
     func run(dark: Bool) {
@@ -69,20 +74,37 @@ class PlannerLookTests: XCTestCase {
     func testPlannerLight() { run(dark: false) }
     func testPlannerDark() { run(dark: true) }
 
+    /// Drags the iPhone's filter strip sideways along All's row (from the middle of the screen, clear of the back-swipe edge).
+    func slideFilters(by dx: CGFloat) {
+        let row = el("bank-filter-All").coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        let mid = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0)).withOffset(CGVector(dx: 0, dy: row.screenPoint.y))
+        mid.press(forDuration: 0.05, thenDragTo: mid.withOffset(CGVector(dx: dx, dy: 0)))
+        sleep(1)
+    }
+
     /// The bank's filters narrow it, and its button hides it.
     func testBankFiltersAndHides() {
         openPlanner(dark: false)
         let toggle = el("bank-toggle")
         XCTAssertTrue(toggle.waitForExistence(timeout: 5), "no Task bank button")
-        let noDate = el("bank-filter-No date")
+        let noDate = el("bank-filter-No date"), all = el("bank-filter-All")
         var tries = 0
-        while !(noDate.exists && noDate.isHittable) && tries < 10 { app.scrollViews.firstMatch.swipeUp(velocity: .slow); tries += 1 }
+        while !(all.exists && all.isHittable) && tries < 10 { app.scrollViews.firstMatch.swipeUp(velocity: .slow); tries += 1 }
+        sleep(2)   // a tap on a scroll view still gliding only stops it
+        // the iPhone's filters scroll sideways and No date starts past the edge: bring it fully in before pressing it
+        if phone { slideFilters(by: -250) }
         noDate.tap()
         sleep(1)
+        if !noDate.isSelected { noDate.tap(); sleep(1) }
+        shot("look-planner-bank-no-date")
+        XCTAssertTrue(noDate.isSelected, "No date didn't turn on")
         // the sample's personal statement has a deadline; Columbia's short answers have none
         XCTAssertFalse(el("bank").staticTexts["Finalise the personal statement"].exists, "No date kept a task with a deadline")
         XCTAssertTrue(el("bank").staticTexts["Columbia short answers"].waitForExistence(timeout: 5), "No date lost a task without one")
-        el("bank-filter-All").tap()
+        if phone { slideFilters(by: 250) }
+        all.tap()
+        sleep(1)
+        XCTAssertTrue(all.isSelected, "All didn't turn back on")
         // back to the top, and hide the bank
         tries = 0
         while !toggle.isHittable && tries < 10 { app.scrollViews.firstMatch.swipeDown(velocity: .fast); tries += 1 }

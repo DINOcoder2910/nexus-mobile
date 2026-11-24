@@ -120,6 +120,10 @@ targets:
         CFBundleDisplayName: Nexus
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
+        # the Home Screen widgets read the day's card from the hub on the G14 over plain HTTP (Tailscale or the home network)
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+        NSLocalNetworkUsageDescription: The Nexus widget reads your day from your home hub.
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.nexus.mobile.live

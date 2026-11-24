@@ -24,7 +24,7 @@ concurrency:
 jobs:
   ui:
     runs-on: macos-latest
-    timeout-minutes: 240
+    timeout-minutes: 250
     steps:
       - uses: actions/checkout@v4
 
@@ -57,17 +57,19 @@ jobs:
       - name: Run the UI tests, sampling the app
         # its own limit, so a hung iPad run still leaves time for the iPhone tests and the reports (25 tests took 48 min on Nov 16,
         # the full suite 59 min on Nov 18 and over 70 on a slow runner Nov 19; 102 min with DropTests Nov 22; more with Live Activities, shared pens and class material Nov 23)
-        timeout-minutes: 125
+        timeout-minutes: 130
         env:
-          # a push whose commit message says [ui-only: SomeTests] runs only that class (or the Run workflow box's "only"); the name
-          # must end in Tests, so a message that only mentions the marker doesn't narrow the run
+          # a push whose commit message says [ui-only: SomeTests] runs only that class (or the Run workflow box's "only"), and
+          # [ui-only: SomeTests+OtherTests] those classes; the name must end in Tests, so a message that only mentions the marker
+          # doesn't narrow the run
           ONLY_INPUT: ${{ inputs.only }}
           HEAD_MSG: ${{ github.event.head_commit.message }}
         run: |
           ONLY="$ONLY_INPUT"
-          [ -n "$ONLY" ] || ONLY=$(printf '%s' "$HEAD_MSG" | sed -n 's/.*\[ui-only: *\([A-Za-z0-9_]*Tests\)\].*/\1/p' | head -n 1)
+          [ -n "$ONLY" ] || ONLY=$(printf '%s' "$HEAD_MSG" | sed -n 's/.*\[ui-only: *\([A-Za-z0-9_+]*Tests\)\].*/\1/p' | head -n 1)
           ONLY_ARG=""
-          if [ -n "$ONLY" ]; then ONLY_ARG="-only-testing:NexusMobileUITests/$ONLY"; echo "only $ONLY"; fi
+          for c in $(printf '%s' "$ONLY" | tr '+' ' '); do ONLY_ARG="$ONLY_ARG -only-testing:NexusMobileUITests/$c"; done
+          if [ -n "$ONLY_ARG" ]; then echo "only $ONLY"; fi
           mkdir -p samples
           # every 5 s: if the app is running, a 1 s sample of all its threads
           ( while true; do
@@ -216,12 +218,16 @@ jobs:
           [ -d DerivedData/Build/Products ] || { echo "the build for testing failed, so no iPhone run"; exit 0; }
           ONLY=$(grep -ho "class [A-Za-z0-9_]*PhoneTests" UITests/*.swift | awk '{print "-only-testing:NexusMobileUITests/" $2}' | sort -u | tr '\n' ' ')
           # a [ui-only: SomeTests] push runs only that class's iPhone twin (SomePhoneTests) here, and no iPhone test when it has none
-          # (an iPad-only class); before Nov 22 such a push ran every iPhone test. [ui-only: SomePhoneTests] runs that class.
-          PICK=$(printf '%s' "$HEAD_MSG" | sed -n 's/.*\[ui-only: *\([A-Za-z0-9_]*\)Tests\].*/\1PhoneTests/p' | head -n 1)
-          case "$PICK" in *PhonePhoneTests) PICK="${PICK%PhoneTests}Tests" ;; esac
-          if [ -n "$PICK" ]; then
-            if grep -q "class $PICK" UITests/*.swift; then ONLY="-only-testing:NexusMobileUITests/$PICK"
-            else echo "no iPhone twin for this [ui-only] class, so no iPhone tests"; echo 0 > phone-status.txt; exit 0; fi
+          # (an iPad-only class); before Nov 22 such a push ran every iPhone test. [ui-only: SomePhoneTests] runs that class, and
+          # [ui-only: ATests+BTests] the twins of each.
+          LIST=$(printf '%s' "$HEAD_MSG" | sed -n 's/.*\[ui-only: *\([A-Za-z0-9_+]*Tests\)\].*/\1/p' | head -n 1)
+          if [ -n "$LIST" ]; then
+            ONLY=""
+            for c in $(printf '%s' "$LIST" | tr '+' ' '); do
+              case "$c" in *PhoneTests) PICK="$c" ;; *) PICK="${c%Tests}PhoneTests" ;; esac
+              if grep -q "class $PICK" UITests/*.swift; then ONLY="$ONLY -only-testing:NexusMobileUITests/$PICK"; fi
+            done
+            [ -n "$ONLY" ] || { echo "no iPhone twin for these [ui-only] classes, so no iPhone tests"; echo 0 > phone-status.txt; exit 0; }
           fi
           [ -n "$ONLY" ] || { echo "no iPhone tests"; echo 0 > phone-status.txt; exit 0; }
           echo "running: $ONLY"
