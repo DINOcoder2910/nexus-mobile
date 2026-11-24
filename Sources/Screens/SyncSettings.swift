@@ -35,6 +35,13 @@ struct SyncSettings: View {
                 if let last = sync.lastSynced {
                     LabeledContent("Last synced") { Text(last, format: .relative(presentation: .named)) }
                 }
+                if case .offline = sync.status, sync.waitingHere > 0 {
+                    LabeledContent("Waiting here") { Text(sync.waitingHere == 1 ? "1 change" : "\(sync.waitingHere) changes") }
+                }
+                if sync.hubImpl == "rust" {
+                    // the Rust hub (the Nexus repo's docs/sync.md): it tells this device the moment something changes
+                    LabeledContent("Hub") { Text("New hub, live changes") }
+                }
                 Button("Sync now") { sync.syncNow() }.disabled(!sync.isSetUp)
             }
         } header: {

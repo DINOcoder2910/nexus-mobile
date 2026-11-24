@@ -11,16 +11,89 @@ public struct HubHello: Codable, Equatable, Sendable {
     public var protocolVersion: Int
     public var folderId: String
     public var seq: Int
+    /// What the hub can do beyond protocol 1 (the Rust hub's `v2`, docs/sync.md "The Rust hub"); nil from the Node hub.
+    public var v2: HubV2?
 
     enum CodingKeys: String, CodingKey {
-        case hub, protocolVersion = "protocol", folderId, seq
+        case hub, protocolVersion = "protocol", folderId, seq, v2
     }
 
-    public init(hub: String, protocolVersion: Int, folderId: String, seq: Int) {
+    public init(hub: String, protocolVersion: Int, folderId: String, seq: Int, v2: HubV2? = nil) {
         self.hub = hub
         self.protocolVersion = protocolVersion
         self.folderId = folderId
         self.seq = seq
+        self.v2 = v2
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        hub = try c.decode(String.self, forKey: .hub)
+        protocolVersion = try c.decode(Int.self, forKey: .protocolVersion)
+        folderId = try c.decode(String.self, forKey: .folderId)
+        seq = try c.decode(Int.self, forKey: .seq)
+        v2 = try? c.decodeIfPresent(HubV2.self, forKey: .v2) // a v2 this app can't read is no v2: protocol 1 still works
+    }
+
+    /// The v2 features this hub has (`ops`, `feed`, `ifhash`, `backup`, `activity`).
+    public var features: Set<String> { Set(v2?.features ?? []) }
+}
+
+/// `hello.v2`: the Rust hub's additions. `features` names them; `hub` says which hub it is.
+public struct HubV2: Codable, Equatable, Sendable {
+    public struct Impl: Codable, Equatable, Sendable {
+        public var impl: String?
+        public var version: String?
+        public var build: String?
+
+        public init(impl: String?, version: String? = nil, build: String? = nil) {
+            self.impl = impl
+            self.version = version
+            self.build = build
+        }
+    }
+
+    public var features: [String]
+    public var hub: Impl?
+
+    enum CodingKeys: String, CodingKey { case features, hub }
+
+    public init(features: [String], hub: Impl? = nil) {
+        self.features = features
+        self.hub = hub
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        features = (try? c.decodeIfPresent([String].self, forKey: .features)) ?? []
+        hub = try? c.decodeIfPresent(Impl.self, forKey: .hub)
+    }
+}
+
+/// One line of the change feed (`GET /v2/feed`, NDJSON): the hub writes one whenever files or who is where change, and a ping
+/// every 20 s.
+public enum HubFeedEvent: Equatable, Sendable {
+    /// The first line, then one per change: the hub's folder and its newest seq.
+    case changes(folderId: String, seq: Int)
+    case presence(HubPresenceReply)
+    case ping(seq: Int)
+
+    /// One line of the feed, or nil for a line this app doesn't know.
+    public static func parse(_ line: String) -> HubFeedEvent? {
+        guard let d = line.data(using: .utf8), let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
+              let type = o["type"] as? String else { return nil }
+        let seq = (o["seq"] as? NSNumber)?.intValue
+        switch type {
+        case "hello", "changes":
+            guard let f = o["folderId"] as? String, let seq else { return nil }
+            return .changes(folderId: f, seq: seq)
+        case "presence":
+            return (try? JSONDecoder().decode(HubPresenceReply.self, from: d)).map { .presence($0) }
+        case "ping":
+            return .ping(seq: seq ?? 0)
+        default:
+            return nil
+        }
     }
 }
 
@@ -156,9 +229,27 @@ public protocol SyncTransport: AnyObject, Sendable {
     /// Streams the hub's live file to `destination`, replacing anything there, and returns its `X-Nexus-Hash`.
     /// Throws `SyncError.notFound` when the hub has no live file there.
     func download(path: String, to destination: URL) async throws -> String?
-    /// `base` nil sends `base=none`.
-    func put(path: String, base: String?, body: SyncBody, hash: String) async throws -> PutResult
-    func delete(path: String, base: String) async throws -> DeleteResult
+    /// `base` nil sends `base=none`. `op`: the write's op id (`X-Nexus-Op`, a hub with `ops`): sent again after a lost answer, the hub
+    /// gives its first answer instead of merging the same change twice.
+    func put(path: String, base: String?, body: SyncBody, hash: String, op: String?) async throws -> PutResult
+    func delete(path: String, base: String, op: String?) async throws -> DeleteResult
+    /// The change feed (a hub with `feed`): the lines as they come, from `since`; it ends when the hub closes it (every 10 minutes).
+    /// Throws `SyncError.notFound` where this transport has no feed.
+    func feed(since: Int, psig: String) -> AsyncThrowingStream<HubFeedEvent, Error>
+}
+
+public extension SyncTransport {
+    func put(path: String, base: String?, body: SyncBody, hash: String) async throws -> PutResult {
+        try await put(path: path, base: base, body: body, hash: hash, op: nil)
+    }
+
+    func delete(path: String, base: String) async throws -> DeleteResult {
+        try await delete(path: path, base: base, op: nil)
+    }
+
+    func feed(since: Int, psig: String) -> AsyncThrowingStream<HubFeedEvent, Error> {
+        AsyncThrowingStream { $0.finish(throwing: SyncError.notFound) }
+    }
 }
 
 /// The real hub over HTTP (plain HTTP over Tailscale or the home network).
@@ -210,7 +301,7 @@ public final class HTTPSyncTransport: SyncTransport {
 
     func request(_ endpoint: String, _ query: [(String, String)] = [], method: String = "GET", timeout: TimeInterval = 60) throws -> URLRequest {
         guard var c = URLComponents(url: base, resolvingAgainstBaseURL: false) else { throw SyncError.notAHub }
-        c.path = "/v1/" + endpoint
+        c.path = endpoint.hasPrefix("v2/") ? "/" + endpoint : "/v1/" + endpoint
         if !query.isEmpty { c.percentEncodedQuery = query.map { "\($0.0)=\(Self.encode($0.1))" }.joined(separator: "&") }
         guard let url = c.url else { throw SyncError.notAHub }
         var r = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: timeout)
@@ -293,9 +384,10 @@ public final class HTTPSyncTransport: SyncTransport {
         }
     }
 
-    public func put(path: String, base: String?, body: SyncBody, hash: String) async throws -> PutResult {
+    public func put(path: String, base: String?, body: SyncBody, hash: String, op: String?) async throws -> PutResult {
         var r = try request("file", [("path", path), ("base", base ?? "none")], method: "PUT", timeout: 120)
         r.setValue(hash, forHTTPHeaderField: "X-Nexus-Hash")
+        if let op { r.setValue(op, forHTTPHeaderField: "X-Nexus-Op") }
         r.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
         return try decode(PutResult.self, try await send(r, body: body))
     }
@@ -317,8 +409,44 @@ public final class HTTPSyncTransport: SyncTransport {
         return try decode(HubPresenceReply.self, try await send(r))
     }
 
-    public func delete(path: String, base: String) async throws -> DeleteResult {
-        let r = try request("file", [("path", path), ("base", base)], method: "DELETE")
+    public func delete(path: String, base: String, op: String?) async throws -> DeleteResult {
+        var r = try request("file", [("path", path), ("base", base)], method: "DELETE")
+        if let op { r.setValue(op, forHTTPHeaderField: "X-Nexus-Op") }
         return try decode(DeleteResult.self, try await send(r))
+    }
+
+    // MARK: the change feed (docs/sync.md "The Rust hub")
+
+    public func feed(since: Int, psig: String) -> AsyncThrowingStream<HubFeedEvent, Error> {
+        #if canImport(Darwin)
+        let request: URLRequest
+        do {
+            // (the hub pings every 20 s, so a minute's silence is a dead connection)
+            request = try self.request("v2/feed", [("since", String(since)), ("psig", psig)], timeout: 60)
+        } catch {
+            return AsyncThrowingStream { $0.finish(throwing: error) }
+        }
+        let session = self.session
+        return AsyncThrowingStream { out in
+            let task = Task {
+                do {
+                    let (bytes, resp) = try await session.bytes(for: request)
+                    guard let http = resp as? HTTPURLResponse else { throw SyncError.badReply }
+                    if !(200..<300).contains(http.statusCode) { try Self.check(http.statusCode, Data()) }
+                    for try await line in bytes.lines {
+                        if let e = HubFeedEvent.parse(line) { out.yield(e) }
+                    }
+                    out.finish()
+                } catch let e as URLError {
+                    out.finish(throwing: e.code == .cancelled ? CancellationError() : SyncError.offline(e.localizedDescription))
+                } catch {
+                    out.finish(throwing: error)
+                }
+            }
+            out.onTermination = { _ in task.cancel() }
+        }
+        #else
+        return AsyncThrowingStream { $0.finish(throwing: SyncError.notFound) } // (no streamed bytes in Linux Foundation: the long poll)
+        #endif
     }
 }

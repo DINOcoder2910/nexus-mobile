@@ -80,6 +80,14 @@ public actor SyncClient {
     /// again until they change.
     private var refused: [String: (hash: String, problem: SyncProblem)] = [:]
     private var dirty = 0
+    /// What the hub can do beyond protocol 1, from its last hello (`ops`, `feed`, …; the Rust hub: docs/sync.md "The Rust hub").
+    public private(set) var hubFeatures: Set<String> = []
+    /// Which hub answered last (`rust`, or nil for the Node hub).
+    public private(set) var hubImpl: String?
+    /// A write's op id, kept until the hub answers it (path -> what was sent, and its id): see `op`.
+    private var ops: [String: (sent: String, op: String)] = [:]
+    /// The feed failed in a way a retry won't fix (this transport has none): the long poll from then on.
+    private var noFeed = false
     private var busy = false
     private var waiters: [CheckedContinuation<Void, Never>] = []
 
@@ -135,6 +143,8 @@ public actor SyncClient {
         let hello = try await transport.hello()
         guard hello.hub == "nexus-hub" else { throw SyncError.notAHub }
         guard hello.protocolVersion == 1 else { throw SyncError.newerHub(hello.protocolVersion) }
+        hubFeatures = hello.features
+        hubImpl = hello.v2?.hub?.impl
         guard folderExists() else { return .notADataFolder }
 
         if state.folderId != hello.folderId {
@@ -202,10 +212,65 @@ public actor SyncClient {
         return .synced(report)
     }
 
-    /// The long poll: returns when the hub has something newer than the cursor, or after `seconds`.
+    /// Waits until the hub has something newer than the cursor (true), or `seconds` pass (false): the change feed when the hub has
+    /// one (one connection the hub writes to as files change), else the long poll (a hub holds at most 25 s of it).
     public func waitForHub(seconds: Int = 25) async throws -> Bool {
-        let page = try await transport.changes(since: state.cursor, wait: seconds)
+        if followsFeed {
+            do {
+                return try await waitOnFeed(seconds: seconds)
+            } catch SyncError.notFound {
+                noFeed = true
+            }
+        }
+        let page = try await transport.changes(since: state.cursor, wait: min(seconds, 25))
         return !page.changes.isEmpty || page.folderId != state.folderId
+    }
+
+    /// The hub has the change feed and this transport can follow it: the caller can wait longer between cycles.
+    public var followsFeed: Bool { hubFeatures.contains("feed") && !noFeed }
+
+    private func waitOnFeed(seconds: Int) async throws -> Bool {
+        let cursor = state.cursor, folderId = state.folderId
+        let stream = transport.feed(since: cursor, psig: "")
+        return try await withThrowingTaskGroup(of: Bool.self) { g in
+            g.addTask {
+                for try await e in stream {
+                    if case .changes(let f, let seq) = e, f != folderId || seq > cursor { return true }
+                }
+                return false // the hub closed it (every 10 minutes): the caller cycles and opens it again
+            }
+            g.addTask {
+                try await Task.sleep(nanoseconds: UInt64(max(1, seconds)) * 1_000_000_000)
+                return false
+            }
+            defer { g.cancelAll() }
+            return try await g.next() ?? false
+        }
+    }
+
+    /// A write's op id (`X-Nexus-Op`), for a hub with `ops`: the same id while the same thing is sent again (the answer was lost),
+    /// so the hub answers it from what it did the first time instead of merging the change twice (a list insert merged twice comes
+    /// out doubled). Anything else sent to the path gets a new id, and an answered write drops it (the same content may be written
+    /// again later on purpose).
+    private func op(_ kind: String, _ p: String, _ base: String?, _ hash: String) -> String? {
+        guard hubFeatures.contains("ops") else { return nil }
+        let sent = kind + " " + (base ?? "none") + " " + hash
+        if let o = ops[p], o.sent == sent { return o.op }
+        let id = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
+        ops[p] = (sent, id)
+        return id
+    }
+
+    /// The changes here that wait for the hub (the sync chip's "Offline · N waiting"): what the folder holds against the bases,
+    /// counted without the hub.
+    public func waitingHere() async -> Int {
+        await acquire()
+        defer { release() }
+        guard folderExists(), state.folderId != nil else { return 0 }
+        let local = scan()
+        let changed = local.files.filter { state.bases[$0.key] != $0.value.hash && refused[$0.key]?.hash != $0.value.hash }.count
+        let deleted = state.bases.keys.filter { local.files[$0] == nil && !local.unreadable.contains($0) }.count
+        return changed + deleted
     }
 
     // MARK: the user's answers
@@ -290,7 +355,8 @@ public actor SyncClient {
             progress?(SyncProgress(remaining: remaining))
             remaining -= 1
             guard let base = state.bases[p] else { continue }
-            let r = try await transport.delete(path: p, base: base)
+            let r = try await transport.delete(path: p, base: base, op: op("del", p, base, ""))
+            ops[p] = nil
             report.pushed.append(p)
             if r.result == "kept" {
                 // An edit on another device wins over this deletion: take the file back.
@@ -326,7 +392,8 @@ public actor SyncClient {
             }
             let r: PutResult
             do {
-                r = try await transport.put(path: p, base: state.bases[p], body: body, hash: sent)
+                r = try await transport.put(path: p, base: state.bases[p], body: body, hash: sent, op: op("put", p, state.bases[p], sent))
+                ops[p] = nil
             } catch SyncError.sameNameDifferentCase {
                 refuse(p, sent, "Another file on the hub has the same name in different capitals, so this one isn't synced. Rename one of them.", &report)
                 continue
