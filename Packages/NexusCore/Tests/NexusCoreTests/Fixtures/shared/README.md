@@ -17,6 +17,17 @@ without failing on the other, and when the Rust core takes a rule over (the swit
   says it, the status from the files, Claude's answer read into a proposal, `summary.md`, a filed task's note, `teaching.md`. The old app
   has no recordings, so the Rust core (`core/tests/shared.rs`) and NexusCore run it; `dev/unit-shared.mjs` only knows the folder.
 
+- `capture/cases.json`: the capture line read into a task (`renderer/src/taskparse.js`, the core's `capture.rs`, NexusCore
+  `CaptureParse.swift`), as `{title, ...facts, subs, flags}`; the answers are the laptop's table in `dev/unit-taskparse.mjs`.
+- `fsrs/cases.json`: a study card after a grade (`renderer/src/studyfsrs.js`, the core's `study/fsrs.rs`, NexusCore `StudyFSRS.swift`),
+  in UTC with the day starting at 4; worked from the FSRS-5 formulas.
+- `tutor/cases.json`: the tutor's reply read as it streams in, one drawing step checked (`renderer/src/tutor/reply.js` and `steps.js`, the
+  core's `tutor/`, NexusCore `TutorReply.swift` and `TutorSteps.swift`), and Check my maths (only the core's `tutor/maths.rs`: the laptop's
+  new app and the iPad call it, so `dev/unit-shared.mjs` only reads those cases).
+
+nexus-mobile's runner also sends every case through the Rust core as the iPad builds it (`core/ffi`, UniFFI), so the iPad's copy of the
+core passes the same answers as its own Swift.
+
 ## Adding a case or a rule
 
 - A case: a new folder (or a new entry in a `cases.json`) with the answer worked out by hand from the rule as `docs/data-format.md`

@@ -111,12 +111,15 @@ struct TutorPanel: View {
     @State private var typed = ""
     @State private var voiceSettings = false
     @State private var typing = false
+    /// Check my maths' sheet (MathsCheck.swift)
+    @State private var maths = false
 
     var body: some View {
         VStack(spacing: 0) {
             header
             Divider()
             chatList
+                .sheet(isPresented: $maths) { MathsCheckView(tutor: tutor) { maths = false } }
             Divider()
             footer
         }
@@ -163,6 +166,7 @@ struct TutorPanel: View {
         Toggle(isOn: $tutor.hints) { Label("Hints only", systemImage: "lightbulb") }
         Button { tutor.practice() } label: { Label("Give me a practice problem", systemImage: "square.and.pencil") }
         Button { tutor.ask(BoardTutor.explainWords) } label: { Label("Explain what's on my board", systemImage: "text.magnifyingglass") }
+        Button { maths = true } label: { Label("Check my maths…", systemImage: "function") }
         Button(action: onReplay) { Label("Replay the explanations", systemImage: "play.rectangle") }
             .disabled(!tutor.canReplay || tutor.busy)
         Divider()
@@ -240,6 +244,7 @@ struct TutorPanel: View {
                 starter("Explain what's on my board", "text.magnifyingglass") { tutor.ask(BoardTutor.explainWords) }
                 starter("Check my work", "checkmark.circle") { tutor.checkWork() }
                 starter("Give me a practice problem", "square.and.pencil") { tutor.practice() }
+                starter("Check my maths", "function") { maths = true }
             }
         }
         .padding(.top, 4)

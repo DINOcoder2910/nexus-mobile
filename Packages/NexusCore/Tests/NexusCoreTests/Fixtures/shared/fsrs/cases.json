@@ -1,0 +1,296 @@
+{
+ "rule": "fsrs",
+ "about": "A study card after a grade (renderer/src/studyfsrs.js `review`, the core's study/fsrs.rs, NexusCore StudyFSRS.swift): FSRS-5 with the default weights, 90% retention, intervals in whole Nexus days (the day starts at dayStart, local time). Times are epoch milliseconds in timeZone; 'at' says the same moment in words. The answers were worked from the FSRS-5 formulas (the header of studyfsrs.js), not printed from either app.",
+ "timeZone": "UTC",
+ "dayStart": 4,
+ "cases": [
+  {
+   "about": "a new card, Again",
+   "at": "2026-11-20T10:00Z",
+   "card": {
+    "state": "new",
+    "due": 0,
+    "s": 0,
+    "d": 0,
+    "reps": 0,
+    "lapses": 0,
+    "last": 0
+   },
+   "grade": 1,
+   "now": 1795168800000,
+   "expect": {
+    "state": "learning",
+    "due": 1795168860000,
+    "s": 0.4026,
+    "d": 7.1949,
+    "reps": 1,
+    "lapses": 0,
+    "last": 1795168800000
+   }
+  },
+  {
+   "about": "a new card, Hard",
+   "at": "2026-11-20T10:00Z",
+   "card": {
+    "state": "new",
+    "due": 0,
+    "s": 0,
+    "d": 0,
+    "reps": 0,
+    "lapses": 0,
+    "last": 0
+   },
+   "grade": 2,
+   "now": 1795168800000,
+   "expect": {
+    "state": "learning",
+    "due": 1795169100000,
+    "s": 1.1839,
+    "d": 6.4883,
+    "reps": 1,
+    "lapses": 0,
+    "last": 1795168800000
+   }
+  },
+  {
+   "about": "a new card, Good",
+   "at": "2026-11-20T10:00Z",
+   "card": {
+    "state": "new",
+    "due": 0,
+    "s": 0,
+    "d": 0,
+    "reps": 0,
+    "lapses": 0,
+    "last": 0
+   },
+   "grade": 3,
+   "now": 1795168800000,
+   "expect": {
+    "state": "learning",
+    "due": 1795169400000,
+    "s": 3.173,
+    "d": 5.2824,
+    "reps": 1,
+    "lapses": 0,
+    "last": 1795168800000
+   }
+  },
+  {
+   "about": "a new card, Easy",
+   "at": "2026-11-20T10:00Z",
+   "card": {
+    "state": "new",
+    "due": 0,
+    "s": 0,
+    "d": 0,
+    "reps": 0,
+    "lapses": 0,
+    "last": 0
+   },
+   "grade": 4,
+   "now": 1795168800000,
+   "expect": {
+    "state": "review",
+    "due": 1796529600000,
+    "s": 15.6911,
+    "d": 3.2245,
+    "reps": 1,
+    "lapses": 0,
+    "last": 1795168800000
+   }
+  },
+  {
+   "about": "a review card 12 days on, Again",
+   "at": "2026-11-20T10:00Z",
+   "card": {
+    "state": "review",
+    "due": 1795147200000,
+    "s": 12.5,
+    "d": 5.5,
+    "reps": 4,
+    "lapses": 0,
+    "last": 1794162600000
+   },
+   "grade": 1,
+   "now": 1795168800000,
+   "expect": {
+    "state": "relearning",
+    "due": 1795169400000,
+    "s": 2.324,
+    "d": 6.9432,
+    "reps": 5,
+    "lapses": 1,
+    "last": 1795168800000
+   }
+  },
+  {
+   "about": "a review card 12 days on, Hard",
+   "at": "2026-11-20T10:00Z",
+   "card": {
+    "state": "review",
+    "due": 1795147200000,
+    "s": 12.5,
+    "d": 5.5,
+    "reps": 4,
+    "lapses": 0,
+    "last": 1794162600000
+   },
+   "grade": 2,
+   "now": 1795168800000,
+   "expect": {
+    "state": "review",
+    "due": 1796702400000,
+    "s": 18.2149,
+    "d": 6.2164,
+    "reps": 5,
+    "lapses": 0,
+    "last": 1795168800000
+   }
+  },
+  {
+   "about": "a review card 12 days on, Good",
+   "at": "2026-11-20T10:00Z",
+   "card": {
+    "state": "review",
+    "due": 1795147200000,
+    "s": 12.5,
+    "d": 5.5,
+    "reps": 4,
+    "lapses": 0,
+    "last": 1794162600000
+   },
+   "grade": 3,
+   "now": 1795168800000,
+   "expect": {
+    "state": "review",
+    "due": 1798344000000,
+    "s": 37.1864,
+    "d": 5.4895,
+    "reps": 5,
+    "lapses": 0,
+    "last": 1795168800000
+   }
+  },
+  {
+   "about": "a review card 12 days on, Easy",
+   "at": "2026-11-20T10:00Z",
+   "card": {
+    "state": "review",
+    "due": 1795147200000,
+    "s": 12.5,
+    "d": 5.5,
+    "reps": 4,
+    "lapses": 0,
+    "last": 1794162600000
+   },
+   "grade": 4,
+   "now": 1795168800000,
+   "expect": {
+    "state": "review",
+    "due": 1802577600000,
+    "s": 86.3075,
+    "d": 4.7627,
+    "reps": 5,
+    "lapses": 0,
+    "last": 1795168800000
+   }
+  },
+  {
+   "about": "a learning card, Good: into review",
+   "at": "2026-11-20T10:00Z",
+   "card": {
+    "state": "learning",
+    "due": 1795168800000,
+    "s": 3.173,
+    "d": 5.2825,
+    "reps": 1,
+    "lapses": 0,
+    "last": 1795168200000
+   },
+   "grade": 3,
+   "now": 1795168800000,
+   "expect": {
+    "state": "review",
+    "due": 1795492800000,
+    "s": 4.4669,
+    "d": 5.273,
+    "reps": 2,
+    "lapses": 0,
+    "last": 1795168800000
+   }
+  },
+  {
+   "about": "a learning card, Hard: 10 minutes",
+   "at": "2026-11-20T10:00Z",
+   "card": {
+    "state": "learning",
+    "due": 1795168800000,
+    "s": 3.173,
+    "d": 5.2825,
+    "reps": 1,
+    "lapses": 0,
+    "last": 1795168200000
+   },
+   "grade": 2,
+   "now": 1795168800000,
+   "expect": {
+    "state": "learning",
+    "due": 1795169400000,
+    "s": 2.6648,
+    "d": 6.035,
+    "reps": 2,
+    "lapses": 0,
+    "last": 1795168800000
+   }
+  },
+  {
+   "about": "a review card again the same day, Again: relearning, a lapse",
+   "at": "2026-11-20T10:00Z",
+   "card": {
+    "state": "review",
+    "due": 1795147200000,
+    "s": 12.5,
+    "d": 5.5,
+    "reps": 4,
+    "lapses": 0,
+    "last": 1795165200000
+   },
+   "grade": 1,
+   "now": 1795168800000,
+   "expect": {
+    "state": "relearning",
+    "due": 1795169100000,
+    "s": 6.2629,
+    "d": 6.9432,
+    "reps": 5,
+    "lapses": 1,
+    "last": 1795168800000
+   }
+  },
+  {
+   "about": "half past two at night is still the day before (day starts at 4)",
+   "at": "2026-11-21T02:30Z",
+   "card": {
+    "state": "review",
+    "due": 1795147200000,
+    "s": 12.5,
+    "d": 5.5,
+    "reps": 4,
+    "lapses": 0,
+    "last": 1795154400000
+   },
+   "grade": 3,
+   "now": 1795228200000,
+   "expect": {
+    "state": "review",
+    "due": 1796702400000,
+    "s": 17.5971,
+    "d": 5.4895,
+    "reps": 5,
+    "lapses": 0,
+    "last": 1795228200000
+   }
+  }
+ ]
+}
