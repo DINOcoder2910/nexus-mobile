@@ -170,6 +170,7 @@ final class ExtrasPhoneTests: ExtrasTests {
         let pill = el("phone-tool-pill")
         XCTAssertTrue(pill.waitForExistence(timeout: 20), "no tool pill on the iPhone's board")
         shot("pill-\(mode)")
+        focusNote("board open")
         let pen = app.buttons["phone-tool-pen"].firstMatch
         XCTAssertTrue(pen.exists, "no pen in the pill")
         // an earlier test may have left another tool picked: one tap picks the pen, the next opens its sheet
@@ -197,13 +198,25 @@ final class ExtrasPhoneTests: ExtrasTests {
         shot("pill-eraser-sheet-\(mode)")
         if done.exists { done.tap() }
         _ = gone(sheet)
-        // + : Insert
+        // + : Insert. A run showed the keyboard instead of the menu after this tap: the log says what had the keyboard's focus
         let plus = el("phone-tool-plus")
-        XCTAssertTrue(plus.exists, "no + in the pill")
+        XCTAssertTrue(plus.waitForExistence(timeout: 5) && plus.isHittable, "no + in the pill")
+        focusNote("before +")
         plus.tap()
+        let space = app.buttons["Insert space"].firstMatch
+        let menuUp = space.waitForExistence(timeout: 5) && space.isHittable
         sleep(1)
         shot("pill-insert-\(mode)")
-        XCTAssertTrue(app.buttons["Insert space"].firstMatch.exists || app.staticTexts["Insert space"].firstMatch.exists, "+ has no Insert space")
+        focusNote("after +")
+        XCTAssertTrue(menuUp, "+ didn't show Insert's menu with Insert space")
+        XCTAssertEqual(app.keyboards.count, 0, "the keyboard came up with +'s menu")
+    }
+
+    /// Prints what has the keyboard's focus (and whether a keyboard is up) to the log, for a run that shows one unasked.
+    func focusNote(_ when: String) {
+        let focused = app.descendants(matching: .any).matching(NSPredicate(format: "hasKeyboardFocus == true")).firstMatch
+        let what = focused.exists ? "\(focused.elementType.rawValue) id=\(focused.identifier) label=\(focused.label.prefix(60))" : "nothing"
+        print("UIDEBUG \(when): keyboards \(app.keyboards.count), focus \(what), web views \(app.webViews.count)")
     }
 
     // the panel is checked and pictured by pill() on the iPhone: one launch less each
