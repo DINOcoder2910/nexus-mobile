@@ -324,11 +324,49 @@ final class NexusStore {
         }
     }
 
+    // MARK: workstream edits (NexusCore WorkstreamEditor: the laptop's New workstream, Rename, Move, Park, Colour, decisions, sessions)
+
+    var workstreamEditor: WorkstreamEditor { WorkstreamEditor(root: folder, read: FolderAccess.read, write: FolderAccess.write) }
+
+    /// One workstream edit: written, the folder read again, sync told, the undo bar shown. Returns false when it couldn't be made.
+    @discardableResult
+    private func performWs(list: Bool = false, _ make: (WorkstreamEditor, Snapshot) throws -> Change) -> Bool {
+        do {
+            let c = try make(workstreamEditor, snapshot)
+            reload()
+            didWrite(listChanged: list)
+            toast = Toast(message: c.message, change: c)
+            return true
+        } catch {
+            problem = "\(error)"
+            reload()
+            return false
+        }
+    }
+
+    /// A new workstream in a group; returns its id.
+    func createWorkstream(in group: String, name: String) -> String? {
+        var id: String?
+        performWs(list: true) { ed, s in let (c, made) = try ed.create(group: group, name: name, in: s); id = made; return c }
+        return id
+    }
+    func renameWorkstream(_ w: Workstream, to name: String) { performWs { try $0.rename(w, to: name, in: $1) } }
+    func moveWorkstream(_ w: Workstream, to group: String) { performWs(list: true) { try $0.move(w, to: group, in: $1) } }
+    func parkWorkstream(_ w: Workstream, _ on: Bool) { performWs { try $0.park(w, on, in: $1) } }
+    func colorWorkstream(_ w: Workstream, _ color: String?) { performWs { try $0.color(w, color, in: $1) } }
+    func addDecision(_ w: Workstream, _ text: String) { performWs { try $0.decision(w, text, date: today, in: $1) } }
+    /// A person's new session note (and its task when asked); returns the note's path.
+    func newSession(_ w: Workstream, title: String, task: Bool) -> String? {
+        var path: String?
+        performWs { ed, s in let (c, p) = try ed.session(w, title: title, date: today, task: task, in: s, today: today); path = p; return c }
+        return path
+    }
+
     func undo() {
         guard let c = toast?.change else { return }
         do { try editor.undo(c); toast = Toast(message: "Undone") } catch { problem = "\(error)" }
         reload()
-        didWrite()
+        didWrite(listChanged: c.moved != nil || c.created)
     }
 
     func tickOfferedParent() {

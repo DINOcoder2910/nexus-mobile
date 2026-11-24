@@ -16,13 +16,25 @@ extension BoardController {
                 UIAction(title: "English", state: lang == "en" ? .on : .off) { [weak self] _ in self?.setBlockField(id, "lang", .string("en")) },
                 UIAction(title: "Spanish", state: lang == "es" ? .on : .off) { [weak self] _ in self?.setBlockField(id, "lang", .string("es")) },
             ]),
-            UIAction(title: practicing ? "Check it now (ends practice)" : "Check Spanish", image: UIImage(systemName: "checkmark.seal")) { [weak self] _ in
-                if practicing { self?.endPractice(id) }
-                self?.openSpanishCheck(id)
+            UIAction(title: "Check it now", subtitle: practicing ? "Ends practice; Claude reads it all" : "Claude reads it all and underlines what to fix",
+                     image: UIImage(systemName: "checkmark.seal")) { [weak self] _ in
+                guard let self else { return }
+                Task { await BoardSpanish.shared.checkNow(self, id) }
             },
-            UIAction(title: "Check my Spanish", subtitle: "Spelling while you type", state: it.json["check"]?.bool == false ? .off : .on) { [weak self] _ in
+            UIAction(title: "Correct this", subtitle: "A corrected draft: Apply or Reject each fix", image: UIImage(systemName: "pencil.and.list.clipboard")) { [weak self] _ in
+                guard let self else { return }
+                Task { await BoardSpanish.shared.correct(self, id) }
+            },
+            UIAction(title: "Check my Spanish", subtitle: "Underlines and spelling as you write", state: it.json["check"]?.bool == false ? .off : .on) { [weak self] _ in
                 self?.setBlockField(id, "check", it.json["check"]?.bool == false ? nil : .bool(false))
                 self?.writing?.applyPractice()
+            },
+            UIAction(title: "Live corrections", subtitle: "Every Spanish block, as you write", state: BoardSpanish.liveOn ? .on : .off) { [weak self] _ in
+                BoardSpanish.liveOn.toggle()
+                self?.tell(BoardSpanish.liveOn ? "Live corrections on: Spanish blocks are underlined as you write." : "Live corrections off: Check it now reads a block when you ask.", brief: true)
+            },
+            UIAction(title: "Spelling (offline)", subtitle: "The \(Device.name)'s Spanish dictionary", image: UIImage(systemName: "textformat.abc")) { [weak self] _ in
+                self?.openSpanishCheck(id)
             },
         ]
         if practicing {

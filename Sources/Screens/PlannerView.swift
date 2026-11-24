@@ -1,10 +1,13 @@
 import SwiftUI
 import NexusCore
 
-/// The Planner, as the new laptop app has it (switch-over step 4, Nov 20 2026; nexus `desktop/src/screens/Planner.tsx`): a week with
-/// each day's load against its free time, the Events and Deadlines rows, a lane per subject across the week, and the task bank full
-/// width below, shown or hidden with its button. Drag a card to another day, a bank card onto a day to plan it, a card back to the
-/// bank to take its day off. The sums are NexusCore WeekPlan's, the same as the laptop's. Narrow (the iPhone) the days stack.
+/// The Planner, as the new laptop app has it (nexus `desktop/src/screens/Planner.tsx`): 2 days, 3 days, a Week or a Month (five weeks),
+/// rolling from today; ‹ › step a whole view (the Month a week). The days show their load against their free time, the Events and
+/// Deadlines rows and a lane per subject; the Month is a grid of days with their cards. The Show row hides planned work, deadlines,
+/// events, a subject or a calendar (each device keeps its own, as the laptop does). The task bank is full width below, shown or hidden
+/// with its button. Drag a card to another day, a bank card onto a day to plan it, a card back to the bank to take its day off. The
+/// sums are NexusCore WeekPlan's and the Show row NexusCore PlannerShow, the same as the laptop's. Narrow (the iPhone) the days stack,
+/// and the Month is a small grid: tap a day for its cards under it.
 struct PlannerView: View {
     @Environment(NexusStore.self) private var store
     @Environment(CalendarStore.self) private var cal
@@ -13,24 +16,43 @@ struct PlannerView: View {
     @AppStorage("plannerBankOpen") private var bankOpen = true
     @AppStorage("plannerBankFilter") private var filter = Filter.all.rawValue
     @AppStorage("plannerBankGroup") private var group = BankGroup.soonest.rawValue
+    /// How many days: 2, 3, 7 or 35 (the Month).
+    @AppStorage("plannerSpan") private var span = 7
+    /// What the Show row hides (PlannerShow.text).
+    @AppStorage("plannerShow") private var showText = ""
     /// The first day shown; nil starts at today.
     @State private var start: String?
     @State private var find = ""
     /// The day a drag is over ("bank" for the bank).
     @State private var hot: String?
+    /// The Month on the iPhone: the day whose cards show under the grid.
+    @State private var picked: String?
 
     enum Filter: String, CaseIterable { case all = "All", soon = "Due soon", key = "Key dates", slipped = "Slipped", noDate = "No date" }
     enum BankGroup: String, CaseIterable { case soonest = "Soonest", workstream = "Workstream", deadline = "Deadline" }
+    static let spans: [(Int, String)] = [(2, "2 days"), (3, "3 days"), (7, "Week"), (35, "Month")]
 
     private var stacked: Bool { sizeClass == .compact }
+    private var days: Int { Self.spans.contains { $0.0 == span } ? span : 7 }
+    private var show: PlannerShow { PlannerShow(text: showText) }
 
     var body: some View {
-        let w = week()
+        let first = start ?? store.today
+        let evs = events(first, Days.add(first, days - 1))
+        let w = week(evs)
+        let shown = show.apply(w)
         GeometryReader { geo in
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    header(w)
-                    if stacked { stackedDays(w) } else { grid(w, width: geo.size.width - 48) }
+                    header(shown)
+                    showRow(w, evs)
+                    if days == 35 {
+                        month(shown, evs, width: geo.size.width - (stacked ? 32 : 48))
+                    } else if stacked {
+                        stackedDays(shown, evs)
+                    } else {
+                        grid(shown, evs, width: geo.size.width - 48)
+                    }
                     if bankOpen { bank(w) }
                 }
                 .padding(.horizontal, stacked ? 16 : 24)
@@ -46,11 +68,32 @@ struct PlannerView: View {
         .eventSheet($eventSheet, store: cal)
     }
 
-    private func week() -> WeekPlan.Week {
+    /// The calendar's events on the days shown, by day (one read for the whole span), without the hidden calendars' when `shown`.
+    private func events(_ first: String, _ last: String) -> [String: [CalEvent]] {
+        guard cal.eventsOnPlan && cal.canRead else { return [:] }
+        var out: [String: [CalEvent]] = [:]
+        for e in cal.events(from: first, through: last) { for d in e.days where d >= first && d <= last { out[d, default: []].append(e) } }
+        return out
+    }
+
+    private func week(_ evs: [String: [CalEvent]]) -> WeekPlan.Week {
         let c = Calendar.current.dateComponents([.hour, .minute], from: Date())
         let now = (c.hour ?? 0) * 60 + (c.minute ?? 0)
-        let spans = { (d: String) in TodayEvents.spans(cal, d).map { TodayPlan.Span($0.start, $0.end) } }
-        return WeekPlan.week(store.planning, start: start ?? store.today, now: now, events: spans)
+        let spans = { (d: String) -> [TodayPlan.Span] in
+            var seen = Set<String>()
+            return (evs[d] ?? []).filter { !$0.allDay }.compactMap { e in
+                DayLayout.clip(start: e.start, end: e.end, day: d).map { TodayPlan.Span($0.start, max($0.end, $0.start + 15)) }
+            }
+            .filter { seen.insert("\($0)").inserted }
+        }
+        return WeekPlan.week(store.planning, start: start ?? store.today, now: now, days: days, events: spans)
+    }
+
+    /// A day's events as the Show row leaves them.
+    private func shownEvents(_ evs: [String: [CalEvent]], _ day: String) -> [CalEvent] {
+        let s = show
+        guard s.shows(.ev) else { return [] }
+        return (evs[day] ?? []).filter { !s.calendars.contains($0.calendarName) }
     }
 
     // MARK: the header
@@ -58,21 +101,25 @@ struct PlannerView: View {
     private func header(_ w: WeekPlan.Week) -> some View {
         let first = w.days.first?.date ?? w.today, last = w.days.last?.date ?? w.today
         let over = w.overDays
+        let spanWord = days == 7 ? "this week" : days == 35 ? "in these five weeks" : "in these \(days) days"
         return VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .center, spacing: 10) {
                 Text(Self.range(first, last)).font(.nx(size: stacked ? 26 : 30, .bold, display: true)).foregroundStyle(Kit.ink).lineLimit(1).minimumScaleFactor(0.8)
                     .accessibilityIdentifier("week-range")
                 HStack(spacing: 2) {
-                    Button { withAnimation(Kit.spring) { step(-7) } } label: { Image(systemName: "chevron.left").frame(width: 30, height: 30) }
-                        .accessibilityLabel("Week before")
+                    Button { withAnimation(Kit.spring) { step(-1) } } label: { Image(systemName: "chevron.left").frame(width: 30, height: 30) }
+                        .accessibilityLabel("Earlier")
+                        .accessibilityIdentifier("week-prev")
                     Button("Today") { withAnimation(Kit.spring) { start = nil } }
                         .font(.nx(.subheadline, .medium)).lineLimit(1).fixedSize().padding(.horizontal, 6)
-                    Button { withAnimation(Kit.spring) { step(7) } } label: { Image(systemName: "chevron.right").frame(width: 30, height: 30) }
-                        .accessibilityLabel("Week after")
+                        .accessibilityIdentifier("week-today")
+                    Button { withAnimation(Kit.spring) { step(1) } } label: { Image(systemName: "chevron.right").frame(width: 30, height: 30) }
+                        .accessibilityLabel("Later")
                         .accessibilityIdentifier("week-next")
                 }
                 .buttonStyle(.plain).foregroundStyle(Kit.muted)
                 Spacer(minLength: 8)
+                if !stacked { spanSwitch }
                 Button { withAnimation(Kit.spring) { bankOpen.toggle() } } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "tray")
@@ -86,7 +133,8 @@ struct PlannerView: View {
                 .accessibilityLabel("Task bank")
                 .accessibilityIdentifier("bank-toggle")
             }
-            (Text("\(TimeWords.about(w.load)) planned this week. ")
+            if stacked { spanSwitch.padding(.vertical, 4) }
+            (Text("\(TimeWords.about(w.load)) planned \(spanWord). ")
                 + (over.isEmpty ? Text("Every day fits its free time.")
                    : Text(Self.join(over.map { TodayView.weekday($0.date) }) + (over.count == 1 ? " is" : " are") + " over the free time.")
                         .foregroundColor(Theme.soon).fontWeight(.medium)))
@@ -95,9 +143,19 @@ struct PlannerView: View {
         }
     }
 
-    private func step(_ n: Int) {
-        let next = Days.add(start ?? store.today, n)
+    /// 2 days, 3 days, Week, Month.
+    private var spanSwitch: some View {
+        KitSwitch(items: Self.spans, selection: Binding(get: { days }, set: { n in span = n; picked = nil }))
+            .fixedSize()
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("plan-span")
+    }
+
+    /// ‹ › move a whole view; the Month a week.
+    private func step(_ dir: Int) {
+        let next = Days.add(start ?? store.today, dir * (days == 35 ? 7 : days))
         start = next == store.today ? nil : next
+        picked = nil
     }
 
     static func range(_ a: String, _ b: String) -> String {
@@ -107,21 +165,106 @@ struct PlannerView: View {
         return mon(a) == mon(b) ? "\(day(a))–\(day(b)) \(mon(b))" : "\(day(a)) \(mon(a)) – \(day(b)) \(mon(b))"
     }
 
+    static func month(_ s: String) -> String {
+        ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][max(0, min(11, (Int(s.dropFirst(5).prefix(2)) ?? 1) - 1))]
+    }
+
     static func join(_ words: [String]) -> String {
         words.count <= 1 ? words.joined() : words.dropLast().joined(separator: ", ") + " and " + words.last!
     }
 
-    // MARK: the week (side by side)
+    // MARK: the Show row
 
-    private func grid(_ w: WeekPlan.Week, width: CGFloat) -> some View {
+    /// Show: Planned, Deadlines, Events; the subjects with work on these days; the calendars with events on them (when more than
+    /// one); Show everything while something is hidden. Tap a pill to hide it, again to bring it back.
+    private func showRow(_ w: WeekPlan.Week, _ evs: [String: [CalEvent]]) -> some View {
+        let s = show
+        let wss = s.pills(w)
+        var cals: [(String, Color?)] = []
+        for d in w.days { for e in evs[d.date] ?? [] where !cals.contains(where: { $0.0 == e.calendarName }) { cals.append((e.calendarName, e.color)) } }
+        for c in s.calendars.sorted() where !cals.contains(where: { $0.0 == c }) { cals.append((c, nil)) }
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                Text("Show").font(.nx(size: 12.5, .semibold)).foregroundStyle(Kit.faint).padding(.trailing, 2)
+                pill("Planned", on: s.shows(.plan), id: "show-plan") { update { $0.flip(.plan) } }
+                pill("Deadlines", on: s.shows(.dl), id: "show-dl") { update { $0.flip(.dl) } }
+                pill("Events", on: s.shows(.ev), id: "show-ev") { update { $0.flip(.ev) } }
+                if !wss.isEmpty && (s.shows(.plan) || s.shows(.dl)) {
+                    gap
+                    ForEach(wss, id: \.self) { k in
+                        let id = k == PlannerShow.inbox ? nil : k
+                        pill(store.workstream(id)?.name ?? (k == PlannerShow.inbox ? "Inbox" : k), on: !s.workstreams.contains(k), id: "show-ws-\(k)",
+                             dot: k == PlannerShow.inbox ? Kit.faint : store.color(workstream: id)) { update { $0.flip(workstream: k) } }
+                    }
+                }
+                if cals.count > 1 && s.shows(.ev) {
+                    gap
+                    ForEach(cals.indices, id: \.self) { i in
+                        let name = cals[i].0
+                        pill(name.isEmpty ? "Calendar" : name, on: !s.calendars.contains(name), id: "show-cal-\(name)", dot: cals[i].1 ?? Kit.faint) {
+                            update { $0.flip(calendar: name) }
+                        }
+                    }
+                }
+                if s.any {
+                    Button("Show everything") { withAnimation(Kit.snap) { showText = "" } }
+                        .font(.nx(size: 12.5, .medium)).foregroundStyle(Theme.accent).buttonStyle(.plain).padding(.leading, 6)
+                        .accessibilityIdentifier("show-all")
+                }
+            }
+            .padding(.vertical, 2)
+        }
+        .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("plan-show")
+    }
+
+    private var gap: some View { Rectangle().fill(Kit.ink.opacity(0.08)).frame(width: 1, height: 18).padding(.horizontal, 4) }
+
+    private func update(_ f: (inout PlannerShow) -> Void) {
+        var s = show
+        f(&s)
+        withAnimation(Kit.snap) { showText = s.text }
+    }
+
+    /// One pill: a tick (or the subject's dot) and its name, filled while shown, struck out and faint while hidden.
+    private func pill(_ title: String, on: Bool, id: String, dot: Color? = nil, _ tap: @escaping () -> Void) -> some View {
+        Button(action: tap) {
+            HStack(spacing: 5) {
+                if let dot { Circle().fill(dot).frame(width: 7, height: 7).opacity(on ? 1 : 0.4) }
+                else { Image(systemName: on ? "checkmark" : "circle.dashed").font(.system(size: 9, weight: .bold)) }
+                Text(title).strikethrough(!on, color: Kit.faint).lineLimit(1)
+            }
+            .font(.nx(size: 12.5, on ? .medium : .regular))
+            .foregroundStyle(on ? Kit.ink : Kit.faint)
+            .padding(.horizontal, 10).frame(height: 28)
+            .background(on ? Kit.rests : Color.clear, in: Capsule())
+            .overlay(Capsule().strokeBorder(Kit.ink.opacity(on ? 0 : 0.12), lineWidth: 1))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityValue(on ? "shown" : "hidden")
+        .accessibilityIdentifier(id)
+    }
+
+    // MARK: the days side by side (2 days, 3 days, Week)
+
+    private func grid(_ w: WeekPlan.Week, _ evs: [String: [CalEvent]], width: CGFloat) -> some View {
+        let n = CGFloat(max(1, w.days.count))
         let inner = width - 16
-        let col = max(124, inner / 7)
+        let col = max(124, inner / n)
+        let s = show
         let content = VStack(alignment: .leading, spacing: 0) {
             row(w, col) { d in DayHead(day: d, today: w.today) }
-            laneLabel("Events", icon: "calendar")
-            row(w, col) { d in eventsCell(d.date) }
-            laneLabel("Deadlines", icon: "tag", count: w.days.reduce(0) { $0 + $1.deadlines.count })
-            row(w, col) { d in VStack(alignment: .leading, spacing: 4) { ForEach(d.deadlines) { t in DeadlineChip(task: t) } } }
+            if s.shows(.ev) {
+                laneLabel("Events", icon: "calendar")
+                row(w, col) { d in eventsCell(shownEvents(evs, d.date), d.date) }
+            }
+            if s.shows(.dl) {
+                laneLabel("Deadlines", icon: "tag", count: w.days.reduce(0) { $0 + $1.deadlines.count })
+                row(w, col) { d in VStack(alignment: .leading, spacing: 4) { ForEach(d.deadlines) { t in DeadlineChip(task: t) } } }
+            }
             ForEach(Array(w.lanes.enumerated()), id: \.offset) { _, l in
                 laneHead(l)
                 row(w, col, drop: true) { d in
@@ -131,14 +274,14 @@ struct PlannerView: View {
                 .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("lane")
             }
-            laneLabel("Drop a task on any day to plan it", quiet: true)
+            laneLabel(s.shows(.plan) ? "Drop a task on any day to plan it" : "Planned work is hidden (Show) · drop a task on a day to plan it", quiet: true)
             row(w, col, drop: true) { _ in Color.clear.frame(height: 34) }
         }
         .padding(8)
-        .frame(width: col * 7 + 16, alignment: .leading)
+        .frame(width: col * n + 16, alignment: .leading)
         .kitSurface(Kit.rests, radius: 18)
         return Group {
-            if col * 7 > inner + 1 {
+            if col * n > inner + 1 {
                 ScrollView(.horizontal, showsIndicators: true) { content }.scrollBounceBehavior(.basedOnSize, axes: .horizontal)
             } else {
                 content
@@ -146,7 +289,7 @@ struct PlannerView: View {
         }
     }
 
-    /// One row of the week: a cell per day, today's on the accent wash; `drop`: a task dropped on a cell is planned that day.
+    /// One row of the days: a cell per day, today's on the accent wash; `drop`: a task dropped on a cell is planned that day.
     private func row<C: View>(_ w: WeekPlan.Week, _ col: CGFloat, drop: Bool = false, @ViewBuilder _ cell: @escaping (WeekPlan.Day) -> C) -> some View {
         HStack(alignment: .top, spacing: 0) {
             ForEach(w.days, id: \.date) { d in
@@ -187,9 +330,8 @@ struct PlannerView: View {
         .padding(.top, 6)
     }
 
-    private func eventsCell(_ day: String) -> some View {
-        let evs = (cal.eventsOnPlan && cal.canRead) ? cal.events(on: day) : []
-        return VStack(alignment: .leading, spacing: 4) {
+    private func eventsCell(_ evs: [CalEvent], _ day: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
             if evs.isEmpty { Text("–").font(.nx(size: 12)).foregroundStyle(Kit.selected) }
             ForEach(evs.prefix(4)) { e in
                 Button { eventSheet = .show(e.event) } label: {
@@ -211,28 +353,120 @@ struct PlannerView: View {
         return TimeWords.clock(m).replacingOccurrences(of: ":00", with: "") + " "
     }
 
-    // MARK: the week (stacked, the iPhone)
+    // MARK: the days stacked (the iPhone)
 
-    private func stackedDays(_ w: WeekPlan.Week) -> some View {
+    private func stackedDays(_ w: WeekPlan.Week, _ evs: [String: [CalEvent]]) -> some View {
         VStack(spacing: 10) {
-            ForEach(w.days, id: \.date) { d in
-                VStack(alignment: .leading, spacing: 8) {
-                    DayHead(day: d, today: w.today)
-                    let evs = (cal.eventsOnPlan && cal.canRead) ? cal.events(on: d.date) : []
-                    if !evs.isEmpty { eventsCell(d.date) }
-                    ForEach(d.deadlines) { t in DeadlineChip(task: t) }
-                    ForEach(d.planned) { t in PlanCard(task: t, day: d.date, today: w.today) }
-                    if d.planned.isEmpty && !d.past {
-                        Text("Nothing planned").font(.nx(.caption)).foregroundStyle(Kit.faint)
-                    }
-                }
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(hot == d.date ? Theme.accent.opacity(0.12) : d.date == w.today ? Kit.accentWash.opacity(0.7) : Kit.rests,
-                            in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .modifier(DayDrop(enabled: true, day: d.date, hot: $hot) { ids in self.drop(ids, on: d.date, w) })
+            ForEach(w.days, id: \.date) { d in stackedDay(d, w, evs) }
+        }
+    }
+
+    private func stackedDay(_ d: WeekPlan.Day, _ w: WeekPlan.Week, _ evs: [String: [CalEvent]]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            DayHead(day: d, today: w.today)
+            let es = shownEvents(evs, d.date)
+            if !es.isEmpty { eventsCell(es, d.date) }
+            ForEach(d.deadlines) { t in DeadlineChip(task: t) }
+            ForEach(d.planned) { t in PlanCard(task: t, day: d.date, today: w.today) }
+            if d.planned.isEmpty && !d.past {
+                Text(show.shows(.plan) ? "Nothing planned" : "Planned work is hidden").font(.nx(.caption)).foregroundStyle(Kit.faint)
             }
         }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(hot == d.date ? Theme.accent.opacity(0.12) : d.date == w.today ? Kit.accentWash.opacity(0.7) : Kit.rests,
+                    in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .modifier(DayDrop(enabled: true, day: d.date, hot: $hot) { ids in self.drop(ids, on: d.date, w) })
+    }
+
+    // MARK: the Month
+
+    /// Five weeks of days from the first shown, seven across, each with its load bar, its deadlines and its planned cards (every
+    /// subject together), up to four and "+n more"; drop a card on a day to plan it there. On the iPhone a day shows its number, its
+    /// load bar and a dot per card; tap it for its cards under the grid.
+    private func month(_ w: WeekPlan.Week, _ evs: [String: [CalEvent]], width: CGFloat) -> some View {
+        let spacing: CGFloat = stacked ? 3 : 6
+        let col = max(30, (width - 6 * spacing) / 7)
+        let rows = stride(from: 0, to: w.days.count, by: 7).map { Array(w.days[$0..<min($0 + 7, w.days.count)]) }
+        let sel = picked.flatMap { p in w.days.first { $0.date == p } }
+        return VStack(alignment: .leading, spacing: 12) {
+            VStack(spacing: spacing) {
+                HStack(spacing: spacing) {
+                    ForEach(w.days.prefix(7), id: \.date) { d in
+                        Text(TodayView.weekday(d.date, short: true)).font(.nx(size: 12, .semibold)).foregroundStyle(Kit.faint)
+                            .frame(width: col)
+                    }
+                }
+                ForEach(rows.indices, id: \.self) { r in
+                    HStack(alignment: .top, spacing: spacing) {
+                        ForEach(rows[r], id: \.date) { d in
+                            monthDay(d, w, evs, col: col, first: d.date == w.days.first?.date)
+                        }
+                    }
+                }
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("month")
+            if stacked, let sel { stackedDay(sel, w, evs).accessibilityIdentifier("month-picked") }
+        }
+    }
+
+    private func monthDay(_ d: WeekPlan.Day, _ w: WeekPlan.Week, _ evs: [String: [CalEvent]], col: CGFloat, first: Bool) -> some View {
+        let isToday = d.date == w.today
+        let n = Int(d.date.suffix(2)) ?? 0
+        let label = n == 1 || first ? "\(n) \(Self.month(d.date))" : "\(n)"
+        let pct = d.free > 0 ? min(1, Double(d.load) / Double(d.free)) : d.load > 0 ? 1 : 0
+        let cards = d.planned
+        let nEv = shownEvents(evs, d.date).count
+        let selected = picked == d.date
+        return VStack(alignment: .leading, spacing: stacked ? 3 : 4) {
+            HStack(spacing: 4) {
+                Text(stacked && n != 1 && !first ? "\(n)" : label)
+                    .font(.nx(size: stacked ? 13 : 13.5, isToday ? .bold : .semibold))
+                    .foregroundStyle(isToday ? Theme.accent : d.past ? Kit.faint : Kit.ink)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                Spacer(minLength: 0)
+                if !stacked && d.load > 0 { Text(TimeWords.dur(d.load)).font(.nx(size: 11)).foregroundStyle(d.over ? Theme.soon : Kit.faint) }
+            }
+            GeometryReader { g in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Kit.selected)
+                    Capsule().fill(d.over ? Theme.soon : Theme.accent).frame(width: g.size.width * pct)
+                }
+            }
+            .frame(height: stacked ? 3 : 4)
+            if stacked {
+                // a dot per deadline (★ in the key colour) and per card, in its subject's colour
+                let dots = d.deadlines.map { $0.key ? Theme.key : Kit.muted } + cards.map { store.color($0) }
+                HStack(spacing: 2) {
+                    ForEach(Array(dots.prefix(5).enumerated()), id: \.offset) { _, c in Circle().fill(c).frame(width: 5, height: 5) }
+                    if dots.count > 5 { Text("+").font(.nx(size: 9, .bold)).foregroundStyle(Kit.faint) }
+                }
+                .frame(height: 6)
+                if nEv > 0 { Image(systemName: "calendar").font(.system(size: 8)).foregroundStyle(Kit.faint) }
+            } else {
+                ForEach(d.deadlines) { t in DeadlineChip(task: t) }
+                ForEach(cards.prefix(4)) { t in PlanCard(task: t, day: d.date, today: w.today, small: true) }
+                if cards.count > 4 { Text("+\(cards.count - 4) more").font(.nx(size: 11)).foregroundStyle(Kit.faint) }
+                if nEv > 0 {
+                    Label("\(nEv)", systemImage: "calendar").font(.nx(size: 11)).foregroundStyle(Kit.faint).labelStyle(.titleAndIcon)
+                }
+            }
+        }
+        .padding(stacked ? 5 : 7)
+        .frame(width: col, alignment: .topLeading)
+        .frame(minHeight: stacked ? 58 : 118, alignment: .topLeading)
+        .background(hot == d.date ? Theme.accent.opacity(0.14) : selected ? Theme.accent.opacity(0.10) : isToday ? Kit.accentWash.opacity(0.8) : Kit.rests,
+                    in: RoundedRectangle(cornerRadius: stacked ? 9 : 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: stacked ? 9 : 12, style: .continuous).strokeBorder(selected ? Theme.accent.opacity(0.6) : .clear, lineWidth: 1.5))
+        .opacity(d.past ? 0.6 : 1)
+        .contentShape(Rectangle())
+        .onTapGesture { if stacked { withAnimation(Kit.snap) { picked = picked == d.date ? nil : d.date } } }
+        .modifier(DayDrop(enabled: true, day: d.date, hot: $hot) { ids in self.drop(ids, on: d.date, w) })
+        .accessibilityElement(children: stacked ? .combine : .contain)
+        .accessibilityLabel("\(label), \(cards.count) planned")
+        .accessibilityAddTraits(stacked ? .isButton : [])
+        .accessibilityIdentifier("month-day")
     }
 
     // MARK: dropping
@@ -475,19 +709,23 @@ private struct PlanCard: View {
     let task: NexusTask
     let day: String
     let today: String
+    /// The Month's card: the tick and the title on one line, no meta line.
+    var small = false
 
     var body: some View {
         let color = store.color(task)
         VStack(alignment: .leading, spacing: 3) {
-            HStack(alignment: .top, spacing: 7) {
-                TickRing(task: task).scaleEffect(0.78).frame(width: 18, height: 18)
-                Text((task.key ? "★ " : "") + task.text).font(.nx(size: 13, .medium)).foregroundStyle(Kit.ink)
-                    .lineLimit(3).multilineTextAlignment(.leading)
+            HStack(alignment: .top, spacing: small ? 5 : 7) {
+                TickRing(task: task).scaleEffect(small ? 0.62 : 0.78).frame(width: small ? 14 : 18, height: small ? 14 : 18)
+                Text((task.key ? "★ " : "") + task.text).font(.nx(size: small ? 11.5 : 13, .medium)).foregroundStyle(Kit.ink)
+                    .lineLimit(small ? 1 : 3).multilineTextAlignment(.leading)
             }
-            planMeta(task, day: day, today: today).font(.nx(size: 11)).foregroundStyle(Kit.faint).lineLimit(2)
-                .padding(.leading, 25)
+            if !small {
+                planMeta(task, day: day, today: today).font(.nx(size: 11)).foregroundStyle(Kit.faint).lineLimit(2)
+                    .padding(.leading, 25)
+            }
         }
-        .padding(.leading, 9).padding(.trailing, 6).padding(.vertical, 7)
+        .padding(.leading, small ? 6 : 9).padding(.trailing, small ? 4 : 6).padding(.vertical, small ? 4 : 7)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Kit.page)
         .overlay(alignment: .leading) { Rectangle().fill(color).frame(width: 3) }
