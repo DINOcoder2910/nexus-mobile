@@ -36,6 +36,10 @@ final class BoardBar: UIView {
         }
     }
     private lazy var middleHeight = middleRow.heightAnchor.constraint(equalToConstant: 0)
+    /// Wide but not wide enough for everything in one top row (a board beside a second pane, the markscheme or a clean PDF):
+    /// the page and zoom pills move to the right of the row under it, and "Draw ▾" stands in for the name and the switch.
+    var tight = false { didSet { if tight != oldValue { refresh() } } }
+    static let tightWidth: CGFloat = 780 // under a portrait iPad (820, 834), over a board beside a pane (about 700)
 
     weak var board: BoardController?
     var dark = false { didSet { if dark != oldValue { refresh() } } }
@@ -234,7 +238,7 @@ final class BoardBar: UIView {
         return b
     }
 
-    func widthDot(_ size: CGFloat, selected: Bool, name: String = "Width", action: @escaping () -> Void) -> UIView {
+    func widthDot(_ size: CGFloat, selected: Bool, name: String = "Width", hold: (() -> Void)? = nil, action: @escaping () -> Void) -> UIView {
         var c = selected ? UIButton.Configuration.tinted() : UIButton.Configuration.plain()
         c.cornerStyle = .capsule
         let b = UIButton(configuration: c, primaryAction: UIAction { _ in action() })
@@ -249,6 +253,14 @@ final class BoardBar: UIView {
         b.addSubview(dot)
         b.accessibilityLabel = name
         b.accessibilityValue = selected ? "Picked" : nil
+        if let hold {
+            // touch and hold a size to change its width (BoardController+PenExtras.swift)
+            let g = UILongPressGestureRecognizer(target: nil, action: nil)
+            g.addTarget(HoldTarget.shared, action: #selector(HoldTarget.fire(_:)))
+            HoldTarget.shared.actions[ObjectIdentifier(g)] = hold
+            b.addGestureRecognizer(g)
+            b.accessibilityHint = "Touch and hold to change this size"
+        }
         return b
     }
 
@@ -325,11 +337,16 @@ final class BoardBar: UIView {
             rowStack.addArrangedSubview(divider())
             // six widths, Extra fine to Extra bold: the dot grows a step at a time, whatever the tool's sizes
             for i in BoardTools.widths(t).indices {
-                rowStack.addArrangedSubview(widthDot(3 + CGFloat(i) * 3, selected: tools.widthIndex(t) == i, name: BoardTools.widthNames[i]) { [weak b] in
+                rowStack.addArrangedSubview(widthDot(3 + CGFloat(i) * 3, selected: tools.widthIndex(t) == i, name: BoardTools.widthNames[i],
+                                                     hold: { [weak b] in b?.editSize(t, i) }) { [weak b] in
                     tools.setWidthIndex(t, i)
                     b?.toolChanged()
                 })
             }
+            // take the pen of a stroke on the board (BoardController+PenExtras.swift)
+            let copy = icon("eyedropper", "Copy from a stroke", selected: b.copyingStroke, size: 15) { [weak b] in b?.startCopyFromStroke() }
+            copy.accessibilityIdentifier = "pen-copy-stroke"
+            rowStack.addArrangedSubview(copy)
             if t == .pen || t == .shapes {
                 rowStack.addArrangedSubview(divider())
                 let kinds = BoardTools.PenKind.allCases.map { k in
@@ -389,7 +406,23 @@ final class BoardBar: UIView {
         } else if t == .text {
             rowStack.addArrangedSubview(label("Tap where you want to type."))
         } else if t == .lasso {
-            rowStack.addArrangedSubview(label("Circle ink to move it. Touch and hold ink to attach it to the words beside it."))
+            // Change the selection: a colour or a size restyles the lassoed ink (BoardController+PenExtras.swift)
+            for (i, hex) in tools.colors(.pen).enumerated() {
+                let dot = colorDot(hex, selected: false, action: { [weak b] in b?.restyleLassoed(color: hex) }, edit: { [weak b] in b?.editColor(.pen, i) })
+                dot.accessibilityLabel = "Change to this colour"
+                rowStack.addArrangedSubview(dot)
+            }
+            rowStack.addArrangedSubview(divider())
+            for i in BoardTools.widths(.pen).indices {
+                let dot = widthDot(3 + CGFloat(i) * 3, selected: false, name: "Change to " + BoardTools.widthNames[i]) { [weak b] in b?.restyleLassoed(step: i) }
+                rowStack.addArrangedSubview(dot)
+            }
+            rowStack.addArrangedSubview(divider())
+            let n = b.lassoedCount
+            let hint = label(n > 0 ? "\(n) stroke\(n == 1 ? "" : "s") picked: tap a colour or size to change them." :
+                                     "Circle ink to move it, or to change its colour or size here. Touch and hold ink to attach it to words.")
+            hint.accessibilityIdentifier = "lasso-hint"
+            rowStack.addArrangedSubview(hint)
         } else if t == .hand {
             rowStack.addArrangedSubview(label(Device.isPhone ? "Your finger scrolls and picks things; nothing is drawn." : "The Pencil scrolls and picks things; nothing is drawn."))
         }

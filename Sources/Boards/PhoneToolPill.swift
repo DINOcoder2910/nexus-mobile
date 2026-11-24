@@ -299,11 +299,12 @@ final class PhoneToolSheet: UIViewController {
     /// + 's choices as rows: each closes the sheet, then runs (a picker opens over the board, not over the sheet).
     private func fillInsert(_ b: BoardController) {
         let all = b.insertChoices()
-        for c in all where !c.shape { content.addArrangedSubview(choiceRow(c.title, c.symbol, picked: false, c.run)) }
+        for c in all where !c.shape && !c.last { content.addArrangedSubview(choiceRow(c.title, c.symbol, picked: false, c.run)) }
         let space = BoardTool.space
         content.addArrangedSubview(choiceRow(space.title, space.symbol, picked: BoardTools.shared.tool == .space) { [weak b] in b?.selectTool(.space) })
         content.addArrangedSubview(section("Shape"))
         for c in all where c.shape { content.addArrangedSubview(choiceRow(c.title, c.symbol, picked: false, c.run)) }
+        for c in all where c.last { content.addArrangedSubview(choiceRow(c.title, c.symbol, picked: false, c.run)) }
     }
 
     private func choiceRow(_ title: String, _ symbol: String, picked: Bool, _ run: @escaping () -> Void) -> UIView {

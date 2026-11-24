@@ -14,6 +14,7 @@ struct SubjectPage: View {
     @State private var notebooks: [String] = []
     @State private var boards: [Notebook.BoardRef] = []
     @State private var actions = NotebookActions()
+    @State private var wsActions = WorkstreamActions()
 
     enum Tab: Hashable { case overview, tasks, notebooks, study, files }
 
@@ -64,8 +65,13 @@ struct SubjectPage: View {
                     Button { withAnimation(Kit.spring) { tab = .study } } label: { Text("Review \(due)") }
                         .buttonStyle(.kitPrimary)
                 }
+                // the workstream's menu (the laptop's ⋯ on a subject page)
+                Menu { WorkstreamMenu(workstream: w, actions: wsActions) } label: { Label("Workstream", systemImage: "ellipsis.circle") }
+                    .accessibilityIdentifier("ws-menu")
             }
         }
+        .workstreamPrompts(wsActions, store: store)
+        .onAppear { wsActions.made = { id in go(.subject(id)) } }
         .spanishSetupMenu(w.id)
         .notebookPrompts(actions, store: store)
         .task(id: "\(w.id)|\(store.notebooksVersion)|\(store.snapshot.loadedAt)") { readNotebooks(w) }
@@ -79,7 +85,10 @@ struct SubjectPage: View {
                 Circle().fill(store.color(workstream: w.id)).frame(width: 14, height: 14)
                 Text(w.name).font(.nx(size: size == .regular ? 40 : 32, .bold, display: true, relativeTo: .largeTitle)).foregroundStyle(Kit.ink).lineLimit(2)
             }
-            Text(summary(w)).font(.nx(.body)).foregroundStyle(Kit.muted)
+            HStack(spacing: 8) {
+                if w.parked { Chip(text: "Parked", icon: "pause.circle", strong: true) }
+                Text(summary(w)).font(.nx(.body)).foregroundStyle(Kit.muted)
+            }
             ScrollView(.horizontal, showsIndicators: false) {
                 KitSwitch(items: tabs(w), selection: $tab)
             }
@@ -110,17 +119,25 @@ struct SubjectPage: View {
                 HStack(alignment: .top, spacing: 24) {
                     VStack(alignment: .leading, spacing: 24) { nextUp(w); studyCard(w); spanishCard(w) }
                         .frame(maxWidth: .infinity, alignment: .topLeading)
-                    VStack(alignment: .leading, spacing: 24) { notebooksCard(w); filesCard(w) }
+                    VStack(alignment: .leading, spacing: 24) { notebooksCard(w); people(w); DecisionsCard(workstream: w, actions: wsActions); filesCard(w) }
                         .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
                 .padding(.horizontal, 28)
                 .padding(.bottom, 28)
             } else {
-                VStack(alignment: .leading, spacing: 22) { nextUp(w); notebooksCard(w); studyCard(w); spanishCard(w); filesCard(w) }
+                VStack(alignment: .leading, spacing: 22) {
+                    nextUp(w); people(w); notebooksCard(w); studyCard(w); spanishCard(w); DecisionsCard(workstream: w, actions: wsActions); filesCard(w)
+                }
                     .padding(.horizontal, 16)
                     .padding(.bottom, 90)
             }
         }
+    }
+
+    /// A person's sessions (the laptop's subject page shows them for a person).
+    @ViewBuilder
+    private func people(_ w: Workstream) -> some View {
+        if w.kind == "person" { SessionsCard(workstream: w, actions: wsActions) }
     }
 
     private func cardHead(_ title: String, link: String?, action: (() -> Void)? = nil) -> some View {

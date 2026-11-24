@@ -14,6 +14,7 @@ struct SheetsBrowser: View {
 
     @AppStorage("studySheetSort") private var sort = "unit"
     @State private var preview: URL?
+    @State private var pdf: PdfOpen?
 
     private var study: StudyLibrary.Study? { StudyLibrary.shared.study(workstreamId) }
 
@@ -39,6 +40,7 @@ struct SheetsBrowser: View {
             }
         }
         .quickLookPreview($preview)
+        .pdfPage($pdf)
         .navigationTitle(embedded ? "" : "Practice sheets")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -81,7 +83,7 @@ struct SheetsBrowser: View {
     }
 
     private func row(_ s: StudySheets.Sheet) -> some View {
-        SheetRow(sheet: s, root: store.folder, onUnit: { filter.unit = $0 }) { preview = $0 }
+        SheetRow(sheet: s, root: store.folder, onUnit: { filter.unit = $0 }) { PdfOpen.route($0, root: store.folder, pdf: $pdf, preview: $preview) }
     }
 
     private func countText(_ total: Int, _ shown: Int) -> some View {
@@ -214,6 +216,7 @@ struct SheetsBrowser: View {
 /// One sheet: its title (opens the paper), its kind and facts, syllabus and markscheme, the units it covers (each narrows the list
 /// to that unit), its files, and the notes kept when it was uploaded.
 struct SheetRow: View {
+    @Environment(NexusStore.self) private var store
     let sheet: StudySheets.Sheet
     let root: URL
     var onUnit: ((String) -> Void)?
@@ -244,9 +247,29 @@ struct SheetRow: View {
                     }
                 }
             }
-            if files.count > 1 {
+            let paper = paperPDF
+            if files.count > 1 || paper != nil {
                 FlowRow(spacing: 6) {
-                    ForEach(files, id: \.file.path) { f in
+                    // Write on it: the paper's board, made the first time (Your board once it has one)
+                    if let paper {
+                        let made = store.madeBoard(pdf: paper) != nil
+                        Button { store.writeOn(pdf: paper) } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: made ? "scribble.variable" : "pencil.and.scribble").imageScale(.small)
+                                Text(made ? "Your board" : "Write on it")
+                            }
+                            .font(.nx(.caption, .semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 5)
+                            .background(Theme.accent, in: Capsule())
+                            .fixedSize()
+                        }
+                        .buttonStyle(.borderless)
+                        .disabled(store.snapshot.readOnlyReason != nil && !made)
+                        .accessibilityIdentifier(made ? "sheet-board" : "sheet-write")
+                    }
+                    if files.count > 1 { ForEach(files, id: \.file.path) { f in
                         // drawn like the chips: a system bordered button in this layout came out as a tall pill without its words
                         Button { open(root.appendingPathComponent(f.file.path)) } label: {
                             HStack(spacing: 4) {
@@ -263,7 +286,7 @@ struct SheetRow: View {
                         }
                         .buttonStyle(.borderless)
                         .accessibilityLabel("Open " + f.label)
-                    }
+                    } }
                 }
             }
             if !s.notes.isEmpty {
@@ -271,7 +294,13 @@ struct SheetRow: View {
             }
         }
         .padding(.vertical, 3)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("study-sheet")
+    }
+
+    /// The sheet's paper as a PDF (nil for a markscheme-only sheet or a Word paper).
+    private var paperPDF: String? {
+        sheet.files.first { $0.role == "paper" && $0.path.lowercased().hasSuffix(".pdf") }?.path
     }
 
     private func openFirst() {

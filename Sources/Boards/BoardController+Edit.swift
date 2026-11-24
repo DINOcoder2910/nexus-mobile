@@ -61,6 +61,8 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
 
     func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
         if g === hold || other === hold { return true }
+        // the lasso's tracer only watches
+        if g.name == "lassoTrace" || other.name == "lassoTrace" { return true }
         // the quiet tap goes along with the board's own gestures (it only keeps PencilKit's taps from showing their callout)
         if g.name == "quietTap" { return !isCanvasMenuGesture(other) }
         if other.name == "quietTap" { return !isCanvasMenuGesture(g) }
@@ -260,12 +262,13 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
 
     // MARK: inserting
 
-    /// What can be put on the board, in the Insert menu's order; `shape` marks the Shape submenu's rows. The iPad's menus and the
-    /// iPhone's Insert sheet (PhoneToolPill) are both made from it.
+    /// What can be put on the board, in the Insert menu's order; `shape` marks the Shape submenu's rows, `last` what comes after
+    /// it (New page). The iPad's menus and the iPhone's Insert sheet (PhoneToolPill) are both made from it.
     struct InsertChoice {
         let title: String
         let symbol: String
         var shape = false
+        var last = false
         let run: () -> Void
     }
 
@@ -282,6 +285,7 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
                                       ("Line", "line.diagonal", "line"), ("Arrow", "arrow.up.right", "arrow")] {
             out.append(InsertChoice(title: title, symbol: symbol, shape: true) { [weak self] in self?.insertShape(kind) })
         }
+        out.append(InsertChoice(title: "New page", symbol: "doc.badge.plus", last: true) { [weak self] in self?.newPage() })
         return out
     }
 
@@ -289,7 +293,31 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
         let all = insertChoices()
         func action(_ c: InsertChoice) -> UIAction { UIAction(title: c.title, image: UIImage(systemName: c.symbol)) { _ in c.run() } }
         let shapes = UIMenu(title: "Shape", image: UIImage(systemName: "square.on.circle"), children: all.filter(\.shape).map(action))
-        return UIMenu(children: all.filter { !$0.shape }.map(action) + [shapes])
+        return UIMenu(children: all.filter { !$0.shape && !$0.last }.map(action) + [shapes] + all.filter(\.last).map(action))
+    }
+
+    /// Insert › New page: an empty board beside this one, in the same notebook folder, opened in its place (as on the laptop).
+    func newPage() {
+        guard !replay else { return }
+        saveNow()
+        let dir = (path as NSString).deletingLastPathComponent
+        let folder = dir.isEmpty ? root : root.appendingPathComponent(dir, isDirectory: true)
+        let name = BoardFormat.freeName("Untitled", taken: NotebookActions.names(in: folder), suffix: ".board")
+        do {
+            try FolderAccess.write(folder.appendingPathComponent(name, isDirectory: true).appendingPathComponent("board.json"), BoardFormat.boardJSON())
+        } catch {
+            toast("No new page: \(error.localizedDescription)")
+            return
+        }
+        let rel = (dir.isEmpty ? "" : dir + "/") + name
+        store?.boardsChanged(listChanged: true)
+        // the main board changes in place; a board pushed from a link or in the side pane opens over it, with a way back
+        let pushed = navigationController.map { $0.viewControllers.first !== self } ?? false
+        if (isSidePane || pushed), navigationController != nil {
+            openBoard(rel, end: nil)
+        } else if let store {
+            store.openBoard = .init(path: rel, focus: nil)
+        }
     }
 
     var allIds: Set<String> { Set(content.items.map(\.id)).union(content.strokes.map(\.id)) }
