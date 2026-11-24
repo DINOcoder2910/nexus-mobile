@@ -308,11 +308,12 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     func showStart() {
         let W = view.bounds.width, top = topInset, H = view.bounds.height - top
         if solving, let f = focus {
-            // as the laptop's BoardFull: the question across the width (40 pt either side), its top just under the bar
-            let z = min(2, max(0.25, (W - 80) / max(f.width, 1)))
+            // as the laptop's BoardFull: the question across the width (40 pt either side, 8 on a phone), its top just under the bar
+            let side: CGFloat = W < BoardBar.compactWidth ? 8 : 40
+            let z = min(2, max(0.25, (W - 2 * side) / max(f.width, 1)))
             canvas.zoomScale = z
             updateContentSize()
-            scroll(toBoard: CGPoint(x: f.minX - 40 / z, y: f.minY - (24 + top) / z))
+            scroll(toBoard: CGPoint(x: f.minX - side / z, y: f.minY - (24 + top) / z))
             toast("Esc or ‹ goes back to the question · what you write stays on the board", hold: 3)
         } else if let f = focus {
             let z = min(2, max(0.5, min(W / max(f.width + 200, 1), H / max(f.height + 200, 1))))
