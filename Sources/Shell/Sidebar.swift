@@ -11,6 +11,7 @@ import NexusCore
 /// notebooks, the Subjects tab (`subjectsTab`).
 struct Sidebar: View {
     @Environment(NexusStore.self) private var store
+    @Environment(SyncService.self) private var sync
     @Binding var selection: Screen?
     var pushes = false
     /// The iPhone's Subjects tab: the subjects (each opens its page), then every notebook.
@@ -110,6 +111,10 @@ struct Sidebar: View {
     private var sections: some View {
         let p = store.planning
         let s = store.snapshot
+        // the iPhone's More: where this phone stands with the hub, on top (the iPad has it at the sidebar's foot)
+        if pushes && !subjectsTab && sync.chip.tone != .hidden {
+            Section { SyncChipView() }
+        }
         if !subjectsTab {
             // the running timer, whichever device started it (TimeViews.swift)
             if s.isDataFolder && TimeTracker.shared.current != nil {
@@ -412,6 +417,15 @@ struct Sidebar: View {
         return VStack(spacing: 0) {
             if s.readOnlyReason != nil {
                 Label("Read-only", systemImage: "lock").font(.nx(.caption)).foregroundStyle(.secondary).padding(.bottom, 6)
+            }
+            // where this iPad stands with the hub (hidden while sync is off)
+            if sync.chip.tone != .hidden {
+                HStack {
+                    SyncChipView { go(.settings) }
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 4)
+                .padding(.bottom, 6)
             }
             HStack(spacing: 0) {
                 ForEach(items) { item in
