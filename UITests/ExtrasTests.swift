@@ -229,6 +229,8 @@ final class ExtrasPhoneTests: ExtrasTests {
         if up { space.tap() }
         XCTAssertTrue(gone(sheet), "Insert space didn't close the sheet")
         XCTAssertTrue(app.buttons["phone-tool-space"].firstMatch.waitForExistence(timeout: 5), "Insert space isn't picked in the pill")
+        sleep(1)
+        XCTAssertTrue(plus.isHittable, "+ went off the pill's edge with Insert space's button in it")
     }
 
     // the panel is checked and pictured by pill() on the iPhone: one launch less each

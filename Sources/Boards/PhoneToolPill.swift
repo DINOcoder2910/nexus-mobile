@@ -128,12 +128,14 @@ final class PhoneToolPill: UIView {
         bar.clear(stack)
         let tools = BoardTools.shared
         let now = tools.tool
+        // Insert space picked adds its button: the tools narrow a little so + stays on an iPhone's screen
+        let width: CGFloat = now == .space ? 36 : 42
         for t in PhoneToolPill.tools {
             // the Pen's place shows the Pencil while it is picked (its sheet switches between the two)
             let shown: BoardTool = t == .pen && now == .pencil ? .pencil : t
-            stack.addArrangedSubview(toolButton(shown, picked: now == shown, b: b))
+            stack.addArrangedSubview(toolButton(shown, picked: now == shown, b: b, width: width))
         }
-        if now == .space { stack.addArrangedSubview(toolButton(.space, picked: true, b: b)) }
+        if now == .space { stack.addArrangedSubview(toolButton(.space, picked: true, b: b, width: width)) }
         let line = bar.divider()
         stack.addArrangedSubview(line)
         // + opens a sheet like the tools', not a menu: on iOS 26 a menu from the pill brought the keyboard up over itself
@@ -163,7 +165,7 @@ final class PhoneToolPill: UIView {
         sheet?.build()
     }
 
-    private func toolButton(_ t: BoardTool, picked: Bool, b: BoardController) -> UIView {
+    private func toolButton(_ t: BoardTool, picked: Bool, b: BoardController, width: CGFloat = 42) -> UIView {
         var c = UIButton.Configuration.plain()
         c.image = UIImage(systemName: t.symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 19, weight: .regular))
         c.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 8, bottom: 12, trailing: 8)
@@ -179,7 +181,7 @@ final class PhoneToolPill: UIView {
         button.accessibilityHint = picked ? "Tap again for its colours and sizes" : nil
         if picked { button.accessibilityTraits.insert(.selected) }
         button.translatesAutoresizingMaskIntoConstraints = false
-        button.widthAnchor.constraint(equalToConstant: 42).isActive = true
+        button.widthAnchor.constraint(equalToConstant: width).isActive = true
         button.heightAnchor.constraint(equalToConstant: 46).isActive = true
         // an ink's colour as a short line under it, as in the mockup
         if t.inks {
