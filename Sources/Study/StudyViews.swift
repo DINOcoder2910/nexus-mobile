@@ -4,6 +4,7 @@ import NexusCore
 /// Study: every workstream's memorize decks, with what is due (the sidebar's Study, and the Study section of a workstream's page).
 struct StudyHome: View {
     @Environment(NexusStore.self) private var store
+    @State private var back: String?
     private var lib: StudyLibrary { StudyLibrary.shared }
 
     var body: some View {
@@ -43,6 +44,12 @@ struct StudyHome: View {
         .navigationTitle("Study")
         .refreshable { lib.load(store) }
         .studyRefresh(store)
+        // back from a board opened at a question (Write on it): on the iPad the board took the detail column, so the pages under
+        // it are gone; the subject's Study page comes back, and it opens the question (StudyPage, BankLibrary.returnTo)
+        .onAppear {
+            if store.openBoard == nil, let r = BankLibrary.shared.returnTo { back = r.workstream }
+        }
+        .navigationDestination(item: $back) { id in StudyPage(workstreamId: id) }
     }
 }
 

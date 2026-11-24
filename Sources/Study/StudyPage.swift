@@ -15,6 +15,7 @@ struct StudyPage: View {
     @State private var preview: URL?
     @State private var openTheme: String?
     @State private var openUnit: String?
+    @State private var openQuestion: BankTarget?
 
     private var lib: StudyLibrary { StudyLibrary.shared }
 
@@ -38,6 +39,20 @@ struct StudyPage: View {
         .navigationTitle(lib.study(workstreamId).map { "\($0.workstream.name) · Study" } ?? "Study")
         .navigationBarTitleDisplayMode(.inline)
         .studyRefresh(store)
+        .task(id: lib.study(workstreamId)?.sheets.sheets.count ?? -1) {
+            // the question bank: read with the study folder, then every few seconds (the laptop sorts, sync brings it)
+            while !Task.isCancelled {
+                if let s = lib.study(workstreamId) { BankLibrary.shared.refresh(s, root: store.folder) }
+                try? await Task.sleep(for: .seconds(5))
+            }
+        }
+        .onAppear {
+            // back from a board opened at a question (Write on it): that question again
+            if store.openBoard == nil, let r = BankLibrary.shared.returnTo, r.workstream == workstreamId {
+                BankLibrary.shared.returnTo = nil
+                openQuestion = r.target
+            }
+        }
         .quickLookPreview($preview)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -111,11 +126,14 @@ struct StudyPage: View {
                     Text("From \(s.config.sheets) in this workstream.")
                 }
             }
+            // the question bank (the laptop's Study home shows it too): Open, the papers being worked on, Review later
+            BankGlance(workstreamId: workstreamId, open: $openQuestion)
         }
         .listStyle(.insetGrouped)
         .refreshable { lib.load(store) }
         .navigationDestination(item: $openTheme) { code in ThemeUnitsView(workstreamId: workstreamId, theme: code) }
         .navigationDestination(item: $openUnit) { code in UnitDetailView(workstreamId: workstreamId, code: code) }
+        .navigationDestination(item: $openQuestion) { t in BankQuestionView(workstreamId: workstreamId, paper: t.paper, q: t.q) }
     }
 }
 
