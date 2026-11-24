@@ -95,9 +95,10 @@ final class WriteOnItPadTests: XCTestCase {
         boardMs.tap()
         sleep(3)
         shot("write-board-markscheme")
-        // beside the pane the bar is tight: the Draw | Insert | View switch keeps its words (it was squeezed to letters)
-        let draw = el("board-mode-draw")
-        if draw.exists { XCTAssertGreaterThan(draw.frame.width, 40, "the Draw | Insert | View switch is squeezed beside the markscheme") }
+        // beside the pane the bar is tight: "Draw ▾" stands for the name and the switch (they were squeezed to letters), and the
+        // Markscheme button stays on screen
+        XCTAssertTrue(el("board-mode-menu").waitForExistence(timeout: 5), "no Draw ▾ on the tight bar beside the markscheme")
+        XCTAssertTrue(el("board-ms").isHittable, "the Markscheme button is off the bar beside the markscheme")
         // with the markscheme beside, page 1's corner may be off the board: the icon moves inside the page
         let clean = el("printout-clean")
         XCTAssertTrue(clean.waitForExistence(timeout: 10), "no clean-PDF icon with the markscheme beside")

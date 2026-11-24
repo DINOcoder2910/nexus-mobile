@@ -109,12 +109,17 @@ extension BoardBar {
         }
 
         // A: the top row, with the switch in the middle
-        titleButton.configuration = titleConfig(b)
-        titleButton.menu = b.titleMenu()
-        topRow.addArrangedSubview(titleButton)
+        // tight (a pane beside, about 600 points): no room for the name and the three-way switch beside the buttons, so
+        // "Draw ▾" stands for both, as on the folded bar (its menu has the modes and the board's own menu)
+        let short = tight && !readOnly
+        if !short {
+            titleButton.configuration = titleConfig(b)
+            titleButton.menu = b.titleMenu()
+            topRow.addArrangedSubview(titleButton)
+        }
         let left = spacer(), right = spacer()
         topRow.addArrangedSubview(left)
-        if !readOnly { topRow.addArrangedSubview(modePill) }
+        if !readOnly { topRow.addArrangedSubview(short ? modeMenu(b) : modePill) }
         topRow.addArrangedSubview(right)
         let even = left.widthAnchor.constraint(equalTo: right.widthAnchor)
         even.priority = .init(200)
