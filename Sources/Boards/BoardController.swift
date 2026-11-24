@@ -14,6 +14,9 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     let root: URL
     let path: String
     var focus: CGRect?
+    /// Solve full screen from a question (BankQuestionView): `focus` is the question, shown across the screen's width at the top
+    /// with room under it to write; Esc goes back to the question (BoardShortcuts).
+    var solving = false
     var onClose: (() -> Void)?
     /// After a save: the board's path (sync and the handwriting index pick it up).
     var onSaved: ((String) -> Void)?
@@ -304,7 +307,14 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     /// Where to look first: the place asked for, the first PDF page, or the top left of what is there.
     func showStart() {
         let W = view.bounds.width, top = topInset, H = view.bounds.height - top
-        if let f = focus {
+        if solving, let f = focus {
+            // as the laptop's BoardFull: the question across the width (40 pt either side), its top just under the bar
+            let z = min(2, max(0.25, (W - 80) / max(f.width, 1)))
+            canvas.zoomScale = z
+            updateContentSize()
+            scroll(toBoard: CGPoint(x: f.minX - 40 / z, y: f.minY - (24 + top) / z))
+            toast("Esc or ‹ goes back to the question · what you write stays on the board", hold: 3)
+        } else if let f = focus {
             let z = min(2, max(0.5, min(W / max(f.width + 200, 1), H / max(f.height + 200, 1))))
             canvas.zoomScale = z
             updateContentSize()

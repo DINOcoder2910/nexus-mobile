@@ -23,6 +23,7 @@ struct BoardHost: UIViewControllerRepresentable {
         vc.isSidePane = isSide
         vc.onSidebar = onSidebar
         vc.focusEnd = target.focusEnd
+        vc.solving = target.solve
         // the board in its own navigation, with room for a second pane beside it (Side by side)
         let split = BoardSplitController(board: vc, root: root)
         split.store = store

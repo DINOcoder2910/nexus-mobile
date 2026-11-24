@@ -136,6 +136,12 @@ struct BankQuestionView: View {
                     .accessibilityIdentifier("bq-clip")
                     Button { writeHere(place) } label: { Label("Write on it", systemImage: "pencil.and.scribble") }
                         .accessibilityIdentifier("bq-board")
+                    // as the laptop's Solve full screen (F): the whole screen is the board, the question across its width
+                    Button { writeHere(place, solve: true) } label: {
+                        Label("Solve full screen", systemImage: "arrow.up.left.and.arrow.down.right")
+                    }
+                    .keyboardShortcut("f", modifiers: [])
+                    .accessibilityIdentifier("bq-solve")
                 } else if paper.lowercased().hasSuffix(".pdf") {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("This paper has no board yet.").font(.nx(.callout)).foregroundStyle(.secondary)
@@ -236,10 +242,11 @@ struct BankQuestionView: View {
         store.toast = .init(message: "Your place in \(name) is \(QuestionBank.qName(q)).")
     }
 
-    /// The board, opened at the question (and back to this question when it closes).
-    private func writeHere(_ place: BankLibrary.Place) {
+    /// The board, opened at the question (and back to this question when it closes). `solve`: full screen, the question across
+    /// the width with room under it, as the laptop's Solve full screen.
+    private func writeHere(_ place: BankLibrary.Place, solve: Bool = false) {
         lib.returnTo = (workstreamId, BankTarget(paper: paper, q: q))
-        store.openBoard = .init(path: place.board, focus: Self.union(place.rects))
+        store.openBoard = .init(path: place.board, focus: Self.union(place.rects), solve: solve)
     }
 
     static func union(_ rects: [[Double]]) -> CGRect? {

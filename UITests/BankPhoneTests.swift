@@ -130,5 +130,14 @@ final class BankPhoneTests: XCTestCase {
         XCTAssertTrue(el("bq-count").waitForExistence(timeout: 15), "closing the board didn't come back to the question")
         sleep(1)
         shot("phone-bank-back-to-question")
+
+        // Solve full screen (the laptop's F): the board over the whole phone from the question; Close comes back to it
+        tap("bq-solve", "no Solve full screen")
+        let back = app.buttons["Close the board"].firstMatch
+        XCTAssertTrue(back.waitForExistence(timeout: 30), "Solve full screen didn't open the board")
+        sleep(3)
+        shot("phone-bank-solve")
+        back.tap()
+        XCTAssertTrue(el("bq-count").waitForExistence(timeout: 15), "closing the full screen board didn't come back to the question")
     }
 }
