@@ -28,6 +28,8 @@ enum BlockStyler {
     /// On the first character of a $maths$ span drawn by KaTeX (a MathBox); the rest of the span hides. MDLayoutManager makes that
     /// character take the picture's width and draws the picture there.
     static let mathKey = NSAttributedString.Key("nexusMath")
+    /// On a Spanish mistake's words (BoardSpanish.swift): "error" or "accent"; MDLayoutManager draws a wavy line under them.
+    static let spanishKey = NSAttributedString.Key("nexusSpanish")
     /// Posted when a formula's picture has been drawn, so blocks showing its TeX lay out again.
     static let mathReady = Notification.Name("nexusMathReady")
 

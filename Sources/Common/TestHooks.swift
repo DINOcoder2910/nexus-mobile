@@ -9,6 +9,7 @@ enum TestHooks {
     static func run(_ store: NexusStore) {
         nestedNotebooks(store)
         manyNotebooks(store)
+        if ProcessInfo.processInfo.arguments.contains("-NexusTestPerson") { person(store) }
         if ProcessInfo.processInfo.arguments.contains("-NexusTestBigBoard") { bigBoard(store); return }
         if ProcessInfo.processInfo.arguments.contains("-NexusTestLinksBoard") { linksBoard(store); return }
         if ProcessInfo.processInfo.arguments.contains("-NexusTestTime") { timeSessions(store); return }
@@ -268,6 +269,25 @@ enum TestHooks {
         for (title, day, time, est) in adds where !store.snapshot.tasks.values.contains(where: { $0.text == title }) {
             _ = store.add(title: title, workstream: "physics-hl", plan: [PlanEntry(day: day, time: time)], est: est)
         }
+    }
+
+    /// `-NexusTestPerson`: sample data, then a People group (kind person) with Ms Lee, a counsellor: one session note and a decision
+    /// in her notes (UITests/WorkstreamsAndPlannerTests: Sessions and Decisions on a person's page).
+    static func person(_ store: NexusStore) {
+        if !store.snapshot.isDataFolder { store.makeSample() }
+        guard store.workstream("ms-lee") == nil else { return }
+        let files: [(String, String)] = [
+            ("people/group.yaml", "label: People\nkind: person\n"),
+            ("people/ms-lee/workstream.yaml", "id: ms-lee\nname: Ms Lee\nrole: counsellor\ncadence: every two weeks\nstatus: active\n"),
+            ("people/ms-lee/\(Days.add(store.today, -9)) College list.md", WorkstreamText.sessionTemplate + "\nTrimmed to twelve schools.\n"),
+            ("people/ms-lee/notes.md", "# Ms Lee\n\n## Decisions\n\n- \(Days.add(store.today, -9)) Apply ED to Columbia, not Northwestern: the programme fits.\n"),
+        ]
+        for (rel, text) in files {
+            let url = store.folder.appendingPathComponent(rel)
+            try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? FolderAccess.write(url, text)
+        }
+        store.reload()
     }
 
     static func dayOrder(_ store: NexusStore) {
