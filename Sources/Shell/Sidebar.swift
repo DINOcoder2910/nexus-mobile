@@ -11,6 +11,7 @@ import NexusCore
 /// notebooks, the Subjects tab (`subjectsTab`).
 struct Sidebar: View {
     @Environment(NexusStore.self) private var store
+    /// (Drop's count looks again when a file comes in)
     @Environment(SyncService.self) private var sync
     @Binding var selection: Screen?
     var pushes = false
@@ -135,6 +136,8 @@ struct Sidebar: View {
                 if s.isDataFolder {
                     row(.recordings, "Recordings", "waveform", count: RecordingsCount.review(store))
                         .accessibilityIdentifier("sidebar-recordings")
+                    row(.drop, "Drop", "paperplane", count: DropCount.new(store, version: sync.dropVersion))
+                        .accessibilityIdentifier("sidebar-drop")
                     row(.inbox, "Inbox", "tray", count: p.openCount(nil))
                     row(.someday, "Someday", "moon.zzz", count: nil)
                 }
