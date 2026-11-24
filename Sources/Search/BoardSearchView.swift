@@ -1,10 +1,13 @@
 import SwiftUI
 import NexusCore
 
-/// Search boards: finds a word in what was handwritten or typed on any board in Notebooks, and opens the board there.
+/// Search boards: finds a word in what was handwritten or typed on any board in Notebooks, and opens the board there. PDFs whose
+/// names hold the words come first, each opening on its page (Write on it, its markscheme, what it goes with).
 struct BoardSearchView: View {
     @Environment(NexusStore.self) private var store
     @State private var query = ""
+    @State private var pdfNames: [String] = []
+    @State private var pdf: PdfOpen?
 
     private var index: HandwritingIndex { HandwritingIndex.shared }
 
@@ -15,6 +18,29 @@ struct BoardSearchView: View {
         List {
             Section {
                 status
+            }
+            let pdfs = BoardSearchView.pdfHits(pdfNames, words: words)
+            if !pdfs.isEmpty {
+                Section {
+                    ForEach(pdfs, id: \.self) { p in
+                        Button { pdf = PdfOpen(path: p) } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "doc.richtext").foregroundStyle(.secondary).frame(width: 20)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(((p as NSString).lastPathComponent as NSString).deletingPathExtension).foregroundStyle(.primary).lineLimit(1)
+                                    Text((p as NSString).deletingLastPathComponent).font(.nx(.caption)).foregroundStyle(.secondary).lineLimit(1)
+                                }
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .contextMenu {
+                            Button { store.writeOn(pdf: p) } label: { Label("Write on it", systemImage: "pencil.and.scribble") }
+                        }
+                        .accessibilityIdentifier("search-pdf")
+                    }
+                } header: {
+                    Text("PDFs").font(.nx(.headline)).foregroundStyle(.primary).textCase(nil)
+                }
             }
             if !groups.isEmpty {
                 ForEach(groups) { g in
@@ -33,8 +59,13 @@ struct BoardSearchView: View {
                 }
             }
         }
-        .overlay { emptyState(found: !hits.isEmpty) }
-        .searchable(text: $query, prompt: "Words on your boards")
+        .overlay { emptyState(found: !hits.isEmpty || !BoardSearchView.pdfHits(pdfNames, words: words).isEmpty) }
+        .pdfPage($pdf)
+        .task(id: "\(store.folder.path)|\(store.notebooksVersion)") {
+            let root = store.folder
+            pdfNames = await Task.detached(priority: .utility) { BoardSearchView.pdfFiles(root) }.value
+        }
+        .searchable(text: $query, prompt: "Words on your boards, or a PDF's name")
         .autocorrectionDisabled()
         .navigationTitle("Search boards")
         .toolbar {
@@ -105,7 +136,7 @@ struct BoardSearchView: View {
     @ViewBuilder
     private func emptyState(found: Bool) -> some View {
         let q = query.trimmingCharacters(in: .whitespaces)
-        if index.boards.isEmpty && !index.isIndexing {
+        if index.boards.isEmpty && !index.isIndexing && !found {
             ContentUnavailableView("No boards yet", systemImage: "scribble.variable",
                                    description: Text("Boards you make in Notebooks show up here, handwriting and typed text both."))
         } else if q.isEmpty {
@@ -123,6 +154,36 @@ struct BoardSearchView: View {
     }
 
     // MARK: helpers
+
+    /// The PDFs whose name (or folder) holds every word, best first: the name before the folder, shorter first; at most 12.
+    static func pdfHits(_ all: [String], words: [String]) -> [String] {
+        let ws = words.map { $0.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil) }.filter { !$0.isEmpty }
+        guard !ws.isEmpty else { return [] }
+        func fold(_ s: String) -> String { s.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil) }
+        let hits = all.filter { p in let f = fold(p); return ws.allSatisfy { f.contains($0) } }
+        let named = { (p: String) in let n = fold((p as NSString).lastPathComponent); return ws.allSatisfy { n.contains($0) } }
+        return Array(hits.sorted { a, b in
+            let na = named(a), nb = named(b)
+            if na != nb { return na }
+            return a.count != b.count ? a.count < b.count : a < b
+        }.prefix(12))
+    }
+
+    /// Every PDF in the data folder (not inside boards, the bin or hidden folders), as data-folder paths.
+    nonisolated static func pdfFiles(_ root: URL) -> [String] {
+        let base = root.resolvingSymlinksInPath().standardizedFileURL
+        guard let e = FileManager.default.enumerator(at: base, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles, .skipsPackageDescendants]) else { return [] }
+        var out: [String] = [], seen = 0
+        for case let u as URL in e {
+            seen += 1
+            if seen > 60_000 { break }
+            if u.pathExtension.lowercased() == "board" { e.skipDescendants(); continue }
+            guard u.pathExtension.lowercased() == "pdf" else { continue }
+            let full = u.resolvingSymlinksInPath().standardizedFileURL.path
+            if full.hasPrefix(base.path + "/") { out.append(String(full.dropFirst(base.path.count + 1))) }
+        }
+        return out
+    }
 
     struct BoardHits: Identifiable {
         var path: String

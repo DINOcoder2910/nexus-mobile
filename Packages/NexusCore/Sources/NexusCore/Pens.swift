@@ -127,4 +127,102 @@ public enum Pens {
         guard let s = widths(shared), let base = laptopWidths[ink], own.count == 6 else { return nil }
         return own.indices.map { (own[$0] * s[$0] / base[$0] * 100).rounded() / 100 }
     }
+
+    /// The other way: the iPad's six widths for an ink (`mine`, its own built-in ones `own`) as the file keeps them, in the laptop's
+    /// units, so a size set on the iPad (Save as my default) draws the same step that many times wider on the laptop. Kept inside
+    /// the file's 0.2 to 120. nil when the rows aren't six long or the ink isn't one the file knows.
+    public static func unscaled(_ mine: [Double], ink: String, own: [Double]) -> [Double]? {
+        guard let base = laptopWidths[ink], mine.count == 6, own.count == 6, own.allSatisfy({ $0 > 0 }) else { return nil }
+        return mine.indices.map { min(120, max(0.2, (mine[$0] * base[$0] / own[$0] * 100).rounded() / 100)) }
+    }
+}
+
+/// The pen panel's extras on the iPad (the laptop has them in desktop/src/board/Board.tsx): copying a pen from a stroke, a size set
+/// by holding it, and restyling lassoed ink. The pure parts: a stroke's width, the step nearest it, a colour's name, which strokes a
+/// lasso holds, and the words the board shows. The app's BoardController+PenExtras.swift does the rest.
+public enum PenExtras {
+    /// A stroke's width: the middle of its points' widths (a pen thins where it moves fast, so neither the least nor the most).
+    public static func width(_ sizes: [Double]) -> Double {
+        let s = sizes.filter { $0.isFinite && $0 > 0 }.sorted()
+        guard !s.isEmpty else { return 0 }
+        return s[s.count / 2]
+    }
+
+    /// The step of `row` nearest `w`, by ratio (as the laptop's dropper picks: 3 is as far from 1.5 as from 6).
+    public static func nearestStep(_ w: Double, in row: [Double]) -> Int {
+        guard w > 0, !row.isEmpty else { return 0 }
+        var best = 0
+        for i in row.indices where row[i] > 0 && abs(log(row[i] / w)) < abs(log(max(row[best], 0.0001) / w)) { best = i }
+        return best
+    }
+
+    /// The colours with names, the pens' and the highlighter's built-in ones first (a colour is named after the nearest).
+    static let named: [(String, (Double, Double, Double))] = [
+        ("black", (0x1B, 0x1B, 0x1B)), ("blue", (0x2F, 0x6F, 0xEB)), ("red", (0xD9, 0x30, 0x25)), ("green", (0x18, 0x80, 0x38)),
+        ("orange", (0xE3, 0x74, 0x00)), ("purple", (0x8E, 0x44, 0xAD)), ("grey", (0x6E, 0x6E, 0x73)), ("teal", (0x00, 0x97, 0xA7)),
+        ("pink", (0xD8, 0x1B, 0x60)), ("brown", (0x8D, 0x55, 0x24)), ("navy", (0x1E, 0x29, 0x5A)),
+        ("yellow", (0xFF, 0xE0, 0x66)), ("green", (0x9B, 0xE7, 0xA0)), ("pink", (0xFF, 0xB3, 0xC7)), ("blue", (0x9F, 0xD3, 0xFF)),
+        ("orange", (0xFF, 0xC4, 0x8C)), ("purple", (0xD7, 0xB8, 0xFF)), ("coral", (0xFF, 0x9F, 0x8F)), ("grey", (0xCF, 0xCF, 0xCF)),
+        ("white", (0xFF, 0xFF, 0xFF)),
+    ]
+
+    /// A colour's everyday name ("red"), from the nearest named colour; "this colour" when it isn't a colour.
+    public static func colorName(_ hex: String) -> String {
+        guard let c = Pens.color(hex) else { return "this colour" }
+        let h = Array(c.dropFirst())
+        func v(_ i: Int) -> Double { Double(Int(String(h[i...i + 1]), radix: 16) ?? 0) }
+        let (r, g, b) = (v(0), v(2), v(4))
+        var best = named[0].0, d = Double.infinity
+        for (n, (r2, g2, b2)) in named {
+            // weighted as the eye sees (green counts most)
+            let e = 2 * (r - r2) * (r - r2) + 4 * (g - g2) * (g - g2) + 3 * (b - b2) * (b - b2)
+            if e < d { d = e; best = n }
+        }
+        return best
+    }
+
+    /// A width as the panel shows it: "5.5 px", "4 px", "0.75 px".
+    public static func widthText(_ w: Double) -> String {
+        let r = (w * 100).rounded() / 100
+        if r == r.rounded() { return "\(Int(r)) px" }
+        let one = (r * 10).rounded() / 10
+        return (abs(one - r) < 0.001 ? String(format: "%.1f", one) : String(format: "%.2f", r)) + " px"
+    }
+
+    /// The card under a copied stroke: "Pen · 5.5 px · red".
+    public static func strokeText(ink: String, width: Double, color: String) -> String {
+        "\(ink) · \(widthText(width)) · \(colorName(color))"
+    }
+
+    /// Whether `p` is inside the closed polygon `poly` (even-odd).
+    public static func inside(_ p: SIMD2<Double>, _ poly: [SIMD2<Double>]) -> Bool {
+        guard poly.count >= 3 else { return false }
+        var c = false
+        var j = poly.count - 1
+        for i in poly.indices {
+            let a = poly[i], b = poly[j]
+            if (a.y > p.y) != (b.y > p.y), p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x { c.toggle() }
+            j = i
+        }
+        return c
+    }
+
+    /// Whether a lasso drawn along `poly` holds a stroke through `points`: at least half of them inside it.
+    public static func lassoed(_ points: [SIMD2<Double>], by poly: [SIMD2<Double>]) -> Bool {
+        guard !points.isEmpty, poly.count >= 3 else { return false }
+        let n = points.filter { inside($0, poly) }.count
+        return n * 2 >= points.count
+    }
+
+    /// The note after restyling: "Changed 4 strokes to blue, 5 px" (what changed: a colour, a width or both).
+    public static func restyleText(count: Int, color: String?, width: Double?) -> String {
+        let what = [color.map(colorName), width.map(widthText)].compactMap { $0 }.joined(separator: ", ")
+        return "Changed \(count) stroke\(count == 1 ? "" : "s") to \(what)"
+    }
+
+    /// The width a size can be set to on the iPad for an ink whose PencilKit range is `range`: the file's 0.2 to 120, inside the range.
+    public static func settable(_ w: Double, range: ClosedRange<Double>) -> Double {
+        let lo = max(0.2, range.lowerBound), hi = min(120, range.upperBound)
+        return (min(hi, max(lo, w)) * 10).rounded() / 10
+    }
 }
