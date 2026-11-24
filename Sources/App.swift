@@ -172,6 +172,8 @@ enum Screen: Hashable {
     case applications, school(String)
     /// Recordings: meetings, classes and filmed classes, transcribed here and prepared by Claude for review.
     case recordings
+    /// Drop: files sent between your devices through the hub (Drop/ at the data folder's top).
+    case drop
     /// A subject's page (a workstream in the new look: its next tasks, notebooks, study and files), and its Study page.
     case subject(String), studyPage(String)
     /// A Spanish subject's Oral practice page (Today's From Study oral card).
@@ -363,6 +365,7 @@ struct RootView: View {
         case .guide: return "How Nexus works"
         case .files(let path): return path.isEmpty ? "Files (the data folder)" : "Files: \(path)"
         case .recordings: return "Recordings (recordings/)"
+        case .drop: return "Drop (files sent between your devices, Drop/)"
         case .subject(let id): return store.workstream(id).map { "\($0.name)'s page (\($0.folder))" } ?? id
         case .studyPage(let id): return store.workstream(id).map { "\($0.name)'s Study (\($0.folder)/study)" } ?? id
         case .oralPage(let id): return store.workstream(id).map { "\($0.name)'s Oral practice (\($0.folder)/study/spanish/oral)" } ?? id
@@ -461,6 +464,7 @@ struct RootView: View {
             case .time: TimeView()
             case .claude: ClaudeChatView()
             case .recordings: RecordingsView()
+            case .drop: DropView()
             case .subject(let id): SubjectPage(workstreamId: id, go: go)
             case .studyPage(let id): StudyPage(workstreamId: id)
             case .oralPage(let id): OralPage(workstreamId: id)

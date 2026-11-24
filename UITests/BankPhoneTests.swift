@@ -1,7 +1,7 @@
 import XCTest
 
 /// The question bank on the iPhone (Nov 23 2026): the same as BankTests on the iPad, laid out for the phone (the markscheme in a sheet,
-/// Mark as question in the board's Insert menu). `-NexusTestBank` gives Chemistry HL's bank as the laptop leaves it. Screenshots
+/// Mark as question in the board's Insert sheet). `-NexusTestBank` gives Chemistry HL's bank as the laptop leaves it. Screenshots
 /// ("phone-bank-…") are printed in the ui-check log. Skips on the iPad.
 final class BankPhoneTests: XCTestCase {
     let app = XCUIApplication()
@@ -98,17 +98,16 @@ final class BankPhoneTests: XCTestCase {
 
         // the board's Insert menu: Mark as question
         tap("bq-board", "no Write on it")
-        let insert = app.buttons["Insert"].firstMatch
-        XCTAssertTrue(insert.waitForExistence(timeout: 30), "the paper's board didn't open")
+        // the iPhone's board has the tool pill (PhoneToolPill): + opens Insert's sheet, whose rows include Mark as question
+        let insert = el("phone-tool-plus")
+        XCTAssertTrue(insert.waitForExistence(timeout: 30), "the paper's board didn't open (no + in the tool pill)")
         sleep(3)
-        // Insert sits past the tool strip's right edge: scroll the strip ourselves and let it settle, so the tap isn't made
-        // while XCUITest's own scroll-to-visible is still moving the strip (on 80e8744 a keyboard came up there, Nov 23, PR #55)
-        let strip = app.scrollViews.containing(NSPredicate(format: "label == 'Insert'")).firstMatch
-        var swipes = 0
-        while !insert.isHittable && strip.exists && swipes < 3 { strip.swipeLeft(); sleep(1); swipes += 1 }
         insert.tap()
+        XCTAssertTrue(el("phone-tool-sheet").waitForExistence(timeout: 10), "+ didn't open Insert's sheet")
         let mark = app.buttons["Mark as question"].firstMatch
-        XCTAssertTrue(mark.waitForExistence(timeout: 5), "Insert has no Mark as question")
+        XCTAssertTrue(mark.waitForExistence(timeout: 5), "Insert's sheet has no Mark as question")
+        sleep(1)
+        shot("phone-bank-insert")
         mark.tap()
         let box = el("question-box")
         XCTAssertTrue(box.waitForExistence(timeout: 5), "no box to draw round the question")

@@ -61,7 +61,7 @@ targets:
         # the commit this build was made from (the cloud build sets NEXUS_BUILD): told to the hub, so the laptop can say when the iPad is behind
         NexusBuild: $(NEXUS_BUILD)
         NSCameraUsageDescription: Nexus scans pages into a new board or a practice sheet into your study folder, films a class, and snaps the board while recording.
-        NSPhotoLibraryUsageDescription: Nexus puts a photo on a new board.
+        NSPhotoLibraryUsageDescription: Nexus puts a photo on a new board, or sends photos and videos to your other devices through Drop.
         NSMicrophoneUsageDescription: Nexus listens while you hold the tutor button, and records meetings and classes when you ask it to.
         NSSpeechRecognitionUsageDescription: Nexus turns what you ask the tutor, and your recordings, into words on this device.
         # a class keeps recording when the screen locks or you switch apps
@@ -120,6 +120,10 @@ targets:
         CFBundleDisplayName: Nexus
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
+        # the Home Screen widgets read the day's card from the hub on the G14 over plain HTTP (Tailscale or the home network)
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+        NSLocalNetworkUsageDescription: The Nexus widget reads your day from your home hub.
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.nexus.mobile.live

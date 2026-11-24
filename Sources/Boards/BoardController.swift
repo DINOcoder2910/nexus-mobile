@@ -186,6 +186,12 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         NotificationCenter.default.addObserver(self, selector: #selector(saveNowSelector), name: UIApplication.willResignActiveNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(otherPaneSaved(_:)), name: BoardController.savedNote, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(mathDrawn), name: BlockStyler.mathReady, object: nil)
+        if TestHooks.extras {
+            NotificationCenter.default.addObserver(forName: TestHooks.openGooglePanel, object: nil, queue: .main) { [weak self] n in
+                guard let id = n.object as? String else { return }
+                MainActor.assumeIsolated { self?.openGooglePanel(id) }
+            }
+        }
         poll = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.checkOutside() }
         setUpLive()
     }

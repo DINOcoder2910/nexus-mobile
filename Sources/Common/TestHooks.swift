@@ -9,6 +9,7 @@ enum TestHooks {
     static func run(_ store: NexusStore) {
         nestedNotebooks(store)
         manyNotebooks(store)
+        if extras || extrasTask { runExtras(store); return }
         if ProcessInfo.processInfo.arguments.contains("-NexusTestPerson") { person(store) }
         if ProcessInfo.processInfo.arguments.contains("-NexusTestBigBoard") { bigBoard(store); return }
         if ProcessInfo.processInfo.arguments.contains("-NexusTestLinksBoard") { linksBoard(store); return }
@@ -16,6 +17,7 @@ enum TestHooks {
         if ProcessInfo.processInfo.arguments.contains("-NexusTestDayOrder") { dayOrder(store); return }
         if ProcessInfo.processInfo.arguments.contains("-NexusTestDayEdges") { dayEdges(store); return }
         if ProcessInfo.processInfo.arguments.contains("-NexusTestBank") { questionBank(store); return }
+        if ProcessInfo.processInfo.arguments.contains("-NexusTestDrop") { dropFiles(store); return }
         guard ProcessInfo.processInfo.arguments.contains("-NexusTestPdfBoard") else { return }
         if !store.snapshot.isDataFolder { store.makeSample() }
         sharedPens(store)
@@ -214,6 +216,57 @@ enum TestHooks {
 
     /// `-NexusTestTime`: sample data with time tracked this week on this device and on the laptop, and a timer running on
     /// "Redox worksheet" (UITests/TimeTrackingTests: the running timer, the Time screen, the task panel's Time section).
+    /// `-NexusTestDrop` (UITests/DropTests): sample data, then Drop/ as a sync would leave it: a photo and a PDF from the laptop,
+    /// notes from the iPhone (or the iPad on an iPhone), a sheet put in the G14's Drop by hand, and a photo sent from here, with
+    /// this device's record of who sent what; Drop never looked at, so the sidebar counts the arrivals. Made again at every launch.
+    static func dropFiles(_ store: NexusStore) {
+        if !store.snapshot.isDataFolder { store.makeSample() }
+        let fm = FileManager.default
+        let dir = store.folder.appendingPathComponent(DropFolder.folder, isDirectory: true)
+        try? fm.removeItem(at: dir)
+        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        let other = Device.isPhone ? "iPad" : "iPhone"
+        func picture(_ top: UIColor, _ bottom: UIColor) -> Data {
+            UIGraphicsImageRenderer(size: CGSize(width: 640, height: 480)).jpegData(withCompressionQuality: 0.85) { c in
+                let colors = [top.cgColor, bottom.cgColor] as CFArray
+                if let g = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 1]) {
+                    c.cgContext.drawLinearGradient(g, start: .zero, end: CGPoint(x: 0, y: 480), options: [])
+                }
+                UIColor.white.withAlphaComponent(0.85).setFill()
+                UIBezierPath(ovalIn: CGRect(x: 420, y: 70, width: 120, height: 120)).fill()
+                UIColor.black.withAlphaComponent(0.35).setFill()
+                UIBezierPath(rect: CGRect(x: 0, y: 360, width: 640, height: 120)).fill()
+            }
+        }
+        let pdf = UIGraphicsPDFRenderer(bounds: CGRect(x: 0, y: 0, width: 595, height: 842)).pdfData { c in
+            c.beginPage()
+            ("Redox: half-equations" as NSString).draw(at: CGPoint(x: 60, y: 70), withAttributes: [.font: UIFont.boldSystemFont(ofSize: 24)])
+            ("Atoms, then O with water, then H with H+, then the charge with electrons." as NSString)
+                .draw(in: CGRect(x: 60, y: 120, width: 475, height: 200), withAttributes: [.font: UIFont.systemFont(ofSize: 15)])
+        }
+        let files: [(String, Data, String, Double, Bool)] = [
+            ("IMG_0042.jpg", picture(.systemTeal, .systemIndigo), "Duo", 2, false),
+            ("Redox notes.pdf", pdf, "Duo", 50, false),
+            ("Essay outline.txt", Data("Intro\nThree points\nConclusion\n".utf8), other, 190, false),
+            ("Physics data.csv", Data("t,x\n0,0\n1,4.9\n2,19.6\n".utf8), "G14", 26 * 60, false),
+            ("Whiteboard.jpg", picture(.systemOrange, .systemPink), "", 30 * 60, true),
+        ]
+        let now = Date()
+        var items: [DropItem] = []
+        for (name, data, from, minutesAgo, here) in files {
+            let at = now.addingTimeInterval(-minutesAgo * 60)
+            let url = dir.appendingPathComponent(name)
+            try? data.write(to: url)
+            try? fm.setAttributes([.modificationDate: at], ofItemAtPath: url.path)
+            items.append(DropItem(path: DropFolder.folder + "/" + name, from: from, at: DropFolder.stamp(at), here: here))
+        }
+        // the record as the sync client leaves it (oldest given first, so the newest ends on top)
+        try? fm.removeItem(at: store.folder.appendingPathComponent(DropFolder.logPath))
+        try? DropLog.note(items.reversed(), in: store.folder)
+        UserDefaults.standard.removeObject(forKey: "dropSeen")
+        store.reload()
+    }
+
     static func timeSessions(_ store: NexusStore) {
         if !store.snapshot.isDataFolder { store.makeSample() }
         guard TimeTracker.shared.entries.isEmpty else {

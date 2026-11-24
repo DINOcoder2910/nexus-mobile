@@ -37,8 +37,12 @@ final class TutorPanelTests: XCTestCase {
         XCTAssertTrue(alert.waitForExistence(timeout: 5))
         alert.textFields.firstMatch.typeText(notebook)
         alert.buttons["Make"].tap()
+        // the sidebar is scrolled to its foot for New notebook…, and a name early in the alphabet ("Maths check") lands above
+        // the fold, where the list hasn't made its row: scroll back up to it (Nov 24, once Drop's row lengthened the sidebar)
         let row = app.staticTexts[notebook].firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 10), "the new notebook isn't in the sidebar")
+        var ups = 0
+        while !row.waitForExistence(timeout: ups == 0 ? 6 : 2) && ups < 5 { app.collectionViews.firstMatch.swipeDown(); ups += 1 }
+        XCTAssertTrue(row.exists, "the new notebook isn't in the sidebar")
         row.tap()
         let new = app.buttons["New"].firstMatch
         XCTAssertTrue(new.waitForExistence(timeout: 10))
@@ -184,6 +188,10 @@ final class TutorPanelTests: XCTestCase {
         sleep(1)
         shot("tutor-maths-0-empty")
         input.tap()
+        // the sheet can still be settling: a tap that lands before the field takes focus leaves typeText nowhere to type
+        // ("Neither element nor any descendant has keyboard focus", Nov 24)
+        var focusTries = 0
+        while !(input.value(forKey: "hasKeyboardFocus") as? Bool ?? false) && focusTries < 3 { sleep(1); input.tap(); focusTries += 1 }
         input.typeText("2x + 6 = 14\n2x = 8\nx = -4")
         app.buttons["maths-check"].firstMatch.tap()
         let verdict = app.otherElements["maths-verdict"].firstMatch

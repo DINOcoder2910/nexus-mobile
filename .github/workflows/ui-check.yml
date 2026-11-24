@@ -24,7 +24,7 @@ concurrency:
 jobs:
   ui:
     runs-on: macos-latest
-    timeout-minutes: 185
+    timeout-minutes: 250
     steps:
       - uses: actions/checkout@v4
 
@@ -56,8 +56,8 @@ jobs:
 
       - name: Run the UI tests, sampling the app
         # its own limit, so a hung iPad run still leaves time for the iPhone tests and the reports (25 tests took 48 min on Nov 16,
-        # the full suite 59 min on Nov 18 and over 70 on a slow runner Nov 19)
-        timeout-minutes: 105
+        # the full suite 59 min on Nov 18 and over 70 on a slow runner Nov 19; 102 min with DropTests Nov 22; more with Live Activities, shared pens and class material Nov 23)
+        timeout-minutes: 130
         env:
           # a push whose commit message says [ui-only: SomeTests] runs only that class (or the Run workflow box's "only"), and
           # [ui-only: SomeTests+OtherTests] those classes; the name must end in Tests, so a message that only mentions the marker
@@ -209,8 +209,8 @@ jobs:
 
       - name: Run the iPhone tests
         if: ${{ !cancelled() }}
-        # 12 tests took 23 min on Nov 18 and over 40 on a slow runner Nov 19
-        timeout-minutes: 65
+        # 12 tests took 23 min on Nov 18 and over 40 on a slow runner Nov 19; past 65 on Nov 24 with the oral, Drop and Live Activities
+        timeout-minutes: 90
         env:
           HEAD_MSG: ${{ github.event.head_commit.message }}
         run: |

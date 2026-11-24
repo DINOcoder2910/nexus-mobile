@@ -151,8 +151,11 @@ final class OralTests: XCTestCase {
         XCTAssertTrue(alert.waitForExistence(timeout: 5))
         alert.textFields.firstMatch.typeText("Español")
         alert.buttons["Make"].tap()
+        // above the fold once the sidebar was scrolled to New notebook…: scroll back up to it (as TutorPanelTests.openBoard)
         let nb = app.staticTexts["Español"].firstMatch
-        XCTAssertTrue(nb.waitForExistence(timeout: 10))
+        var ups = 0
+        while !nb.waitForExistence(timeout: ups == 0 ? 6 : 2) && ups < 5 { app.collectionViews.firstMatch.swipeDown(); ups += 1 }
+        XCTAssertTrue(nb.exists, "the new notebook isn't in the sidebar")
         nb.tap()
         let new = app.buttons["New"].firstMatch
         XCTAssertTrue(new.waitForExistence(timeout: 10))

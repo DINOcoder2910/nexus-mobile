@@ -20,7 +20,7 @@ jobs:
       matrix:
         device: [iPhone, iPad]
     runs-on: macos-latest
-    timeout-minutes: 70
+    timeout-minutes: 125
     steps:
       - uses: actions/checkout@v4
 
@@ -52,8 +52,10 @@ jobs:
             CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- 2>&1 | grep -E "error:|BUILD|\*\*" | head -n 100
 
       - name: Run the tests
-        # 55 since Nov 23: the iPhone's tests took 45 minutes once the Live Activity test (about 8 minutes) joined them
-        timeout-minutes: 55
+        # 55 since Nov 23: the iPhone's tests took 45 minutes once the Live Activity test (about 8 minutes) joined them; 75 since
+        # Nov 23 evening: with Drop, shared pens and class material they passed 55 (PR #51); 110 since Nov 24: with the
+        # question bank, the Planner's spans and the Spanish guides they passed 75 (PR #51, cut off in RecordingsPhoneTests)
+        timeout-minutes: 110
         run: |
           echo 1 > status.txt
           SUFFIX=$([ "${{ matrix.device }}" = iPad ] && echo PadTests || echo PhoneTests)

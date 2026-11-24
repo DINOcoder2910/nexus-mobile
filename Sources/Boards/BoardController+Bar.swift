@@ -93,7 +93,15 @@ extension BoardController: UIPencilInteractionDelegate, UIColorPickerViewControl
         if let p = toolPanel?.view, p.superview == view { view.bringSubviewToFront(p) } // the Tools card sits over the ring
         view.bringSubviewToFront(bar)
         view.bringSubviewToFront(showBarsButton)
+        // an upright iPhone's tools, at the foot of the board
+        if bar.pill || bar.phonePill.superview != nil {
+            bar.phonePill.syncShown()
+            bar.phonePill.place(in: view)
+        }
     }
+
+    /// How much of the foot of the screen the iPhone's tools pill covers, under the safe area's own.
+    var bottomInset: CGFloat { view.safeAreaInsets.bottom + bar.phonePill.coveredHeight }
 
     /// How much of the top of the screen the bar covers.
     var topInset: CGFloat { bar.isHidden ? view.safeAreaInsets.top : view.safeAreaInsets.top + bar.height }
