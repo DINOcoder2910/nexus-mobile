@@ -31,10 +31,15 @@ final class BoardNavigationController: UINavigationController {
         if b.solving && b.selected == nil {
             out.append(UIKeyCommand(title: "Back to the question", action: #selector(backToQuestion), input: UIKeyCommand.inputEscape))
         }
+        // solving: D puts the data booklet beside the board, or takes it away, as on the laptop
+        if b.solving && b.writing == nil {
+            out.append(UIKeyCommand(title: "Data booklet", action: #selector(toggleBooklet), input: "d"))
+        }
         return out
     }
 
     @objc func backToQuestion() { board?.close() }
+    @objc func toggleBooklet() { board?.toggleBooklet() }
 
     @objc func runKey(_ c: UIKeyCommand) {
         if let id = c.propertyList as? String { board?.runShortcut(id) }

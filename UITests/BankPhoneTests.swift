@@ -96,6 +96,15 @@ final class BankPhoneTests: XCTestCase {
             XCTFail("the Acids paper's markscheme wasn't found")
         }
 
+        // the data booklet (the laptop's D): a sheet over the question, chemistry's first
+        tap("bq-booklet", "no Data booklet button")
+        XCTAssertTrue(el("bq-booklet-pane").waitForExistence(timeout: 10), "the data booklet didn't open")
+        sleep(3)
+        shot("phone-bank-booklet")
+        let closeBook = app.buttons["Close the booklet"].firstMatch
+        XCTAssertTrue(closeBook.waitForExistence(timeout: 5), "the booklet has no Close"); closeBook.tap()
+        sleep(1)
+
         // the board's Insert menu: Mark as question
         tap("bq-board", "no Write on it")
         // the iPhone's board has the tool pill (PhoneToolPill): + opens Insert's sheet, whose rows include Mark as question
@@ -137,6 +146,17 @@ final class BankPhoneTests: XCTestCase {
         XCTAssertTrue(back.waitForExistence(timeout: 30), "Solve full screen didn't open the board")
         sleep(3)
         shot("phone-bank-solve")
+        // the data booklet under the board while solving (⋯ › Data booklet; the panes stack on a phone)
+        let boardMore = el("board-more")
+        XCTAssertTrue(boardMore.waitForExistence(timeout: 10), "the board has no ⋯")
+        boardMore.tap()
+        // (the question page's own Data booklet, bq-booklet, is still under the board)
+        let bookRow = app.buttons.matching(NSPredicate(format: "label == 'Data booklet' AND identifier != 'bq-booklet'")).firstMatch
+        XCTAssertTrue(bookRow.waitForExistence(timeout: 5), "solving, the board's ⋯ has no Data booklet")
+        bookRow.tap()
+        XCTAssertTrue(el("bq-booklet-pane").waitForExistence(timeout: 10), "the data booklet didn't open under the board")
+        sleep(3)
+        shot("phone-bank-solve-booklet")
         back.tap()
         XCTAssertTrue(el("bq-count").waitForExistence(timeout: 15), "closing the full screen board didn't come back to the question")
     }

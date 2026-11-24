@@ -374,6 +374,13 @@ enum TestHooks {
           \(j(acids)): "2"
 
         """
+        // the subjects' data booklets (the question page's and the board's Data booklet): chemistry's and physics'
+        try? FolderAccess.writeData(store.folder.appendingPathComponent(chem + "/files/IB chemistry data booklet.pdf"), SampleFolder.pdf([
+            "Chemistry data booklet", "1. Equations: PV = nRT", "2. Physical constants: R = 8.31 J K-1 mol-1", "9. Periodic table: H 1.01, Fe 55.85, Mn 54.94",
+        ]))
+        try? FolderAccess.writeData(store.folder.appendingPathComponent("classes/physics-hl/files/IB physics data booklet.pdf"), SampleFolder.pdf([
+            "Physics data booklet", "Fundamental constants: g = 9.81 m s-2, c = 3.00 x 10^8 m s-1", "A.1 Kinematics: s = ut + at^2 / 2, v^2 = u^2 + 2as",
+        ]))
         try? FolderAccess.write(store.folder.appendingPathComponent(chem + "/study/questions.yaml"), questions)
         try? FolderAccess.write(store.folder.appendingPathComponent(chem + "/study/question-marks.yaml"), marks)
         // the Acids paper's board, as the laptop's Write on it makes it, with an answer written under question 2

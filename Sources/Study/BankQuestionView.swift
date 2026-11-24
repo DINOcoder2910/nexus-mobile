@@ -14,6 +14,9 @@ struct BankQuestionView: View {
     @State var q: String
 
     @State private var showMs = false
+    /// the data booklet beside the question (D), in place of the markscheme (BookletPane)
+    @State private var showBook = false
+    @State private var hasBooklet = false
     @State private var ms: BankPdf.Spot?
     @State private var msLooked = false
     @State private var clip: UIImage?
@@ -35,7 +38,13 @@ struct BankQuestionView: View {
         let i = order.firstIndex(of: q) ?? 0
         Group {
             if let b, let v {
-                if size == .regular && showMs, let ms {
+                if size == .regular && showBook {
+                    HStack(spacing: 0) {
+                        page(b, v, order: order, i: i).frame(minWidth: 380)
+                        Divider().ignoresSafeArea()
+                        BookletPane(subject: workstreamId, close: { showBook = false })
+                    }
+                } else if size == .regular && showMs, let ms {
                     HStack(spacing: 0) {
                         page(b, v, order: order, i: i).frame(minWidth: 380)
                         Divider().ignoresSafeArea()
@@ -70,7 +79,13 @@ struct BankQuestionView: View {
                 .presentationDetents([.medium, .large])
             }
         }
+        .sheet(isPresented: Binding(get: { showBook && size != .regular }, set: { if !$0 { showBook = false } })) {
+            BookletPane(subject: workstreamId, close: { showBook = false })
+                .presentationDetents([.medium, .large])
+                .presentationBackgroundInteraction(.enabled(upThrough: .medium))
+        }
         .task(id: q) { await lookUpMarkscheme() }
+        .task { hasBooklet = !BookletShelf.list(store, first: workstreamId).isEmpty }
         .task(id: "\(q)|\(placeKey(b))") { renderClip(b) }
         .studyRefresh(store)
         .task {
@@ -177,13 +192,21 @@ struct BankQuestionView: View {
                 }
                 .listRowInsets(EdgeInsets(top: 8, leading: 10, bottom: 8, trailing: 10))
                 if let ms {
-                    Button { showMs.toggle() } label: {
+                    Button { showMs.toggle(); if showMs { showBook = false } } label: {
                         Label(showMs ? "Hide the markscheme" : "Markscheme" + (ms.q.map { " at \(QuestionBank.qName($0))" } ?? ""), systemImage: "checkmark.seal")
                     }
                     .keyboardShortcut("m", modifiers: [])
                     .accessibilityIdentifier("bq-ms")
                 } else if msLooked {
                     Text("No markscheme found for this paper.").font(.nx(.callout)).foregroundStyle(.secondary)
+                }
+                // as the laptop's Data booklet (D): this subject's IB data booklet, or another subject's, beside the question
+                if hasBooklet {
+                    Button { showBook.toggle(); if showBook { showMs = false } } label: {
+                        Label(showBook ? "Hide the data booklet" : "Data booklet", systemImage: "book.pages")
+                    }
+                    .keyboardShortcut("d", modifiers: [])
+                    .accessibilityIdentifier("bq-booklet")
                 }
             } header: {
                 SectionTitle(title: "How did it go?")
