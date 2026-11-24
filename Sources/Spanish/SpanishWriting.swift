@@ -252,7 +252,7 @@ struct SpanishWriteView: View {
             // the tutor's box: each paragraph is read by the checker after a pause and its mistakes are underlined as he writes
             // (Live corrections), the laptop's SpanishBox; Return is a new line here, not send
             SpanishTextBox(text: text, placeholder: "Write your answer here", wsId: workstreamId, identifier: "spanish-piece", onSubmit: {},
-                           maxLines: size == .regular ? 24 : 14, returnSends: false, minLines: size == .regular ? 15 : 10)
+                           maxLines: size == .regular ? 15 : 10, returnSends: false, fixed: true)
                 .overlay(alignment: .topLeading) {
                     if text.wrappedValue.isEmpty { Text("Write your answer here").foregroundStyle(.tertiary).padding(.horizontal, 11).padding(.vertical, 8).allowsHitTesting(false).accessibilityHidden(true) }
                 }

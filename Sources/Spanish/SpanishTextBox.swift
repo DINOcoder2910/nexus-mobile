@@ -21,6 +21,9 @@ struct SpanishTextBox: UIViewRepresentable {
     var returnSends = true
     /// The box's least height in lines (an essay box starts tall).
     var minLines = 1
+    /// A box of one fixed height (maxLines) that scrolls inside, like a TextEditor: Writing's essay box. A box that grows a line as
+    /// the words wrap relays the page out mid-key, and a long piece typed into it lost a letter at each new line.
+    var fixed = false
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -44,7 +47,7 @@ struct SpanishTextBox: UIViewRepresentable {
         v.smartQuotesType = .no
         v.autocapitalizationType = .sentences
         v.returnKeyType = returnSends ? .send : .default
-        v.isScrollEnabled = false
+        v.isScrollEnabled = fixed
         v.accessibilityIdentifier = identifier
         v.accessibilityLabel = placeholder
         v.text = text
@@ -78,6 +81,7 @@ struct SpanishTextBox: UIViewRepresentable {
         let fit = v.sizeThatFits(CGSize(width: w, height: .greatestFiniteMagnitude)).height
         let line = (v.font ?? UIFont.preferredFont(forTextStyle: .body)).lineHeight
         let most = line * CGFloat(maxLines) + v.textContainerInset.top + v.textContainerInset.bottom
+        if fixed { return CGSize(width: w, height: most) }
         let least = line * CGFloat(minLines) + v.textContainerInset.top + v.textContainerInset.bottom
         let scroll = fit > most
         if v.isScrollEnabled != scroll { DispatchQueue.main.async { v.isScrollEnabled = scroll } }
