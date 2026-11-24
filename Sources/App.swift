@@ -208,6 +208,8 @@ struct RootView: View {
     var body: some View {
         @Bindable var store = store
         shell
+        // solving a question full screen: no status bar on the iPad either (its board is in the split view's detail column)
+        .statusBarHidden(store.openBoard?.solve == true)
         .background {
             AppShortcutKeys(enabled: store.openTaskId == nil && store.capture == nil && store.openBoard == nil,
                             canRun: canRunShortcut, perform: runShortcut)
