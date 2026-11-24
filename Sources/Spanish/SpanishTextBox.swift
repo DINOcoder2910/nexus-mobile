@@ -60,9 +60,16 @@ struct SpanishTextBox: UIViewRepresentable {
 
     func updateUIView(_ v: UITextView, context: Context) {
         context.coordinator.parent = self
-        if v.text != text {
-            v.text = text
-            context.coordinator.restyle()
+        // only a change made elsewhere (a stem put in, the box emptied after sending) is copied in. SwiftUI can update the view in
+        // the middle of a key's insert, before textViewDidChange has passed the new letter on; copying the binding in then took the
+        // letter back out (a long piece lost a letter every line or two).
+        let c = context.coordinator
+        if text != c.pushed {
+            c.pushed = text
+            if v.text != text {
+                v.text = text
+                c.restyle()
+            }
         }
     }
 
@@ -86,7 +93,10 @@ struct SpanishTextBox: UIViewRepresentable {
         private var timer: Timer?
         private var watching: UUID?
 
-        init(_ p: SpanishTextBox) { parent = p }
+        /// The text last passed to the binding (or copied in from it).
+        var pushed: String
+
+        init(_ p: SpanishTextBox) { parent = p; pushed = p.text }
 
         func watch() { watching = BoardSpanish.shared.onChange { [weak self] in self?.restyle() } }
         func stop() {
@@ -99,9 +109,8 @@ struct SpanishTextBox: UIViewRepresentable {
             text.components(separatedBy: "\n").filter { SpanishBlock.worth($0) && BlockFacts.lang(nil, $0) != "en" }
         }
 
-        /// The underlines over the words as they are now. The text storage is touched only when they differ from what it shows: an
-        /// edit to it while the keyboard is typing resets the keyboard and can lose a key (a long piece typed into Writing's box lost
-        /// a letter every line or two), and the underlines it has already move with the words.
+        /// The underlines over the words as they are now. The text storage is touched only when they differ from what it shows (the
+        /// underlines it has already move with the words), so a key typed doesn't redo the storage.
         func restyle() {
             guard let v = view else { return }
             let s = v.textStorage
@@ -157,6 +166,7 @@ struct SpanishTextBox: UIViewRepresentable {
         }
 
         func textViewDidChange(_ v: UITextView) {
+            pushed = v.text
             parent.text = v.text
             restyle()
             later()

@@ -145,7 +145,7 @@ final class SpanishPadTests: XCTestCase {
         type("spanish-piece", "¡Hola Marta!\n\nLa semana pasada fui a la playa con mi familia. Fuimos en coche y el viaje fue muy largo, pero divertido. Nos quedamos en un hotel pequeño cerca del mar.\n\nCada día nadamos y comimos paella en un restaurante. Ayer compre una camiseta para mi hermano. Lo que más me gustó fue el atardecer en la playa porque fue muy bonito.\n\n¿Y tú? ¿Qué hiciste en las vacaciones?\n\nUn abrazo,\nAli")
         hideKeyboard()
         let typed = el("spanish-piece").value as? String ?? ""
-        XCTAssertTrue(typed.contains("Cada día nadamos") && typed.contains("mi hermano") && typed.contains("Un abrazo,\nAli"), "the piece lost letters as it was typed: \(typed)")
+        XCTAssertTrue(typed.contains("Cada día nadamos") && typed.contains("mi hermano") && typed.contains("Un abrazo,\nAli"), "the piece lost letters as it was typed: \(typed.replacingOccurrences(of: "\n", with: " / "))")
         // the piece is read as it is written: its mistake (compre) is underlined, as in the tutor's box
         let dump = el("esbox")
         var seen = ""

@@ -165,7 +165,7 @@ final class SpanishPhoneTests: XCTestCase {
         hideKeyboard()
         sleep(1)
         let typed = el("spanish-piece").value as? String ?? ""
-        XCTAssertTrue(typed.contains("Cada día nadamos") && typed.contains("mi hermano") && typed.contains("Un abrazo,\nAli"), "the piece lost letters as it was typed: \(typed)")
+        XCTAssertTrue(typed.contains("Cada día nadamos") && typed.contains("mi hermano") && typed.contains("Un abrazo,\nAli"), "the piece lost letters as it was typed: \(typed.replacingOccurrences(of: "\n", with: " / "))")
         // the text type's guide as a sheet: a step ticked, a stem put into the piece
         el("spanish-guide-open").tap()
         XCTAssertTrue(el("spanish-guide-step-0").waitForExistence(timeout: 10), "the guide sheet has no structure")
