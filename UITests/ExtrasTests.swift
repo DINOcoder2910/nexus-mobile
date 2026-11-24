@@ -66,15 +66,18 @@ class ExtrasTests: XCTestCase {
         XCTAssertTrue(up, "the Google Docs panel didn't open")
         XCTAssertEqual(head.label, "Redox notes", "the panel doesn't name the linked Doc")
         XCTAssertTrue(text(containing: "In step").waitForExistence(timeout: 15), "the panel doesn't show the hub's last round")
-        // inside the panel's own list: a swipe on the screen's middle may land on the sheet's head
-        let list = app.collectionViews.containing(.any, identifier: "gdocs-head").firstMatch
+        // inside the panel's own list: a swipe on the screen's middle may land on the sheet's head. The list is found by any of its
+        // rows (the head scrolls out of it, and a row SwiftUI hasn't made yet doesn't exist)
+        let list = app.collectionViews.containing(NSPredicate(format: "identifier BEGINSWITH 'gdocs-'")).firstMatch
         let versions = el("gdocs-version-0")
         var n = 0
-        while !(versions.exists && versions.isHittable) && n < 6 { list.swipeUp(velocity: .slow); n += 1 }
+        while !(versions.exists && versions.isHittable) && n < 6 && list.exists { list.swipeUp(velocity: .slow); n += 1 }
         XCTAssertTrue(versions.waitForExistence(timeout: 15), "the Doc's recent edits didn't show")
         shot("gdocs-versions-\(mode)")
-        // a tap scrolls the list to the button itself; a swipe down on the list can fail once it is at the top
+        // back up to Sync now, which went out of the list on the way down
         let sync = el("gdocs-sync")
+        n = 0
+        while !(sync.exists && sync.isHittable) && n < 6 && list.exists { list.swipeDown(velocity: .slow); n += 1 }
         XCTAssertTrue(sync.exists, "no Sync now")
         if sync.exists { sync.tap() }
         sleep(2)
@@ -170,7 +173,6 @@ final class ExtrasPhoneTests: ExtrasTests {
         let pill = el("phone-tool-pill")
         XCTAssertTrue(pill.waitForExistence(timeout: 20), "no tool pill on the iPhone's board")
         shot("pill-\(mode)")
-        focusNote("board open")
         let pen = app.buttons["phone-tool-pen"].firstMatch
         XCTAssertTrue(pen.exists, "no pen in the pill")
         // an earlier test may have left another tool picked: one tap picks the pen, the next opens its sheet
@@ -198,25 +200,22 @@ final class ExtrasPhoneTests: ExtrasTests {
         shot("pill-eraser-sheet-\(mode)")
         if done.exists { done.tap() }
         _ = gone(sheet)
-        // + : Insert. A run showed the keyboard instead of the menu after this tap: the log says what had the keyboard's focus
+        // + : Insert's sheet (a menu there brought the keyboard up over itself on iOS 26: docs/ci-lessons.md)
         let plus = el("phone-tool-plus")
         XCTAssertTrue(plus.waitForExistence(timeout: 5) && plus.isHittable, "no + in the pill")
-        focusNote("before +")
         plus.tap()
+        XCTAssertTrue(sheet.waitForExistence(timeout: 10), "+ didn't open Insert's sheet")
         let space = app.buttons["Insert space"].firstMatch
-        let menuUp = space.waitForExistence(timeout: 5) && space.isHittable
+        let up = space.waitForExistence(timeout: 5) && space.isHittable
         sleep(1)
         shot("pill-insert-\(mode)")
-        focusNote("after +")
-        XCTAssertTrue(menuUp, "+ didn't show Insert's menu with Insert space")
-        XCTAssertEqual(app.keyboards.count, 0, "the keyboard came up with +'s menu")
-    }
-
-    /// Prints what has the keyboard's focus (and whether a keyboard is up) to the log, for a run that shows one unasked.
-    func focusNote(_ when: String) {
-        let focused = app.descendants(matching: .any).matching(NSPredicate(format: "hasKeyboardFocus == true")).firstMatch
-        let what = focused.exists ? "\(focused.elementType.rawValue) id=\(focused.identifier) label=\(focused.label.prefix(60))" : "nothing"
-        print("UIDEBUG \(when): keyboards \(app.keyboards.count), focus \(what), web views \(app.webViews.count)")
+        XCTAssertTrue(up, "Insert's sheet has no Insert space")
+        XCTAssertTrue(app.buttons["Text"].firstMatch.exists && app.buttons["Rectangle"].firstMatch.exists, "Insert's sheet lacks Text or the shapes")
+        XCTAssertEqual(app.keyboards.count, 0, "the keyboard came up with Insert's sheet")
+        // Insert space: the sheet goes and the pill shows the tool picked
+        if up { space.tap() }
+        XCTAssertTrue(gone(sheet), "Insert space didn't close the sheet")
+        XCTAssertTrue(app.buttons["phone-tool-space"].firstMatch.waitForExistence(timeout: 5), "Insert space isn't picked in the pill")
     }
 
     // the panel is checked and pictured by pill() on the iPhone: one launch less each

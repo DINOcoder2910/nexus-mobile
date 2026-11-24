@@ -260,22 +260,36 @@ extension BoardController: PHPickerViewControllerDelegate, UIDocumentPickerDeleg
 
     // MARK: inserting
 
-    func insertMenu() -> UIMenu {
-        let shapes = UIMenu(title: "Shape", image: UIImage(systemName: "square.on.circle"), children: [
-            UIAction(title: "Rectangle", image: UIImage(systemName: "rectangle")) { [weak self] _ in self?.insertShape("rect") },
-            UIAction(title: "Ellipse", image: UIImage(systemName: "circle")) { [weak self] _ in self?.insertShape("ellipse") },
-            UIAction(title: "Line", image: UIImage(systemName: "line.diagonal")) { [weak self] _ in self?.insertShape("line") },
-            UIAction(title: "Arrow", image: UIImage(systemName: "arrow.up.right")) { [weak self] _ in self?.insertShape("arrow") },
-        ])
-        var items: [UIMenuElement] = [
-            UIAction(title: "Text", image: UIImage(systemName: "textformat")) { [weak self] _ in self?.insertText() },
-            UIAction(title: "Image…", image: UIImage(systemName: "photo")) { [weak self] _ in self?.pickImage() },
-            UIAction(title: "PDF printout…", image: UIImage(systemName: "doc.richtext")) { [weak self] _ in self?.pickPdf() },
+    /// What can be put on the board, in the Insert menu's order; `shape` marks the Shape submenu's rows. The iPad's menus and the
+    /// iPhone's Insert sheet (PhoneToolPill) are both made from it.
+    struct InsertChoice {
+        let title: String
+        let symbol: String
+        var shape = false
+        let run: () -> Void
+    }
+
+    func insertChoices() -> [InsertChoice] {
+        var out: [InsertChoice] = [
+            InsertChoice(title: "Text", symbol: "textformat") { [weak self] in self?.insertText() },
+            InsertChoice(title: "Image…", symbol: "photo") { [weak self] in self?.pickImage() },
+            InsertChoice(title: "PDF printout…", symbol: "doc.richtext") { [weak self] in self?.pickPdf() },
         ]
         if ScanCamera.isSupported { // HandoutScan.swift
-            items.append(UIAction(title: "Scan a handout…", image: UIImage(systemName: "doc.viewfinder")) { [weak self] _ in self?.scanHandout() })
+            out.append(InsertChoice(title: "Scan a handout…", symbol: "doc.viewfinder") { [weak self] in self?.scanHandout() })
         }
-        return UIMenu(children: items + [shapes])
+        for (title, symbol, kind) in [("Rectangle", "rectangle", "rect"), ("Ellipse", "circle", "ellipse"),
+                                      ("Line", "line.diagonal", "line"), ("Arrow", "arrow.up.right", "arrow")] {
+            out.append(InsertChoice(title: title, symbol: symbol, shape: true) { [weak self] in self?.insertShape(kind) })
+        }
+        return out
+    }
+
+    func insertMenu() -> UIMenu {
+        let all = insertChoices()
+        func action(_ c: InsertChoice) -> UIAction { UIAction(title: c.title, image: UIImage(systemName: c.symbol)) { _ in c.run() } }
+        let shapes = UIMenu(title: "Shape", image: UIImage(systemName: "square.on.circle"), children: all.filter(\.shape).map(action))
+        return UIMenu(children: all.filter { !$0.shape }.map(action) + [shapes])
     }
 
     var allIds: Set<String> { Set(content.items.map(\.id)).union(content.strokes.map(\.id)) }

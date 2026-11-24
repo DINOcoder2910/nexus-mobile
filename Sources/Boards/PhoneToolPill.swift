@@ -136,14 +136,16 @@ final class PhoneToolPill: UIView {
         if now == .space { stack.addArrangedSubview(toolButton(.space, picked: true, b: b)) }
         let line = bar.divider()
         stack.addArrangedSubview(line)
-        let plus = bar.menuButton("plus", "Insert", UIMenu(children: [
-            UIDeferredMenuElement.uncached { [weak b] done in
-                guard let b else { done([]); return }
-                let space = UIAction(title: BoardTool.space.title, image: UIImage(systemName: BoardTool.space.symbol),
-                                     state: BoardTools.shared.tool == .space ? .on : .off) { [weak b] _ in b?.selectTool(.space) }
-                done(b.insertMenu().children + [UIMenu(options: .displayInline, children: [space])])
-            },
-        ]))
+        // + opens a sheet like the tools', not a menu: on iOS 26 a menu from the pill brought the keyboard up over itself
+        // (docs/ci-lessons.md, Nov 24), and a sheet has room for the choices with their names
+        var pc = UIButton.Configuration.plain()
+        pc.image = UIImage(systemName: "plus", withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .regular))
+        pc.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 9, bottom: 8, trailing: 9)
+        let plus = UIButton(configuration: pc, primaryAction: UIAction { [weak self, weak b] _ in
+            if let b { self?.openSheet(b, insert: true) }
+        })
+        plus.tintColor = .label
+        plus.accessibilityLabel = "Insert"
         plus.accessibilityIdentifier = "phone-tool-plus"
         stack.addArrangedSubview(plus)
 
@@ -197,9 +199,9 @@ final class PhoneToolPill: UIView {
         return button
     }
 
-    func openSheet(_ b: BoardController) {
+    func openSheet(_ b: BoardController, insert: Bool = false) {
         guard sheet == nil, let bar else { return }
-        let s = PhoneToolSheet(bar: bar)
+        let s = PhoneToolSheet(bar: bar, insert: insert)
         sheet = s
         b.present(s, animated: true)
     }
@@ -210,11 +212,14 @@ final class PhoneToolPill: UIView {
 /// a control added there shows here too.
 final class PhoneToolSheet: UIViewController {
     weak var bar: BoardBar?
+    /// + 's sheet: what can be put on the board, and Insert space, instead of the picked tool's settings.
+    let insert: Bool
     private let scroll = UIScrollView()
     private let content = UIStackView()
 
-    init(bar: BoardBar) {
+    init(bar: BoardBar, insert: Bool = false) {
         self.bar = bar
+        self.insert = insert
         super.init(nibName: nil, bundle: nil)
         modalPresentationStyle = .pageSheet
         if let s = sheetPresentationController {
@@ -263,9 +268,9 @@ final class PhoneToolSheet: UIViewController {
         let tools = BoardTools.shared
         let t = tools.tool
 
-        // the head: the tool's name and Done
+        // the head: the tool's name (or Insert) and Done
         let title = UILabel()
-        title.text = t.title
+        title.text = insert ? "Insert" : t.title
         title.font = .systemFont(ofSize: 20, weight: .semibold)
         title.textColor = Kit.ui.ink
         var dc = UIButton.Configuration.plain()
@@ -278,6 +283,48 @@ final class PhoneToolSheet: UIViewController {
         head.alignment = .center
         content.addArrangedSubview(head)
 
+        if insert { fillInsert(b) } else { fillTool(b, t) }
+        view.layoutIfNeeded()
+        let h = content.systemLayoutSizeFitting(CGSize(width: view.bounds.width - 44, height: 0),
+                                                withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel).height
+        let want = min(560, h + 60)
+        if abs(want - wanted) > 1 {
+            wanted = want
+            sheetPresentationController?.animateChanges { sheetPresentationController?.invalidateDetents() }
+        }
+    }
+
+    /// + 's choices as rows: each closes the sheet, then runs (a picker opens over the board, not over the sheet).
+    private func fillInsert(_ b: BoardController) {
+        let all = b.insertChoices()
+        for c in all where !c.shape { content.addArrangedSubview(choiceRow(c.title, c.symbol, picked: false, c.run)) }
+        let space = BoardTool.space
+        content.addArrangedSubview(choiceRow(space.title, space.symbol, picked: BoardTools.shared.tool == .space) { [weak b] in b?.selectTool(.space) })
+        content.addArrangedSubview(section("Shape"))
+        for c in all where c.shape { content.addArrangedSubview(choiceRow(c.title, c.symbol, picked: false, c.run)) }
+    }
+
+    private func choiceRow(_ title: String, _ symbol: String, picked: Bool, _ run: @escaping () -> Void) -> UIView {
+        var c = UIButton.Configuration.plain()
+        c.title = title
+        c.image = UIImage(systemName: symbol)
+        c.imagePadding = 14
+        c.baseForegroundColor = Kit.ui.ink
+        c.contentInsets = NSDirectionalEdgeInsets(top: 10, leading: 4, bottom: 10, trailing: 4)
+        if picked { c.background.backgroundColor = Kit.ui.hover; c.background.cornerRadius = 10 }
+        let button = UIButton(configuration: c, primaryAction: UIAction { [weak self] _ in
+            guard let self else { run(); return }
+            self.dismiss(animated: true) { run() }
+        })
+        button.contentHorizontalAlignment = .leading
+        button.accessibilityLabel = title
+        if picked { button.accessibilityTraits.insert(.selected) }
+        return button
+    }
+
+    /// The picked tool's settings: Pen | Pencil, then what its iPad row holds as Width, Colour and the rest.
+    private func fillTool(_ b: BoardController, _ t: BoardTool) {
+        guard let bar else { return }
         // Pen | Pencil, as the mockup's kinds
         if t == .pen || t == .pencil {
             let kinds = UISegmentedControl(items: ["Pen", "Pencil"])
@@ -332,14 +379,6 @@ final class PhoneToolSheet: UIViewController {
             }
             content.addArrangedSubview(grid)
             content.addArrangedSubview(hint("Touch and hold a colour to change it."))
-        }
-        view.layoutIfNeeded()
-        let h = content.systemLayoutSizeFitting(CGSize(width: view.bounds.width - 44, height: 0),
-                                                withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel).height
-        let want = min(560, h + 60)
-        if abs(want - wanted) > 1 {
-            wanted = want
-            sheetPresentationController?.animateChanges { sheetPresentationController?.invalidateDetents() }
         }
     }
 
