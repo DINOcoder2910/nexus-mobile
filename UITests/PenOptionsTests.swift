@@ -101,7 +101,9 @@ final class PenOptionsTests: XCTestCase {
             from.press(forDuration: 0.1, thenDragTo: board().coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: y + 0.03)),
                        withVelocity: XCUIGestureVelocity(250), thenHoldForDuration: 0)
             usleep(300_000)
-            let p = probe()
+            var p = probe()
+            // the probe can still show the last stroke's width a moment after the line lands (Extra bold read as Bold, Nov 24)
+            if let last = written.last, let q = p, q.tool <= last { sleep(1); p = probe() }
             print("UISTEP probe \(w): \(p.map { "\($0.ink) stroke \($0.stroke) tool \($0.tool)" } ?? "none")")
             XCTAssertTrue(p?.ink.hasSuffix(ink) ?? false, "\(w) wrote with \(p?.ink ?? "nothing"), not \(ink)")
             written.append(p?.tool ?? 0)
