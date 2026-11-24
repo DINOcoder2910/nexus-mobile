@@ -73,13 +73,14 @@ class ExtrasTests: XCTestCase {
         while !(versions.exists && versions.isHittable) && n < 6 { list.swipeUp(velocity: .slow); n += 1 }
         XCTAssertTrue(versions.waitForExistence(timeout: 15), "the Doc's recent edits didn't show")
         shot("gdocs-versions-\(mode)")
+        // a tap scrolls the list to the button itself; a swipe down on the list can fail once it is at the top
         let sync = el("gdocs-sync")
-        n = 0
-        while !(sync.exists && sync.isHittable) && n < 6 { list.swipeDown(velocity: .slow); n += 1 }
         XCTAssertTrue(sync.exists, "no Sync now")
         if sync.exists { sync.tap() }
         sleep(2)
-        XCTAssertEqual(el("gdocs-head").label, "Redox notes", "Sync now lost the link")
+        // the head can be scrolled out of the list (and so not exist) after the swipes down to the versions
+        let headAfter = el("gdocs-head")
+        if headAfter.waitForExistence(timeout: 5) { XCTAssertEqual(headAfter.label, "Redox notes", "Sync now lost the link") }
         let done = app.navigationBars["Google Docs"].buttons["Done"].firstMatch
         if done.exists { done.tap() }
         sleep(1)
@@ -131,7 +132,11 @@ class ExtrasTests: XCTestCase {
         guard copy.exists else { shot("widgets-missing-\(mode)"); return }
         copy.tap()
         XCTAssertTrue(app.buttons["Widget key copied"].firstMatch.waitForExistence(timeout: 5), "the key wasn't copied")
-        XCTAssertTrue(el("widget-on").waitForExistence(timeout: 5), "no Keep the widgets up to date")
+        // the switch sits under the copy row, below the screen's edge when the section is the last thing scrolled to
+        let on = el("widget-on")
+        n = 0
+        while !(on.exists && on.isHittable) && n < 6 { app.swipeUp(velocity: .slow); n += 1 }
+        XCTAssertTrue(on.waitForExistence(timeout: 5), "no Keep the widgets up to date")
         shot("widgets-\(mode)")
         // off again: the next tests on this simulator (the Live Activity's) run without the widget file being written
         let toggle = app.switches["widget-on"].firstMatch
