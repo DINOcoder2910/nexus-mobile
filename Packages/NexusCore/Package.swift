@@ -19,7 +19,8 @@ let package = Package(
         // its Swift side, generated (nexus core/ffi/bindings.sh); the library needs CoreFoundation (time zones) and nothing else
         .target(name: "NexusRust", dependencies: ["NexusCoreFFI"], linkerSettings: [.linkedFramework("CoreFoundation")]),
         // Resources/richcore.js: the laptop's rich-text converters (tools/richtext/build.mjs), run by RichWords.swift in JavaScriptCore
-        .target(name: "NexusCore", dependencies: ["Yams", "NexusRust"], resources: [.copy("Resources/richcore.js")]),
+        // Resources/activitycore.js: the laptop's task Activity wording (tools/activity/build.mjs), run by TaskActivity.swift
+        .target(name: "NexusCore", dependencies: ["Yams", "NexusRust"], resources: [.copy("Resources/richcore.js"), .copy("Resources/activitycore.js")]),
         .testTarget(name: "NexusCoreTests", dependencies: ["NexusCore"], resources: [.copy("Fixtures")]),
     ]
 )

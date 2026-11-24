@@ -90,7 +90,11 @@ final class LiveActivityTests: XCTestCase {
             while stop.exists && presses < 4 {
                 let allow = springboard.buttons["Allow"].firstMatch
                 if allow.exists { allow.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap(); sleep(2) }
-                if stop.exists { stop.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+                // tapped at the place it was: the card can change between the look and the tap (as LiveActivityPhoneTests)
+                if stop.exists {
+                    let f = stop.frame
+                    springboard.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: f.midX, dy: f.midY)).tap()
+                }
                 presses += 1
                 sleep(4)
                 if presses == 1 { shot("live-ipad-3b-after-first-press") }

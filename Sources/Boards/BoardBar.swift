@@ -10,7 +10,14 @@ final class BoardBar: UIView {
     static let rowHeight: CGFloat = 44
     static var height: CGFloat { topHeight + rowHeight }
     /// This bar's height under the safe area: a third row (the tools) when it is narrow; one row less when it is folded.
-    var height: CGFloat { BoardBar.topHeight + (compact ? BoardBar.rowHeight : 0) + (folded ? 0 : BoardBar.rowHeight) }
+    /// On an upright iPhone the tools float at the foot of the board instead (PhoneToolPill.swift): the bar is its top row only.
+    var height: CGFloat { pill ? BoardBar.topHeight : BoardBar.topHeight + (compact ? BoardBar.rowHeight : 0) + (folded ? 0 : BoardBar.rowHeight) }
+    /// The iPhone's tools pill instead of the bar's tool rows: an iPhone's narrow bar.
+    var pill: Bool { compact && Device.isPhone }
+    /// The iPhone's tools at the foot of the board, and the tool's sheet (PhoneToolPill.swift).
+    let phonePill = PhoneToolPill()
+    override var isHidden: Bool { didSet { phonePill.syncShown() } }
+    override var alpha: CGFloat { didSet { phonePill.syncShown() } }
     /// The row under the top one is shown (the new look's A) or tucked into the top bar (B). Remembered (BoardBar+Modes.swift).
     /// Folded only when wide: a narrow bar (an iPhone, a narrow pane) always shows its rows.
     var folded: Bool { !compact && UserDefaults.standard.bool(forKey: BoardBar.foldedKey) }
@@ -23,8 +30,8 @@ final class BoardBar: UIView {
     var compact = false {
         didSet {
             guard compact != oldValue else { return }
-            middleHeight.constant = compact ? BoardBar.rowHeight : 0
-            toolRowHeight.constant = folded ? 0 : BoardBar.rowHeight
+            middleHeight.constant = compact && !pill ? BoardBar.rowHeight : 0
+            toolRowHeight.constant = folded || pill ? 0 : BoardBar.rowHeight
             refresh()
         }
     }
@@ -149,6 +156,7 @@ final class BoardBar: UIView {
         rowScroll.setContentCompressionResistancePriority(.init(300), for: .horizontal)
         rowScroll.setContentHuggingPriority(.init(260), for: .horizontal)
         setUpModes() // BoardBar+Modes.swift: the switch, swiping the bar to fold it
+        phonePill.bar = self
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }

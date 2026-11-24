@@ -9,6 +9,7 @@ enum TestHooks {
     static func run(_ store: NexusStore) {
         nestedNotebooks(store)
         manyNotebooks(store)
+        if extras || extrasTask { runExtras(store); return }
         if ProcessInfo.processInfo.arguments.contains("-NexusTestPerson") { person(store) }
         if ProcessInfo.processInfo.arguments.contains("-NexusTestBigBoard") { bigBoard(store); return }
         if ProcessInfo.processInfo.arguments.contains("-NexusTestLinksBoard") { linksBoard(store); return }
