@@ -44,8 +44,8 @@ final class SpanishPadTests: XCTestCase {
         sleep(1)
     }
 
-    func openSpanish() {
-        app.launchArguments = ["-NexusSpanishDemo"]
+    func openSpanish(_ more: [String] = []) {
+        app.launchArguments = ["-NexusSpanishDemo"] + more
         app.launch()
         let sample = app.buttons["Try with sample data"]
         if sample.waitForExistence(timeout: 10) { sample.tap() }
@@ -67,7 +67,7 @@ final class SpanishPadTests: XCTestCase {
     }
 
     func testEverySpanishPartOnTheIPad() {
-        openSpanish()
+        openSpanish(["-debug.blockDump", "YES"])
         shot("pad-spanish-home")
 
         // check a sentence: the dictionary and LanguageTool first, then Claude
@@ -144,6 +144,16 @@ final class SpanishPadTests: XCTestCase {
         el("spanish-guide-step-0").tap()
         type("spanish-piece", "¡Hola Marta!\n\nLa semana pasada fui a la playa con mi familia. Fuimos en coche y el viaje fue muy largo, pero divertido. Nos quedamos en un hotel pequeño cerca del mar.\n\nCada día nadamos y comimos paella en un restaurante. Ayer compre una camiseta para mi hermano. Lo que más me gustó fue el atardecer en la playa porque fue muy bonito.\n\n¿Y tú? ¿Qué hiciste en las vacaciones?\n\nUn abrazo,\nAli")
         hideKeyboard()
+        // the piece is read as it is written: its mistake (compre) is underlined, as in the tutor's box
+        let dump = el("esbox")
+        var seen = ""
+        for _ in 0..<20 {
+            if dump.exists { seen = dump.label; if seen.range(of: "box:[1-9]", options: .regularExpression) != nil { break } }
+            sleep(1)
+        }
+        print("UISTEP ESBOX \(seen)")
+        shot("pad-spanish-write-underlined")
+        XCTAssertTrue(seen.range(of: "box:[1-9]", options: .regularExpression) != nil, "the essay box has no underlines: \(seen)")
         // a sentence stem tapped goes into the piece
         let stem = el("spanish-stem-0-0")
         var down = 0

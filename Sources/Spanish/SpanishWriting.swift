@@ -249,16 +249,12 @@ struct SpanishWriteView: View {
                 .buttonStyle(.bordered)
                 .accessibilityIdentifier("spanish-guide-open")
             }
-            TextEditor(text: text)
-                .font(.nx(.body))
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.sentences)
-                .accessibilityIdentifier("spanish-piece")
-                .frame(minHeight: size == .regular ? 360 : 240)
-                .padding(6)
-                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.secondary.opacity(0.3)))
+            // the tutor's box: each paragraph is read by the checker after a pause and its mistakes are underlined as he writes
+            // (Live corrections), the laptop's SpanishBox; Return is a new line here, not send
+            SpanishTextBox(text: text, placeholder: "Write your answer here", wsId: workstreamId, identifier: "spanish-piece", onSubmit: {},
+                           maxLines: size == .regular ? 24 : 14, returnSends: false, minLines: size == .regular ? 15 : 10)
                 .overlay(alignment: .topLeading) {
-                    if text.wrappedValue.isEmpty { Text("Write your answer here").foregroundStyle(.tertiary).padding(14).allowsHitTesting(false).accessibilityHidden(true) }
+                    if text.wrappedValue.isEmpty { Text("Write your answer here").foregroundStyle(.tertiary).padding(.horizontal, 11).padding(.vertical, 8).allowsHitTesting(false).accessibilityHidden(true) }
                 }
             HStack(spacing: 4) {
                 Text("\(c.counted) words").bold()

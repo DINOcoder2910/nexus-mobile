@@ -126,7 +126,7 @@ enum SpanishDemo {
         if (try? FileManager.default.contentsOfDirectory(atPath: orals.path))?.isEmpty ?? true {
             try? FileManager.default.createDirectory(at: orals, withIntermediateDirectories: true)
             for (id, text) in demoOrals(today) { try? FolderAccess.write(orals.appendingPathComponent(id + "/oral.yaml"), text) }
-            if FileManager.default.fileExists(atPath: ws.path) { store.reload(); return }
+            if FileManager.default.fileExists(atPath: ws.path) { writeGuide(root); store.reload(); return }
         }
         guard !FileManager.default.fileExists(atPath: ws.path) else { writeGuide(root); return }
         let month = String(today.prefix(7))
@@ -197,6 +197,9 @@ enum SpanishDemo {
                        {"word": "comi", "lemma": "comer", "form": "comer, pretérito indefinido, yo", "meaning": "I ate"},
                        {"word": "helado", "lemma": "helado", "form": "masculine singular noun", "meaning": "ice cream"}]}
             """#
+        }
+        if text.contains("Ayer compre") {   // Writing's demo piece (the UI checks type it)
+            return #"{"corrected": "\#(text.replacingOccurrences(of: "compre", with: "compré").replacingOccurrences(of: "\"", with: "'"))", "mistakes": [{"wrong": "compre", "right": "compré", "skill": "accent.verb", "why": "The yo preterite of -ar verbs ends in -é."}], "good": [], "structures": [], "words": []}"#
         }
         if text.contains("fui") {
             return #"{"corrected": "\#(text)", "mistakes": [], "good": [{"text": "fui", "skill": "tense.past", "why": "The preterite for a finished trip."}], "structures": [{"name": "pretérito indefinido", "text": "fui"}], "words": [{"word": "fui", "lemma": "ir", "form": "ir / ser, pretérito indefinido, yo", "meaning": "I went"}, {"word": "Madrid", "lemma": "Madrid", "form": "proper noun", "meaning": "Madrid"}]}"#

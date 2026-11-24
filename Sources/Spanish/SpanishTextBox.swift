@@ -17,6 +17,10 @@ struct SpanishTextBox: UIViewRepresentable {
     /// Return (and the send button beside it).
     var onSubmit: () -> Void
     var maxLines = 6
+    /// false for a piece of writing (Writing's essay box): Return starts a new line and nothing is sent.
+    var returnSends = true
+    /// The box's least height in lines (an essay box starts tall).
+    var minLines = 1
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -39,7 +43,7 @@ struct SpanishTextBox: UIViewRepresentable {
         v.spellCheckingType = .no
         v.smartQuotesType = .no
         v.autocapitalizationType = .sentences
-        v.returnKeyType = .send
+        v.returnKeyType = returnSends ? .send : .default
         v.isScrollEnabled = false
         v.accessibilityIdentifier = identifier
         v.accessibilityLabel = placeholder
@@ -67,9 +71,10 @@ struct SpanishTextBox: UIViewRepresentable {
         let fit = v.sizeThatFits(CGSize(width: w, height: .greatestFiniteMagnitude)).height
         let line = (v.font ?? UIFont.preferredFont(forTextStyle: .body)).lineHeight
         let most = line * CGFloat(maxLines) + v.textContainerInset.top + v.textContainerInset.bottom
+        let least = line * CGFloat(minLines) + v.textContainerInset.top + v.textContainerInset.bottom
         let scroll = fit > most
         if v.isScrollEnabled != scroll { DispatchQueue.main.async { v.isScrollEnabled = scroll } }
-        return CGSize(width: w, height: min(fit, most))
+        return CGSize(width: w, height: max(least, min(fit, most)))
     }
 
     static func dismantleUIView(_ v: UITextView, coordinator: Coordinator) { coordinator.stop() }
@@ -137,7 +142,7 @@ struct SpanishTextBox: UIViewRepresentable {
         }
 
         func textView(_ v: UITextView, shouldChangeTextIn range: NSRange, replacementText t: String) -> Bool {
-            if t == "\n" { parent.onSubmit(); return false }
+            if t == "\n" && parent.returnSends { parent.onSubmit(); return false }
             return true
         }
 
