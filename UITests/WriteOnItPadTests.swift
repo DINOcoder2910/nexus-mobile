@@ -48,7 +48,15 @@ final class WriteOnItPadTests: XCTestCase {
         let search = el("study-sheets-search")
         XCTAssertTrue(search.waitForExistence(timeout: 10), "no sheets beside the Study page")
         search.tap()
-        search.typeText("acids")
+        search.typeText("acids\n") // Return puts the keyboard away: left up, it covers the sidebar's foot and swipes type on it
+        sleep(1)
+        hideKeyboard()
+    }
+
+    func hideKeyboard() {
+        guard app.keyboards.firstMatch.exists else { return }
+        let hide = app.keyboards.buttons["Hide keyboard"].firstMatch
+        if hide.exists { hide.tap() }
         sleep(1)
     }
 
@@ -108,6 +116,7 @@ final class WriteOnItPadTests: XCTestCase {
         shot("write-sheet-row-after")
 
         // search finds a PDF by its name, and opens it on its page
+        hideKeyboard()
         tap("sidebar-Search boards", "no Search boards row", in: sidebar)
         let field = app.searchFields.firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 10), "no search field")
