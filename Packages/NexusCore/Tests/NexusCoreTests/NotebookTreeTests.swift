@@ -141,4 +141,83 @@ final class NotebookTreeTests: XCTestCase {
                        "notebooks/B/A|notebooks/B/A/C|notebooks/Z")
         XCTAssertEqual(NotebookTree.renaming("notebooks/Q", to: "notebooks/R", in: "notebooks/A"), "notebooks/A")
     }
+
+    /// One branch open at each level (Nov 24 2026: the sidebar had grown too long to scroll): opening a notebook closes the ones
+    /// beside it and what was open inside them, and keeps what is open inside itself.
+    func testOpeningClosesTheNotebooksBesideIt() {
+        let open = "notebooks/A|notebooks/A/B|notebooks/A/B/C|notebooks/A/D|notebooks/Z|notebooks/Z/Y"
+        XCTAssertEqual(NotebookTree.opening("notebooks/A/D", in: open), "notebooks/A|notebooks/A/D|notebooks/Z|notebooks/Z/Y",
+                       "B and C (beside D) close; Z, in another branch higher up, isn't beside D")
+        XCTAssertEqual(NotebookTree.opening("notebooks/Z", in: open), "notebooks/Z|notebooks/Z/Y",
+                       "a top-level notebook closes every other top-level branch, and keeps its own insides")
+        XCTAssertEqual(NotebookTree.opening("notebooks/A", in: "notebooks/A"), "notebooks/A", "nothing changed: the same text")
+        XCTAssertEqual(NotebookTree.opening("notebooks/Q", in: ""), "notebooks/Q")
+    }
+
+    /// A board opened from anywhere opens its notebooks, closing the ones beside each, and keeps what is open in its own notebook
+    /// (SidebarTreeTests: switching to another board of R3 Energetics keeps Week 1 open).
+    func testFocusingABoardKeepsOnlyItsBranch() {
+        let open = "notebooks/School|notebooks/School/Chemistry|notebooks/School/Chemistry/R3|notebooks/School/Chemistry/R3/Week 1|notebooks/School/Biology|notebooks/Art"
+        XCTAssertEqual(NotebookTree.focusing("notebooks/School/Chemistry/R3/Bond.board", in: open),
+                       "notebooks/School|notebooks/School/Chemistry|notebooks/School/Chemistry/R3|notebooks/School/Chemistry/R3/Week 1")
+        XCTAssertEqual(NotebookTree.focusing("notebooks/Art/Sketch.board", in: open), "notebooks/Art")
+        XCTAssertEqual(NotebookTree.focusing("boards/x.board", in: open), open, "not in a notebook: nothing changes")
+    }
+
+    func testMoveToTreeIsNotebooksOnly() {
+        let all = Notebook.list(dir)
+        XCTAssertEqual(NotebookTree.rows(notebooks: all, open: []).map(line), ["  Art", "> School"],
+                       "Art holds only a board, so it has no arrow in a tree of notebooks")
+        let rows = NotebookTree.rows(notebooks: all, open: ["notebooks/School", "notebooks/School/Chemistry"])
+        XCTAssertEqual(rows.map(line), ["  Art", "v School", "  v Chemistry", "    > R3 Energetics", "    Maths"])
+        XCTAssertEqual(rows[1].boardCount, 5)
+        XCTAssertEqual(rows[1].color, "#007F43")
+        XCTAssertEqual(rows[3].boardCount, 4)
+    }
+
+    func testScanListsEveryBoardAndNotebook() {
+        let scan = NotebookScan.read(dir)
+        XCTAssertEqual(Set(scan.boards), Set(Notebook.list(dir).flatMap { $0.allBoards.map { $0.board.path } }))
+        XCTAssertEqual(scan.boards.count, 6)
+        XCTAssertEqual(scan.notebooks.first, "notebooks/Art")
+        XCTAssertTrue(scan.notebooks.contains("notebooks/School/Chemistry/R3 Energetics/Week 1"))
+        let hits = NotebookFind.search("calor", in: scan.findEntries)
+        XCTAssertEqual(hits.map(\.path), ["notebooks/School/Chemistry/R3 Energetics/Week 1/Calorimetry.board"])
+        XCTAssertEqual(hits.first?.place, "School › Chemistry › R3 Energetics › Week 1")
+    }
+
+    /// Stepping inside a notebook (Nov 25 2026: the tree still had too many levels to open): a notebook that only holds one notebook
+    /// is gone straight through, and Back skips it.
+    func testSteppingInsideGoesThroughLoneNotebooks() {
+        let levels: [String: NotebookLevel] = [
+            "notebooks/Tutor": NotebookLevel(path: "notebooks/Tutor", notebooks: ["notebooks/Tutor/Physics"]),
+            "notebooks/Tutor/Physics": NotebookLevel(path: "notebooks/Tutor/Physics", notebooks: ["notebooks/Tutor/Physics/Textbook"]),
+            "notebooks/Tutor/Physics/Textbook": NotebookLevel(path: "notebooks/Tutor/Physics/Textbook",
+                                                              notebooks: ["notebooks/Tutor/Physics/Textbook/A", "notebooks/Tutor/Physics/Textbook/B"]),
+            "notebooks/Tutor/Physics/Textbook/A": NotebookLevel(path: "notebooks/Tutor/Physics/Textbook/A",
+                                                                boards: [.init(name: "A1", path: "notebooks/Tutor/Physics/Textbook/A/A1.board")]),
+        ]
+        let level: (String) -> NotebookLevel = { levels[$0] ?? NotebookLevel(path: $0) }
+        XCTAssertEqual(NotebookTree.stepping(into: "notebooks/Tutor", level: level), "notebooks/Tutor/Physics/Textbook")
+        XCTAssertEqual(NotebookTree.stepping(into: "notebooks/Tutor/Physics/Textbook/A", level: level), "notebooks/Tutor/Physics/Textbook/A")
+        XCTAssertEqual(NotebookTree.stepping(into: "notebooks/Empty", level: level), "notebooks/Empty", "an empty notebook is shown as it is")
+        XCTAssertEqual(NotebookTree.steppingBack(from: "notebooks/Tutor/Physics/Textbook/A", level: level), "notebooks/Tutor/Physics/Textbook")
+        XCTAssertNil(NotebookTree.steppingBack(from: "notebooks/Tutor/Physics/Textbook", level: level),
+                     "Back skips Physics and Tutor (each holds one notebook) to the full list")
+        XCTAssertNil(NotebookTree.steppingBack(from: "notebooks/Tutor", level: level))
+        XCTAssertNil(NotebookTree.steppingBack(from: "Files/x", level: level))
+        // from the real folder: School holds two notebooks, so it is shown; Week 2 holds a board
+        let real: (String) -> NotebookLevel = { Notebook.level(self.dir, $0) }
+        XCTAssertEqual(NotebookTree.stepping(into: "notebooks/School", level: real), "notebooks/School")
+        XCTAssertEqual(NotebookTree.steppingBack(from: "notebooks/School/Chemistry/R3 Energetics/Week 2", level: real),
+                       "notebooks/School/Chemistry/R3 Energetics")
+    }
+
+    func testCrumbs() {
+        let c = NotebookTree.crumbs("notebooks/School/Chemistry/R3 Energetics")
+        XCTAssertEqual(c.map(\.name), ["School", "Chemistry", "R3 Energetics"])
+        XCTAssertEqual(c.map(\.path), ["notebooks/School", "notebooks/School/Chemistry", "notebooks/School/Chemistry/R3 Energetics"])
+        XCTAssertTrue(NotebookTree.crumbs("notebooks").isEmpty)
+        XCTAssertTrue(NotebookTree.crumbs("Files/a").isEmpty)
+    }
 }

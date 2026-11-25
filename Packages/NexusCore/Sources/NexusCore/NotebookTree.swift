@@ -53,6 +53,13 @@ public struct NotebookTreeRow: Identifiable, Hashable {
     }
 }
 
+/// One notebook on the way down to the one the sidebar is inside (`NotebookTree.crumbs`).
+public struct NotebookCrumb: Hashable, Identifiable, Sendable {
+    public var name: String
+    public var path: String
+    public var id: String { path }
+}
+
 public enum NotebookTree {
     /// The rows to show: every top-level notebook (`top`), and inside each open one its notebooks (and theirs, when open), then its
     /// boards. Lazy: `level` is asked only for the notebooks that get a row (to know their arrow and, when open, what follows), so a
@@ -112,6 +119,73 @@ public enum NotebookTree {
         return more == open ? text : join(more)
     }
 
+    /// `text` with the notebook `path` opened and the notebooks beside it closed, with whatever was open inside them, so one branch
+    /// is open at each level and the tree stays short (a OneNote import's sections hold dozens of boards each). What is open inside
+    /// `path` itself stays open.
+    public static func opening(_ path: String, in text: String) -> String {
+        let open = parse(text)
+        let parent = (path as NSString).deletingLastPathComponent
+        var out = open.filter { p in !(p.hasPrefix(parent + "/") && p != path && !p.hasPrefix(path + "/")) }
+        out.insert(path)
+        return out == open ? text : join(out)
+    }
+
+    /// `text` with the notebooks that hold `path` (a board or a notebook) opened, each closing the notebooks beside it (`opening`):
+    /// a board opened from anywhere shows in the tree with only its own branch open. What is open inside its notebook stays open.
+    public static func focusing(_ path: String, in text: String) -> String {
+        var t = text
+        for a in ancestors(of: path) { t = opening(a, in: t) }
+        return t
+    }
+
+    /// The notebooks of an already read tree (`Notebook.list`) as rows, without their boards: Move to…'s tree. A notebook's rows
+    /// follow it when it is open; each counts its boards (and those of the notebooks inside it).
+    public static func rows(notebooks tree: [Notebook], open: Set<String>) -> [NotebookTreeRow] {
+        var out: [NotebookTreeRow] = []
+        func add(_ nb: Notebook) {
+            let has = !nb.notebooks.isEmpty
+            let isOpen = has && open.contains(nb.path)
+            out.append(NotebookTreeRow(kind: .notebook, name: nb.name, path: nb.path, depth: nb.depth,
+                                       color: nb.depth == 0 ? nb.color : nil, hasChildren: has, isOpen: isOpen,
+                                       boardCount: nb.boardTotal))
+            if isOpen { nb.notebooks.forEach(add) }
+        }
+        tree.forEach(add)
+        return out
+    }
+
+    // MARK: stepping inside a notebook (the sidebar, Nov 25 2026)
+
+    /// A notebook that holds one notebook and nothing else (a OneNote import's section group with one section): stepping in goes
+    /// straight through it, and Back skips it.
+    public static func passesThrough(_ l: NotebookLevel) -> Bool { l.boards.isEmpty && l.notebooks.count == 1 }
+
+    /// The notebook the sidebar shows when stepping into `path`: `path` itself or, while it only holds one notebook, the one inside.
+    public static func stepping(into path: String, level: (String) -> NotebookLevel) -> String {
+        var p = path
+        for _ in 0..<32 {
+            let l = level(p)
+            guard passesThrough(l), let only = l.notebooks.first else { break }
+            p = only
+        }
+        return p
+    }
+
+    /// Where Back goes from the notebook `path`: the notebook that holds it, past the ones that only hold one notebook; nil for the
+    /// full list (from a top-level notebook, or a path outside `notebooks/`).
+    public static func steppingBack(from path: String, level: (String) -> NotebookLevel) -> String? {
+        var a = ancestors(of: path)
+        while let p = a.last, passesThrough(level(p)) { a.removeLast() }
+        return a.last
+    }
+
+    /// The notebooks from the top one down to `path` itself, each with its name: the sidebar's crumbs inside a notebook.
+    public static func crumbs(_ path: String) -> [NotebookCrumb] {
+        let parts = path.split(separator: "/").map(String.init)
+        guard parts.count >= 2, parts[0] == BoardFormat.notebooks else { return [] }
+        return (2...parts.count).map { NotebookCrumb(name: parts[$0 - 1], path: parts[0..<$0].joined(separator: "/")) }
+    }
+
     /// `text` after a notebook or board moved or was renamed from `from` to `to`: the open notebooks at or under it follow it.
     public static func renaming(_ from: String, to: String, in text: String) -> String {
         let open = parse(text)
@@ -132,8 +206,18 @@ public struct NotebookScan: Equatable, Sendable {
     public var counts: [String: Int] = [:]
     /// Folder path (`notebooks` itself too) -> its stamp.
     public var stamps: [String: String] = [:]
+    /// Every board's path, in the order the walk met them (for finding one by name: NotebookFind).
+    public var boards: [String] = []
 
-    public init(counts: [String: Int] = [:], stamps: [String: String] = [:]) { self.counts = counts; self.stamps = stamps }
+    public init(counts: [String: Int] = [:], stamps: [String: String] = [:], boards: [String] = []) {
+        self.counts = counts; self.stamps = stamps; self.boards = boards
+    }
+
+    /// Every notebook's path, by path.
+    public var notebooks: [String] { counts.keys.sorted { $0.localizedStandardCompare($1) == .orderedAscending } }
+
+    /// What finding by name looks through (NotebookFind).
+    public var findEntries: [NotebookFind.Entry] { NotebookFind.entries(notebooks: notebooks, boards: boards) }
 
     public static func read(_ root: URL) -> NotebookScan {
         var scan = NotebookScan()
@@ -144,7 +228,7 @@ public struct NotebookScan: Equatable, Sendable {
             scan.stamps[rel] = stamp(root, rel)
             var n = 0
             for name in Notebook.folders(root, rel) {
-                if name.lowercased().hasSuffix(".board") { n += 1 } else { n += walk(rel + "/" + name) }
+                if name.lowercased().hasSuffix(".board") { n += 1; scan.boards.append(rel + "/" + name) } else { n += walk(rel + "/" + name) }
             }
             scan.counts[rel] = n
             return n
