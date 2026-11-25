@@ -41,9 +41,10 @@ final class NotebookFindTests: XCTestCase {
         while !el.exists && tries < 8 { sidebar.swipeDown(velocity: .slow); tries += 1 }
     }
 
-    /// A found, pinned or Recent row: a button whose label starts with the name (then where it sits).
+    /// A found, pinned or Recent row: a button of the sidebar whose label starts with the name (then where it sits). Not the
+    /// notebook page's card of the same name beside it ("Verbs, Edited 3 minutes ago").
     func entry(_ name: String) -> XCUIElement {
-        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
+        sidebar.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
     }
 
     /// Taps a field until it has the keyboard, then types (a tap on a settling screen can be dropped).
