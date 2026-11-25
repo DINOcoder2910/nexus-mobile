@@ -101,6 +101,12 @@ final class BankPhoneTests: XCTestCase {
         XCTAssertTrue(el("bq-booklet-pane").waitForExistence(timeout: 10), "the data booklet didn't open")
         sleep(3)
         shot("phone-bank-booklet")
+        let maths = el("bq-booklet-subjects").buttons["Math AA HL"].firstMatch
+        XCTAssertTrue(maths.waitForExistence(timeout: 5), "the booklet has no switch to maths' formula booklet")
+        maths.tap()
+        sleep(2)
+        shot("phone-bank-booklet-maths")
+        el("bq-booklet-subjects").buttons["Chemistry HL"].firstMatch.tap()
         let closeBook = app.buttons["Close the booklet"].firstMatch
         XCTAssertTrue(closeBook.waitForExistence(timeout: 5), "the booklet has no Close"); closeBook.tap()
         sleep(1)

@@ -374,7 +374,13 @@ enum TestHooks {
           \(j(acids)): "2"
 
         """
-        // the subjects' data booklets (the question page's and the board's Data booklet): chemistry's and physics'
+        // the subjects' data booklets (the question page's and the board's Data booklet): chemistry's, physics' and maths' formula
+        // booklet (a maths subject as his, named as his is)
+        try? FolderAccess.write(store.folder.appendingPathComponent("classes/math-aa-hl/workstream.yaml"), "id: math-aa-hl\nname: Math AA HL\ncolor: violet\nstatus: active\n")
+        try? FolderAccess.writeData(store.folder.appendingPathComponent("classes/math-aa-hl/files/ib-math-aa-formula-booklet-v1.3.pdf"), SampleFolder.pdf([
+            "Mathematics: analysis and approaches formula booklet", "SL 1.2 Arithmetic sequences: u_n = u_1 + (n - 1)d", "SL 2.6 Quadratic formula: x = (-b +- sqrt(b^2 - 4ac)) / 2a",
+        ]))
+        store.reload()
         try? FolderAccess.writeData(store.folder.appendingPathComponent(chem + "/files/IB chemistry data booklet.pdf"), SampleFolder.pdf([
             "Chemistry data booklet", "1. Equations: PV = nRT", "2. Physical constants: R = 8.31 J K-1 mol-1", "9. Periodic table: H 1.01, Fe 55.85, Mn 54.94",
         ]))

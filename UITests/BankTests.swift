@@ -123,6 +123,12 @@ final class BankTests: XCTestCase {
         physics.tap()
         sleep(2)
         shot("pad-bank-booklet-physics")
+        let maths = el("bq-booklet-subjects").buttons["Math AA HL"].firstMatch
+        XCTAssertTrue(maths.waitForExistence(timeout: 5), "the booklet pane has no switch to maths' formula booklet")
+        maths.tap()
+        sleep(2)
+        shot("pad-bank-booklet-maths")
+        el("bq-booklet-subjects").buttons["Chemistry HL"].firstMatch.tap()
         tap("bq-booklet", "no Hide the data booklet button")
         sleep(1)
 
