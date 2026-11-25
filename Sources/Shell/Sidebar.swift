@@ -623,27 +623,36 @@ struct Sidebar: View {
     /// Where the notebook sits, above it: Notebooks › Tutor › Physics (as the page says it), each a tap back to it (a notebook that only holds one
     /// notebook is gone through, so it is named but not a stop).
     private func crumbRow(_ above: ArraySlice<NotebookCrumb>) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 4) {
-                Button("Notebooks") { withAnimation(Kit.spring) { inNotebook = "" } }
-                    .buttonStyle(.borderless)
-                    .accessibilityIdentifier("notebook-crumb-all")
-                ForEach(above) { c in
-                    Image(systemName: "chevron.right").font(.nx(.caption2, .semibold)).foregroundStyle(Kit.muted)
-                    if NotebookTree.passesThrough(notebookTree.shown(store.folder, c.path)) {
-                        Text(c.name).foregroundStyle(Kit.muted)
-                    } else {
-                        Button(c.name) { withAnimation(Kit.spring) { inNotebook = c.path } }
-                            .buttonStyle(.borderless)
-                            .accessibilityIdentifier("notebook-crumb-" + c.name)
-                    }
+        // on one line when it fits; else it scrolls, showing its end (the notebook just above), its start faded where it is cut
+        ViewThatFits(in: .horizontal) {
+            crumbLine(above)
+            ScrollView(.horizontal, showsIndicators: false) { crumbLine(above) }
+                .defaultScrollAnchor(.trailing)
+                .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.12),
+                                             .init(color: .black, location: 1)], startPoint: .leading, endPoint: .trailing))
+        }
+        .listRowBackground(Color.clear)
+    }
+
+    private func crumbLine(_ above: ArraySlice<NotebookCrumb>) -> some View {
+        HStack(spacing: 4) {
+            Button("Notebooks") { withAnimation(Kit.spring) { inNotebook = "" } }
+                .buttonStyle(.borderless)
+                .accessibilityIdentifier("notebook-crumb-all")
+            ForEach(above) { c in
+                Image(systemName: "chevron.right").font(.nx(.caption2, .semibold)).foregroundStyle(Kit.muted)
+                if NotebookTree.passesThrough(notebookTree.shown(store.folder, c.path)) {
+                    Text(c.name).foregroundStyle(Kit.muted)
+                } else {
+                    Button(c.name) { withAnimation(Kit.spring) { inNotebook = c.path } }
+                        .buttonStyle(.borderless)
+                        .accessibilityIdentifier("notebook-crumb-" + c.name)
                 }
             }
-            .font(.nx(.footnote))
-            .lineLimit(1)
         }
-        .defaultScrollAnchor(.trailing)
-        .listRowBackground(Color.clear)
+        .font(.nx(.footnote))
+        .lineLimit(1)
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     /// Home, Today, Planner, Tasks, Calendar and Inbox as small icons, so they stay one tap away inside a subject.
