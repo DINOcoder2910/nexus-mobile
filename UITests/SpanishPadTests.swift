@@ -54,14 +54,20 @@ final class SpanishPadTests: XCTestCase {
         XCTAssertTrue(study.waitForExistence(timeout: 20), "no Study row in the sidebar")
         study.tap()
         let page = el("study-page-spanish-ab")
+        // a tap on the sidebar right after launch can be lost while the sidebar's notebooks still load (main, Nov 25: it stayed
+        // on Today, then on the Study page without opening Spanish): press again while the screen hasn't moved
         var down = 0
-        while !page.waitForExistence(timeout: 3) && down < 6 { app.swipeUp(); down += 1 }
+        while !page.waitForExistence(timeout: 3) && down < 6 {
+            if down < 2 { study.tap() } else { app.swipeUp() }
+            down += 1
+        }
         if !page.waitForExistence(timeout: 10) { shot("pad-spanish-no-study-page") }
         XCTAssertTrue(page.waitForExistence(timeout: 10), "Study has no Spanish ab initio")
         page.tap()
         let link = el("study-spanish")
         XCTAssertTrue(link.waitForExistence(timeout: 10), "the Study page has no Spanish link")
         link.tap()
+        if !el("spanish-sentence").waitForExistence(timeout: 10) && link.exists && link.isHittable { link.tap() }
         XCTAssertTrue(el("spanish-sentence").waitForExistence(timeout: 10), "the Spanish screen didn't open")
         sleep(1)
     }
