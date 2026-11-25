@@ -620,12 +620,12 @@ struct Sidebar: View {
         }
     }
 
-    /// Where the notebook sits, above it: All notebooks › Tutor › Physics, each a tap back to it (a notebook that only holds one
+    /// Where the notebook sits, above it: Notebooks › Tutor › Physics (as the page says it), each a tap back to it (a notebook that only holds one
     /// notebook is gone through, so it is named but not a stop).
     private func crumbRow(_ above: ArraySlice<NotebookCrumb>) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 4) {
-                Button("All notebooks") { withAnimation(Kit.spring) { inNotebook = "" } }
+                Button("Notebooks") { withAnimation(Kit.spring) { inNotebook = "" } }
                     .buttonStyle(.borderless)
                     .accessibilityIdentifier("notebook-crumb-all")
                 ForEach(above) { c in

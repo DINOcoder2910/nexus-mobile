@@ -111,7 +111,7 @@ final class SidebarTreeTests: XCTestCase {
         stepInto("R3 Energetics")
         inOrder(["Week 2", "Week 1", "Hess's law", "Bond enthalpy"])
         XCTAssertFalse(row("Calorimetry").exists, "Week 1's boards show inside R3 Energetics")
-        // where it sits, above: All notebooks › School › Chemistry
+        // where it sits, above: Notebooks › School › Chemistry
         XCTAssertTrue(app.buttons["notebook-crumb-School"].firstMatch.exists, "no School in the crumbs")
         XCTAssertTrue(app.buttons["notebook-crumb-Chemistry"].firstMatch.exists, "no Chemistry in the crumbs")
         sleep(1)
@@ -125,7 +125,7 @@ final class SidebarTreeTests: XCTestCase {
         openFromSidebar("Enthalpy of combustion")
         XCTAssertTrue(row("Calorimetry").exists, "the sidebar left Week 1 when switching boards")
 
-        // Back goes up one level; a crumb goes straight there; All notebooks to the full list
+        // Back goes up one level; a crumb goes straight there
         app.buttons["notebook-back"].firstMatch.tap()
         let up = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == 'R3 Energetics'"), object: app.buttons["notebook-back"].firstMatch)
         XCTAssertEqual(XCTWaiter().wait(for: [up], timeout: 20), .completed, "Back didn't go up to R3 Energetics")
