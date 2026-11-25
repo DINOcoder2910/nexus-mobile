@@ -386,6 +386,19 @@ enum TestHooks {
           \(j(acids)): "2"
 
         """
+        // the subjects' data booklets (the question page's and the board's Data booklet): chemistry's, physics' and maths' formula
+        // booklet (a maths subject as his, named as his is)
+        try? FolderAccess.write(store.folder.appendingPathComponent("classes/math-aa-hl/workstream.yaml"), "id: math-aa-hl\nname: Math AA HL\ncolor: violet\nstatus: active\n")
+        try? FolderAccess.writeData(store.folder.appendingPathComponent("classes/math-aa-hl/files/ib-math-aa-formula-booklet-v1.3.pdf"), SampleFolder.pdf([
+            "Mathematics: analysis and approaches formula booklet", "SL 1.2 Arithmetic sequences: u_n = u_1 + (n - 1)d", "SL 2.6 Quadratic formula: x = (-b +- sqrt(b^2 - 4ac)) / 2a",
+        ]))
+        store.reload()
+        try? FolderAccess.writeData(store.folder.appendingPathComponent(chem + "/files/IB chemistry data booklet.pdf"), SampleFolder.pdf([
+            "Chemistry data booklet", "1. Equations: PV = nRT", "2. Physical constants: R = 8.31 J K-1 mol-1", "9. Periodic table: H 1.01, Fe 55.85, Mn 54.94",
+        ]))
+        try? FolderAccess.writeData(store.folder.appendingPathComponent("classes/physics-hl/files/IB physics data booklet.pdf"), SampleFolder.pdf([
+            "Physics data booklet", "Fundamental constants: g = 9.81 m s-2, c = 3.00 x 10^8 m s-1", "A.1 Kinematics: s = ut + at^2 / 2, v^2 = u^2 + 2as",
+        ]))
         try? FolderAccess.write(store.folder.appendingPathComponent(chem + "/study/questions.yaml"), questions)
         try? FolderAccess.write(store.folder.appendingPathComponent(chem + "/study/question-marks.yaml"), marks)
         // the Acids paper's board, as the laptop's Write on it makes it, with an answer written under question 2

@@ -113,6 +113,25 @@ final class BankTests: XCTestCase {
             XCTFail("the Acids paper's markscheme wasn't found")
         }
 
+        // the data booklet beside the question (the laptop's D): chemistry's first, physics' one tap away
+        tap("bq-booklet", "no Data booklet button")
+        XCTAssertTrue(el("bq-booklet-pane").waitForExistence(timeout: 10), "the data booklet didn't open beside the question")
+        sleep(3)
+        shot("pad-bank-booklet")
+        let physics = el("bq-booklet-subjects").buttons["Physics HL"].firstMatch
+        XCTAssertTrue(physics.waitForExistence(timeout: 5), "the booklet pane has no switch to physics' booklet")
+        physics.tap()
+        sleep(2)
+        shot("pad-bank-booklet-physics")
+        let maths = el("bq-booklet-subjects").buttons["Math AA HL"].firstMatch
+        XCTAssertTrue(maths.waitForExistence(timeout: 5), "the booklet pane has no switch to maths' formula booklet")
+        maths.tap()
+        sleep(2)
+        shot("pad-bank-booklet-maths")
+        el("bq-booklet-subjects").buttons["Chemistry HL"].firstMatch.tap()
+        tap("bq-booklet", "no Hide the data booklet button")
+        sleep(1)
+
         // Write on it opens the paper's board; Insert › Mark as question boxes a question into the bank
         tap("bq-board", "no Write on it")
         XCTAssertTrue(app.buttons["Insert"].firstMatch.waitForExistence(timeout: 30), "the paper's board didn't open")
@@ -147,6 +166,13 @@ final class BankTests: XCTestCase {
         XCTAssertTrue(back.waitForExistence(timeout: 30), "Solve full screen didn't open the board")
         sleep(3)
         shot("pad-bank-solve")
+        // the data booklet beside the board while solving (the bar's Data booklet)
+        let book = el("board-booklet")
+        XCTAssertTrue(book.waitForExistence(timeout: 10), "solving, the board's bar has no Data booklet")
+        book.tap()
+        XCTAssertTrue(el("bq-booklet-pane").waitForExistence(timeout: 10), "the data booklet didn't open beside the board")
+        sleep(3)
+        shot("pad-bank-solve-booklet")
         back.tap()
         XCTAssertTrue(el("bq-count").waitForExistence(timeout: 15), "closing the full screen board didn't come back to the question")
     }

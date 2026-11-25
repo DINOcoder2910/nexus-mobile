@@ -293,4 +293,29 @@ final class QuestionBankTests: XCTestCase {
         XCTAssertEqual(QuestionBank.paperFacts(.object([("year", .number(2021))])), "2021")
         XCTAssertEqual(QuestionBank.level(7), "hard")
     }
+
+    // MARK: the data booklets (bank.rs booklet_of, case for case)
+
+    func testASubjectsBookletIsFoundByItsName() {
+        XCTAssertEqual(Booklets.pick(["classes/p/files/ib-physics-data-booklet-2025-v1.0.pdf", "classes/p/files/Sheets/a.pdf"]), "classes/p/files/ib-physics-data-booklet-2025-v1.0.pdf")
+        XCTAssertEqual(Booklets.pick(["classes/m/files/ib-math-aa-formula-booklet-v1.3.pdf"]), "classes/m/files/ib-math-aa-formula-booklet-v1.3.pdf")
+        XCTAssertEqual(Booklets.pick(["c/files/Formula booklet.pdf", "c/Data_Booklet.PDF"]), "c/Data_Booklet.PDF", "nearest the folder")
+        XCTAssertEqual(Booklets.pick(["c/files/chem data booklet v1.0.pdf", "c/files/chem data booklet v1.1.pdf"]), "c/files/chem data booklet v1.1.pdf", "the newest")
+        XCTAssertNil(Booklets.pick(["c/files/Sheets/Mole (empirical formula) test.pdf", "c/files/Diagrams Booklet SL.pdf", "c/files/data booklet.docx"]))
+    }
+
+    func testEverySubjectsBookletTheAskingSubjectsFirst() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("booklets-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        for p in ["classes/physics-hl/files/IB physics data booklet.pdf", "classes/maths/files/Formula booklet.pdf", "classes/chemistry-hl/files/Sheets/x.pdf"] {
+            let u = root.appendingPathComponent(p)
+            try FileManager.default.createDirectory(at: u.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data("%PDF-1.4\n".utf8).write(to: u)
+        }
+        func ws(_ id: String, _ name: String) -> Workstream { Workstream(id: id, name: name, kind: nil, color: nil, status: "active", aliases: [], folder: "classes/" + id, group: "classes") }
+        let all = [ws("chemistry-hl", "Chemistry HL"), ws("maths", "Maths AA HL"), ws("physics-hl", "Physics HL")]
+        let b = Booklets.find(root: root, workstreams: all, first: "physics-hl")
+        XCTAssertEqual(b.map(\.id), ["physics-hl", "maths"], "chemistry has none; the asking subject first")
+        XCTAssertEqual(b.map(\.title), ["Data booklet", "Formula booklet"])
+    }
 }
