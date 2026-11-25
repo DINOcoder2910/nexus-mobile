@@ -155,7 +155,8 @@ final class NotebookFindTests: XCTestCase {
         back.tap()
         XCTAssertTrue(app.staticTexts["Planner"].firstMatch.waitForExistence(timeout: 20), "Back didn't return to the full list")
         let pinned = entry("Verbs")
-        if !pinned.waitForExistence(timeout: 5) { reachUp(pinned) }
+        // back at the top of the full list, Pinned (after the subjects) can be below the fold, where the list makes no row
+        if !pinned.waitForExistence(timeout: 5) { reach(pinned, "the pinned Verbs") }
         XCTAssertTrue(pinned.waitForExistence(timeout: 5), "Verbs isn't in Pinned")
         XCTAssertTrue(pinned.label.contains("Spanish"), "the pinned board doesn't say where it is: " + pinned.label)
         sleep(1)
