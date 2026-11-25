@@ -63,8 +63,10 @@ enum TestHooks {
     }
 
     /// `-NexusTestNestedNotebooks`: sample data, then notebooks nested three deep with boards at each level and notebook.json
-    /// orders that are not by name, as the laptop's OneNote import writes them, every notebook closed in the sidebar and no Recent
-    /// boards (UITests/SidebarTreeTests). `-NexusTestDark` puts the window in dark mode.
+    /// orders that are not by name, as the laptop's OneNote import writes them, and a Tutor notebook whose first two levels each
+    /// hold one notebook only; every notebook closed in the sidebar, no Recent
+    /// boards, nothing pinned and no recent Move to places (UITests/SidebarTreeTests, NotebookFindTests). `-NexusTestDark` puts the
+    /// window in dark mode.
     static func nestedNotebooks(_ store: NexusStore) {
         let args = ProcessInfo.processInfo.arguments
         if args.contains("-NexusTestDark") {
@@ -84,8 +86,12 @@ enum TestHooks {
         UserDefaults.standard.removeObject(forKey: "openNotebooks")
         UserDefaults.standard.removeObject(forKey: "openSubjects") // every subject closed too (NewLookTests opens one)
         UserDefaults.standard.removeObject(forKey: RecentBoards.key)
+        UserDefaults.standard.removeObject(forKey: NotebookPins.key)
+        UserDefaults.standard.removeObject(forKey: MovePlaces.key)
+        UserDefaults.standard.removeObject(forKey: "closedGroups") // the Notebooks section unfolded too
         let root = store.folder
-        guard !FileManager.default.fileExists(atPath: root.appendingPathComponent("notebooks/School").path) else { return }
+        // made again at every launch: NotebookFindTests moves boards between them
+        for nb in ["notebooks/School", "notebooks/Spanish", "notebooks/Tutor"] { try? FileManager.default.removeItem(at: root.appendingPathComponent(nb)) }
         let boards = [
             "notebooks/School/Chemistry/R3 Energetics/Week 2/Lattice enthalpy.board",
             "notebooks/School/Chemistry/R3 Energetics/Week 2/Born-Haber cycles.board",
@@ -98,6 +104,11 @@ enum TestHooks {
             "notebooks/School/Biology/Cells.board",
             "notebooks/Spanish/Verbs.board",
             "notebooks/Spanish/Vocab.board",
+            // a OneNote import's lone section groups: Tutor holds only Mechanics, Mechanics only Textbook (stepping inside goes
+            // straight through to Textbook)
+            "notebooks/Tutor/Mechanics/Textbook/A Kinematics/Velocity.board",
+            "notebooks/Tutor/Mechanics/Textbook/A Kinematics/Projectiles.board",
+            "notebooks/Tutor/Mechanics/Textbook/B Forces/Newton's laws.board",
         ]
         let metas = [
             "notebooks/School": ##"{"format": "nexus-notebook/1", "color": "#007F43", "order": ["Chemistry", "Biology"]}"##,
@@ -123,6 +134,7 @@ enum TestHooks {
         if !store.snapshot.isDataFolder { store.makeSample() }
         UserDefaults.standard.removeObject(forKey: "openNotebooks")
         UserDefaults.standard.removeObject(forKey: RecentBoards.key)
+        UserDefaults.standard.removeObject(forKey: NotebookPins.key)
         let root = store.folder
         guard !FileManager.default.fileExists(atPath: root.appendingPathComponent("notebooks/G12 Notebook 01").path) else { return }
         let board = Data(BoardFormat.boardJSON().utf8), fm = FileManager.default
