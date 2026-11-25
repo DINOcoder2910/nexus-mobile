@@ -17,6 +17,13 @@ struct SpanishTextBox: UIViewRepresentable {
     /// Return (and the send button beside it).
     var onSubmit: () -> Void
     var maxLines = 6
+    /// false for a piece of writing (Writing's essay box): Return starts a new line and nothing is sent.
+    var returnSends = true
+    /// The box's least height in lines (an essay box starts tall).
+    var minLines = 1
+    /// A box of one fixed height (maxLines) that scrolls inside, like a TextEditor: Writing's essay box. A box that grows a line as
+    /// the words wrap relays the page out mid-key, and a long piece typed into it lost a letter at each new line.
+    var fixed = false
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -39,8 +46,8 @@ struct SpanishTextBox: UIViewRepresentable {
         v.spellCheckingType = .no
         v.smartQuotesType = .no
         v.autocapitalizationType = .sentences
-        v.returnKeyType = .send
-        v.isScrollEnabled = false
+        v.returnKeyType = returnSends ? .send : .default
+        v.isScrollEnabled = fixed
         v.accessibilityIdentifier = identifier
         v.accessibilityLabel = placeholder
         v.text = text
@@ -56,9 +63,16 @@ struct SpanishTextBox: UIViewRepresentable {
 
     func updateUIView(_ v: UITextView, context: Context) {
         context.coordinator.parent = self
-        if v.text != text {
-            v.text = text
-            context.coordinator.restyle()
+        // only a change made elsewhere (a stem put in, the box emptied after sending) is copied in. SwiftUI can update the view in
+        // the middle of a key's insert, before textViewDidChange has passed the new letter on; copying the binding in then took the
+        // letter back out (a long piece lost a letter every line or two).
+        let c = context.coordinator
+        if text != c.pushed {
+            c.pushed = text
+            if v.text != text {
+                v.text = text
+                c.restyle()
+            }
         }
     }
 
@@ -67,9 +81,11 @@ struct SpanishTextBox: UIViewRepresentable {
         let fit = v.sizeThatFits(CGSize(width: w, height: .greatestFiniteMagnitude)).height
         let line = (v.font ?? UIFont.preferredFont(forTextStyle: .body)).lineHeight
         let most = line * CGFloat(maxLines) + v.textContainerInset.top + v.textContainerInset.bottom
+        if fixed { return CGSize(width: w, height: most) }
+        let least = line * CGFloat(minLines) + v.textContainerInset.top + v.textContainerInset.bottom
         let scroll = fit > most
         if v.isScrollEnabled != scroll { DispatchQueue.main.async { v.isScrollEnabled = scroll } }
-        return CGSize(width: w, height: min(fit, most))
+        return CGSize(width: w, height: max(least, min(fit, most)))
     }
 
     static func dismantleUIView(_ v: UITextView, coordinator: Coordinator) { coordinator.stop() }
@@ -81,7 +97,10 @@ struct SpanishTextBox: UIViewRepresentable {
         private var timer: Timer?
         private var watching: UUID?
 
-        init(_ p: SpanishTextBox) { parent = p }
+        /// The text last passed to the binding (or copied in from it).
+        var pushed: String
+
+        init(_ p: SpanishTextBox) { parent = p; pushed = p.text }
 
         func watch() { watching = BoardSpanish.shared.onChange { [weak self] in self?.restyle() } }
         func stop() {
@@ -94,29 +113,49 @@ struct SpanishTextBox: UIViewRepresentable {
             text.components(separatedBy: "\n").filter { SpanishBlock.worth($0) && BlockFacts.lang(nil, $0) != "en" }
         }
 
-        /// The underlines over the words as they are now.
+        /// The underlines over the words as they are now. The text storage is touched only when they differ from what it shows (the
+        /// underlines it has already move with the words), so a key typed doesn't redo the storage.
         func restyle() {
             guard let v = view else { return }
             let s = v.textStorage
-            let all = NSRange(location: 0, length: s.length)
-            s.beginEditing()
-            s.removeAttribute(BlockStyler.spanishKey, range: all)
+            let text = v.text ?? ""
+            var want: [(NSRange, String)] = []
             if BoardSpanish.liveOn {
-                let ok = Set(Self.lines(v.text ?? ""))
+                let ok = Set(Self.lines(text))
                 var at = 0
-                for line in (v.text ?? "").components(separatedBy: "\n") {
+                for line in text.components(separatedBy: "\n") {
                     let n = (line as NSString).length
                     if ok.contains(line) {
                         for m in BoardSpanish.shared.known.get(line) ?? [] where m.s >= 0 && m.e > m.s && m.e <= n {
-                            s.addAttribute(BlockStyler.spanishKey, value: m.kind, range: NSRange(location: at + m.s, length: m.e - m.s))
+                            want.append((NSRange(location: at + m.s, length: m.e - m.s), m.kind))
                         }
                     }
                     at += n + 1
                 }
             }
-            s.endEditing()
-            v.setNeedsDisplay()
+            if Self.runs(s) != Self.runs(want, length: s.length) {
+                let all = NSRange(location: 0, length: s.length)
+                s.beginEditing()
+                s.removeAttribute(BlockStyler.spanishKey, range: all)
+                for (r, kind) in want where NSMaxRange(r) <= s.length { s.addAttribute(BlockStyler.spanishKey, value: kind, range: r) }
+                s.endEditing()
+                v.setNeedsDisplay()
+            }
             dump()
+        }
+
+        /// The underlined runs a text shows (adjacent marks of one kind read as one run, as the storage keeps them).
+        static func runs(_ s: NSAttributedString) -> [String] {
+            var out: [String] = []
+            s.enumerateAttribute(BlockStyler.spanishKey, in: NSRange(location: 0, length: s.length)) { val, r, _ in
+                if let val { out.append("\(r.location):\(r.length):\(val)") }
+            }
+            return out
+        }
+        static func runs(_ marks: [(NSRange, String)], length: Int) -> [String] {
+            let a = NSMutableAttributedString(string: String(repeating: " ", count: length))
+            for (r, kind) in marks where NSMaxRange(r) <= length { a.addAttribute(BlockStyler.spanishKey, value: kind, range: r) }
+            return runs(a)
         }
 
         /// Read the new paragraphs after a pause (again from the start at each change).
@@ -131,13 +170,14 @@ struct SpanishTextBox: UIViewRepresentable {
         }
 
         func textViewDidChange(_ v: UITextView) {
+            pushed = v.text
             parent.text = v.text
             restyle()
             later()
         }
 
         func textView(_ v: UITextView, shouldChangeTextIn range: NSRange, replacementText t: String) -> Bool {
-            if t == "\n" { parent.onSubmit(); return false }
+            if t == "\n" && parent.returnSends { parent.onSubmit(); return false }
             return true
         }
 
@@ -203,8 +243,10 @@ struct SpanishTextBox: UIViewRepresentable {
                 w.addSubview(l)
                 return l
             }()
+            let said = "es box:\(n) checks:\(BoardSpanish.shared.checks) live:\(BoardSpanish.liveOn ? "on" : "off")"
+            guard label.accessibilityLabel != said else { return }
             w.bringSubviewToFront(label)
-            label.accessibilityLabel = "es box:\(n) checks:\(BoardSpanish.shared.checks) live:\(BoardSpanish.liveOn ? "on" : "off")"
+            label.accessibilityLabel = said
         }
     }
 }

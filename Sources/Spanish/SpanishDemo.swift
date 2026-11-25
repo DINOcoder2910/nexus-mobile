@@ -126,9 +126,9 @@ enum SpanishDemo {
         if (try? FileManager.default.contentsOfDirectory(atPath: orals.path))?.isEmpty ?? true {
             try? FileManager.default.createDirectory(at: orals, withIntermediateDirectories: true)
             for (id, text) in demoOrals(today) { try? FolderAccess.write(orals.appendingPathComponent(id + "/oral.yaml"), text) }
-            if FileManager.default.fileExists(atPath: ws.path) { store.reload(); return }
+            if FileManager.default.fileExists(atPath: ws.path) { writeGuide(root); store.reload(); return }
         }
-        guard !FileManager.default.fileExists(atPath: ws.path) else { return }
+        guard !FileManager.default.fileExists(atPath: ws.path) else { writeGuide(root); return }
         let month = String(today.prefix(7))
         let base = folder + "/"
         var files: [(String, String)] = [
@@ -159,6 +159,7 @@ enum SpanishDemo {
         let prompt = SpanishGrade.Prompt(id: "\(today)-1", text: "Acabas de volver de un viaje con tu familia. Escribe un correo electrónico a tu amigo/a contándole adónde fuiste, qué hiciste y qué te gustó más.",
                                          unit: Spanish.currentUnit?.code ?? "", types: ["correo electrónico", "blog", "diario"], source: "Ms. Panhausen, worksheet 3", added: today)
         files.append((Spanish.P.prompts, SpanishGrade.serializePrompts([prompt])))
+        files.append((SpanishTextTypes.dir + "/correo-informal.md", guideText))
         files.append((Spanish.P.note("ser-estar"), SpanishMemory.addToNote("", id: "ser-estar", status: "taught", lines: ["Taught: estar for states and places", "Wrote \"es cansada\" for a feeling: está cansada"], day: today, link: "chat")))
         do {
             for (rel, text) in files {
@@ -196,6 +197,9 @@ enum SpanishDemo {
                        {"word": "comi", "lemma": "comer", "form": "comer, pretérito indefinido, yo", "meaning": "I ate"},
                        {"word": "helado", "lemma": "helado", "form": "masculine singular noun", "meaning": "ice cream"}]}
             """#
+        }
+        if text.contains("Ayer compre") {   // Writing's demo piece (the UI checks type it)
+            return #"{"corrected": "\#(text.replacingOccurrences(of: "compre", with: "compré").replacingOccurrences(of: "\"", with: "'"))", "mistakes": [{"wrong": "compre", "right": "compré", "skill": "accent.verb", "why": "The yo preterite of -ar verbs ends in -é."}], "good": [], "structures": [], "words": []}"#
         }
         if text.contains("fui") {
             return #"{"corrected": "\#(text)", "mistakes": [], "good": [{"text": "fui", "skill": "tense.past", "why": "The preterite for a finished trip."}], "structures": [{"name": "pretérito indefinido", "text": "fui"}], "words": [{"word": "fui", "lemma": "ir", "form": "ir / ser, pretérito indefinido, yo", "meaning": "I went"}, {"word": "Madrid", "lemma": "Madrid", "form": "proper noun", "meaning": "Madrid"}]}"#
@@ -244,4 +248,115 @@ enum SpanishDemo {
          "applied": [], "mistakes": [{"wrong": "compre", "right": "compré", "skill": "accent.verb", "why": "The yo preterite ends in -é."}]}
         """#
     }
+
+    /// One text type guide, as the laptop writes it (nexus desktop/backend/texttypes/correo-informal.md), for Writing's guide and Text
+    /// types: with the rest of the demo, or on its own when an earlier test already set Spanish up (never before workstream.yaml is
+    /// there, so the folder is a workstream from its first file on).
+    static func writeGuide(_ root: URL) {
+        let u = root.appendingPathComponent(folder + "/" + SpanishTextTypes.dir + "/correo-informal.md")
+        guard !FileManager.default.fileExists(atPath: u.path) else { return }
+        try? FileManager.default.createDirectory(at: u.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? FolderAccess.write(u, guideText)
+    }
+
+    static let guideText = #"""
+    ---
+    title: Correo electrónico informal
+    english: Informal email
+    group: personal
+    register: Informal, tú
+    matches: [correo electrónico, email, correo, e-mail]
+    ---
+
+    ## Structure
+    1. **Asunto** (subject line): three to six words that say what the email is about.
+    2. **Saludo** (greeting): *Hola, Lucía:* or *Querida Lucía:* (a colon after the name is the Spanish way).
+    3. **Opening**: ask how they are, or react to their last message, then say why you are writing.
+    4. **Body**: two or three short paragraphs, one idea each (what happened, how it went, what you think).
+    5. **Plans or a question**: what you will do next, a suggestion, a question back to your friend.
+    6. **Closing line**: ask them to write back.
+    7. **Despedida** (sign-off) and your first name: *Un abrazo, Alex*.
+
+    ## Rules
+    - Use tú all the way through: te, tu, contigo, ¿y tú? Never switch to usted halfway.
+    - A real conversation: ask your friend at least one question and react to things (¡Qué bien! ¡Qué pena!).
+    - Open questions and exclamations with ¿ and ¡.
+    - Short paragraphs with a blank line between them. Paper 1 takes one mark off B when there are no paragraphs.
+    - Mix your tenses on purpose: the past for what happened, the present for how things are, the future or ir a for plans.
+    - No address or date: the email adds those itself.
+    - 70 to 150 words. The subject, greeting, sign-off and name do not count.
+    - Emojis and text-speak (xq, tb) lose marks in an exam: write the words out.
+
+    ## Vocabulary
+    ### The email
+    - el correo (electrónico) · the email
+    - el asunto · the subject line
+    - el archivo adjunto · the attachment
+    - enviar / mandar · to send
+    - responder / contestar · to reply
+    - las noticias · news
+    ### Greetings and sign-offs
+    - Hola, Ana: / Querida Ana: / Querido Pablo: · Hi Ana / Dear Ana / Dear Pablo
+    - ¿Qué tal? / ¿Cómo estás? · How are things? / How are you?
+    - Un abrazo · A hug (the usual friendly sign-off)
+    - Besos / Un beso · Love (close friends, family)
+    - Hasta pronto · See you soon
+    - Escríbeme pronto · Write soon
+    ### Reacting
+    - ¡Qué bien! / ¡Qué guay! · How great! / Cool!
+    - ¡Qué pena! · What a shame!
+    - ¡Qué vergüenza! · How embarrassing!
+    - ¡Qué ganas de verte! · I can't wait to see you!
+
+    ## Sentence stems
+    ### Opening
+    - ¿Qué tal todo? Yo estoy muy bien. · How's everything? I'm very well.
+    - Muchas gracias por tu correo. · Thanks a lot for your email.
+    - Te escribo para contarte que… · I'm writing to tell you that…
+    - ¡Tengo una noticia increíble! · I've got some amazing news!
+    - Espero que estés bien. · I hope you're well. [verb.subjuntivo]
+    ### What happened
+    - El fin de semana pasado fui a… · Last weekend I went to…
+    - Esta semana he… · This week I have…
+    - Lo mejor fue… / Lo peor fue… · The best thing was… / The worst thing was…
+    - Al principio… pero al final… · At first… but in the end…
+    ### Opinions and feelings
+    - Me encantó porque… · I loved it because…
+    - Creo que… / En mi opinión… · I think that… / In my opinion…
+    - Estoy muy contento de… · I'm really happy to…
+    ### Plans and suggestions
+    - El mes que viene voy a… · Next month I'm going to…
+    - ¿Te gustaría venir conmigo? · Would you like to come with me?
+    - ¿Por qué no vamos a…? · Why don't we go to…?
+    - Podríamos… · We could…
+    ### Closing
+    - ¿Y tú? ¿Qué tal te va? · And you? How's it going?
+    - Escríbeme pronto y cuéntame tus noticias. · Write soon and tell me your news.
+    - Que lo pases bien. · Have a good time. [verb.subjuntivo]
+    - No te olvides de escribirme. · Don't forget to write to me. [verb.imperativo-neg]
+
+    ## Exemplar
+    > Has empezado un trabajo a tiempo parcial. Escribe un correo electrónico a tu amiga para contarle cómo es.
+
+    Asunto: ¡Mi primer trabajo!
+
+    Hola, Lucía:
+
+    ¿Qué tal? Te escribo para contarte una noticia: ¡tengo mi primer trabajo! Desde hace dos semanas trabajo en una cafetería cerca de mi casa los sábados y los domingos.
+
+    El primer día fue un poco difícil porque llegaron muchos clientes a la vez y rompí dos tazas. ¡Qué vergüenza! Sin embargo, mis compañeros son muy simpáticos y me han ayudado mucho. Ahora preparo cafés muy rápido.
+
+    Me gusta el trabajo porque hablo con gente nueva y gano mi propio dinero. Con el dinero voy a comprar un billete de avión para visitarte en verano. ¿Qué te parece?
+
+    ¿Y tú? ¿Trabajarías en una cafetería? Escríbeme pronto y cuéntame tus noticias.
+
+    Un abrazo,
+    Alex
+
+    ### Why it works
+    - Every convention is there: subject, greeting with a colon, paragraphs, a question back, a sign-off and a name (C).
+    - tú from start to finish: te escribo, visitarte, ¿y tú?, escríbeme (C, register).
+    - Four tenses used on purpose: present (trabajo), indefinido (rompí), perfecto (me han ayudado), ir a (voy a comprar), plus the conditional (¿Trabajarías?) (A).
+    - Each paragraph has one job: the news, how it went, why they like it, the question back (B).
+    """#
 }

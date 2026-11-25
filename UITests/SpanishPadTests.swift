@@ -44,8 +44,8 @@ final class SpanishPadTests: XCTestCase {
         sleep(1)
     }
 
-    func openSpanish() {
-        app.launchArguments = ["-NexusSpanishDemo"]
+    func openSpanish(_ more: [String] = []) {
+        app.launchArguments = ["-NexusSpanishDemo"] + more
         app.launch()
         let sample = app.buttons["Try with sample data"]
         if sample.waitForExistence(timeout: 10) { sample.tap() }
@@ -54,19 +54,26 @@ final class SpanishPadTests: XCTestCase {
         XCTAssertTrue(study.waitForExistence(timeout: 20), "no Study row in the sidebar")
         study.tap()
         let page = el("study-page-spanish-ab")
+        // a tap on the sidebar right after launch can be lost while the sidebar's notebooks still load (main, Nov 25: it stayed
+        // on Today, then on the Study page without opening Spanish): press again while the screen hasn't moved
         var down = 0
-        while !page.waitForExistence(timeout: 3) && down < 6 { app.swipeUp(); down += 1 }
+        while !page.waitForExistence(timeout: 3) && down < 6 {
+            if down < 2 { study.tap() } else { app.swipeUp() }
+            down += 1
+        }
+        if !page.waitForExistence(timeout: 10) { shot("pad-spanish-no-study-page") }
         XCTAssertTrue(page.waitForExistence(timeout: 10), "Study has no Spanish ab initio")
         page.tap()
         let link = el("study-spanish")
         XCTAssertTrue(link.waitForExistence(timeout: 10), "the Study page has no Spanish link")
         link.tap()
+        if !el("spanish-sentence").waitForExistence(timeout: 10) && link.exists && link.isHittable { link.tap() }
         XCTAssertTrue(el("spanish-sentence").waitForExistence(timeout: 10), "the Spanish screen didn't open")
         sleep(1)
     }
 
     func testEverySpanishPartOnTheIPad() {
-        openSpanish()
+        openSpanish(["-debug.blockDump", "YES"])
         shot("pad-spanish-home")
 
         // check a sentence: the dictionary and LanguageTool first, then Claude
@@ -137,13 +144,60 @@ final class SpanishPadTests: XCTestCase {
         let prompt = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'spanish-prompt-2'")).firstMatch
         XCTAssertTrue(prompt.waitForExistence(timeout: 5), "no prompt")
         prompt.tap()
+        // the text type's guide beside the piece: the one the prompt offers, a step of its structure ticked
+        XCTAssertTrue(el("spanish-guide-panel").waitForExistence(timeout: 10), "no text type guide beside the piece")
+        XCTAssertTrue(el("spanish-guide-step-0").waitForExistence(timeout: 5), "the guide has no structure")
+        el("spanish-guide-step-0").tap()
         type("spanish-piece", "¡Hola Marta!\n\nLa semana pasada fui a la playa con mi familia. Fuimos en coche y el viaje fue muy largo, pero divertido. Nos quedamos en un hotel pequeño cerca del mar.\n\nCada día nadamos y comimos paella en un restaurante. Ayer compre una camiseta para mi hermano. Lo que más me gustó fue el atardecer en la playa porque fue muy bonito.\n\n¿Y tú? ¿Qué hiciste en las vacaciones?\n\nUn abrazo,\nAli")
         hideKeyboard()
+        let typed = el("spanish-piece").value as? String ?? ""
+        XCTAssertTrue(typed.contains("Cada día nadamos") && typed.contains("mi hermano") && typed.contains("Un abrazo,\nAli"), "the piece lost letters as it was typed: \(typed.replacingOccurrences(of: "\n", with: " / "))")
+        // the piece is read as it is written: its mistake (compre) is underlined, as in the tutor's box
+        let dump = el("esbox")
+        var seen = ""
+        for _ in 0..<20 {
+            if dump.exists { seen = dump.label; if seen.range(of: "box:[1-9]", options: .regularExpression) != nil { break } }
+            sleep(1)
+        }
+        print("UISTEP ESBOX \(seen)")
+        shot("pad-spanish-write-underlined")
+        XCTAssertTrue(seen.range(of: "box:[1-9]", options: .regularExpression) != nil, "the essay box has no underlines: \(seen)")
+        // a sentence stem tapped goes into the piece
+        let stem = el("spanish-stem-0-0")
+        var down = 0
+        while !stem.isHittable && down < 5 { el("spanish-guide-panel").swipeUp(); down += 1 }
+        stem.tap()
+        sleep(1)
+        XCTAssertTrue((el("spanish-piece").value as? String ?? "").contains("¿Qué tal todo?"), "the stem didn't go into the piece")
         shot("pad-spanish-write")
         el("spanish-mark").tap()
         XCTAssertTrue(el("spanish-grade-total").waitForExistence(timeout: 20), "the piece wasn't marked")
+        XCTAssertTrue(el("spanish-graded-piece").waitForExistence(timeout: 5), "the marked piece isn't shown with its mistakes")
         sleep(1)
         shot("pad-spanish-marked")
+        app.navigationBars.buttons.firstMatch.tap()
+        sleep(1)
+
+        // Text types: the guides, one with its exemplar, Practise with the tutor
+        let types = el("spanish-text-types")
+        var more = 0
+        while !types.isHittable && more < 6 { app.swipeUp(); more += 1 }
+        types.tap()
+        let guide = el("spanish-guide-correo-informal")
+        XCTAssertTrue(guide.waitForExistence(timeout: 10), "the demo's guide isn't listed")
+        shot("pad-spanish-types")
+        guide.tap()
+        XCTAssertTrue(el("spanish-guide-exemplar").waitForExistence(timeout: 10), "the guide has no exemplar")
+        sleep(1)
+        shot("pad-spanish-guide")
+        el("spanish-guide-practise").tap()
+        XCTAssertTrue(el("spanish-chat-input").waitForExistence(timeout: 10), "Practise didn't open a chat")
+        sleep(4)
+        shot("pad-spanish-guide-practise")
+        el("spanish-guide-chat-close").tap()
+        sleep(1)
+        app.navigationBars.buttons.firstMatch.tap()
+        sleep(1)
         app.navigationBars.buttons.firstMatch.tap()
         sleep(1)
 
@@ -156,8 +210,13 @@ final class SpanishPadTests: XCTestCase {
     /// Set up Spanish study from a workstream's … menu.
     func testSetUpFromAWorkstream() {
         openSpanish()
+        // the sidebar's find field and Drop row put Classes at its foot (main, Nov 25): scroll the sidebar to the row, and lift it clear
+        // of the footer icons (NewLookTests' reach)
         let phys = app.staticTexts["Physics HL"].firstMatch
-        XCTAssertTrue(phys.waitForExistence(timeout: 5))
+        var tries = 0
+        while !(phys.exists && phys.isHittable) && tries < 10 { app.collectionViews.firstMatch.swipeUp(velocity: .slow); tries += 1 }
+        if phys.exists && phys.frame.maxY > app.windows.firstMatch.frame.maxY - 140 { app.collectionViews.firstMatch.swipeUp(velocity: .slow) }
+        XCTAssertTrue(phys.waitForExistence(timeout: 5) && phys.isHittable, "can't reach Physics HL in the sidebar")
         phys.tap()
         let more = app.navigationBars.buttons["More"].firstMatch
         XCTAssertTrue(more.waitForExistence(timeout: 5), "no … menu on the workstream")

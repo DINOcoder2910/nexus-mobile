@@ -135,13 +135,16 @@ public enum SpanishGrade {
         public var comment, prompt, text: String
     }
 
-    public static func gradePrompt(prompt: Prompt, text: String, count: Count, samples: [Sample] = []) -> String {
+    /// `guide`: the conventions of the text type the student says they wrote (SpanishTextTypes.conventions), judged under C as the laptop does.
+    public static func gradePrompt(prompt: Prompt, text: String, count: Count, samples: [Sample] = [], guide: String = "") -> String {
         let rubric = criteria.map { c in
             "Criterion \(c.key): \(c.name) (0-\(c.max))\n" + c.bands.map { "  \($0.lo == $0.hi ? "\($0.lo)" : "\($0.lo)-\($0.hi)"): \($0.text)" }.joined(separator: "\n") + "\n  0: the work does not reach a standard described above."
         }.joined(separator: "\n")
         let skipped = count.skipped.isEmpty ? "every line counts" : "not counting " + count.skipped.map { "\"\($0.line)\" (\($0.why))" }.joined(separator: ", ")
         let fmt = { (d: Double) in JSONValue.format(d) }
+        let guideSection: String = guide.isEmpty ? "" : "## The text type the student says they wrote, with its conventions from their guide (judge C against these as well as the descriptors; if the piece is really another type, judge it as what it is)\n" + guide
         return ["(Nexus Spanish grade)", "", "Mark this IB Spanish ab initio Paper 1 response.", "", "## The task", prompt.text, prompt.types.isEmpty ? "" : "Text types offered: \(prompt.types.joined(separator: ", "))", "",
+                guideSection, "",
                 "## The response", text, "", "## Word count (counted the IB way: \(skipped)): \(count.counted) words, \(count.paragraphs) paragraph\(count.paragraphs == 1 ? "" : "s").", "",
                 "## The criteria", rubric, "", "## The examiners' rules", rules.map { "- " + $0 }.joined(separator: "\n"), "",
                 samples.isEmpty ? "" : "## Pieces the student's teacher marked (match this standard)\n" + samples.map { "\($0.text)\nMarks: A \(fmt($0.A)), B \(fmt($0.B)), C \(fmt($0.C)). \($0.comment)" }.joined(separator: "\n\n") + "\n",

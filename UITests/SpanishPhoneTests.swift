@@ -52,6 +52,7 @@ final class SpanishPhoneTests: XCTestCase {
         let page = el("study-page-spanish-ab")
         var down = 0
         while !page.waitForExistence(timeout: 3) && down < 6 { app.swipeUp(); down += 1 }
+        if !page.waitForExistence(timeout: 10) { shot("phone-spanish-no-study-page") }
         XCTAssertTrue(page.waitForExistence(timeout: 10), "Study has no Spanish ab initio")
         page.tap()
         let link = el("study-spanish")
@@ -134,16 +135,59 @@ final class SpanishPhoneTests: XCTestCase {
         el("spanish-go-Writing").tap()
         sleep(1)
         shot("phone-spanish-writing")
+        // Text types (under the prompts): the guides, one with its structure, Practise with the tutor, back to the prompts
+        let types = app.descendants(matching: .any).matching(NSPredicate(format: "identifier == 'spanish-text-types' OR label BEGINSWITH 'Text type guides'")).firstMatch
+        var more = 0
+        while !types.waitForExistence(timeout: 2) && more < 4 { app.swipeUp(); more += 1 }
+        if !types.exists { shot("phone-spanish-no-text-types") }
+        XCTAssertTrue(types.exists, "no Text type guides under the prompts")
+        types.tap()
+        let guide = el("spanish-guide-correo-informal")
+        XCTAssertTrue(guide.waitForExistence(timeout: 10), "the demo's guide isn't listed")
+        shot("phone-spanish-types")
+        guide.tap()
+        XCTAssertTrue(el("spanish-guide-structure").waitForExistence(timeout: 10), "the guide has no structure")
+        sleep(1)
+        shot("phone-spanish-guide")
+        el("spanish-guide-practise").tap()
+        XCTAssertTrue(el("spanish-chat-input").waitForExistence(timeout: 10), "Practise didn't open a chat")
+        sleep(4)
+        shot("phone-spanish-guide-practise")
+        el("spanish-guide-chat-close").tap()
+        sleep(1)
+        back()
+        back()
+        app.swipeDown()
         let prompt = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'spanish-prompt-2'")).firstMatch
         XCTAssertTrue(prompt.waitForExistence(timeout: 5), "no prompt")
         prompt.tap()
         type("spanish-piece", "¡Hola Marta!\n\nLa semana pasada fui a la playa con mi familia. Fuimos en coche y el viaje fue muy largo, pero divertido. Nos quedamos en un hotel pequeño cerca del mar.\n\nCada día nadamos y comimos paella en un restaurante. Ayer compre una camiseta para mi hermano. Lo que más me gustó fue el atardecer en la playa porque fue muy bonito.\n\n¿Y tú? ¿Qué hiciste en las vacaciones?\n\nUn abrazo,\nAli")
         hideKeyboard()
         sleep(1)
+        let typed = el("spanish-piece").value as? String ?? ""
+        XCTAssertTrue(typed.contains("Cada día nadamos") && typed.contains("mi hermano") && typed.contains("Un abrazo,\nAli"), "the piece lost letters as it was typed: \(typed.replacingOccurrences(of: "\n", with: " / "))")
+        // the text type's guide as a sheet: a step ticked, a stem put into the piece
+        el("spanish-guide-open").tap()
+        XCTAssertTrue(el("spanish-guide-step-0").waitForExistence(timeout: 10), "the guide sheet has no structure")
+        el("spanish-guide-step-0").tap()
+        sleep(1)
+        shot("phone-spanish-guide-sheet")
+        let stem = el("spanish-stem-0-0")
+        var down = 0
+        while !stem.isHittable && down < 5 { app.swipeUp(); down += 1 }
+        stem.tap()
+        el("spanish-guide-done").tap()
+        sleep(1)
+        XCTAssertTrue((el("spanish-piece").value as? String ?? "").contains("¿Qué tal todo?"), "the stem didn't go into the piece")
         shot("phone-spanish-write")
-        el("spanish-mark").tap()
+        // Mark it sits below the longer piece: lift it clear of the tab bar first (a press there lands on Today)
+        let mark = el("spanish-mark")
+        var lift = 0
+        while mark.frame.maxY > app.frame.height * 0.7 && lift < 4 { app.swipeUp(); lift += 1 }
+        mark.tap()
         XCTAssertTrue(el("spanish-grade-total").waitForExistence(timeout: 20), "the piece wasn't marked")
-        el("spanish-grade-total").swipeUp()
+        XCTAssertTrue(el("spanish-graded-piece").waitForExistence(timeout: 5), "the marked piece isn't shown with its mistakes")
+        app.swipeUp()
         sleep(1)
         shot("phone-spanish-marked")
         back()
