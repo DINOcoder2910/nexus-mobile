@@ -146,9 +146,13 @@ extension BoardController {
         return L
     }
 
-    /// A short note at the top of the board that fades by itself (never in the way of writing).
-    func toast(_ message: String) {
+    /// A short note at the top of the board that fades by itself (never in the way of writing), after `hold` seconds.
+    /// The label stays fully shown until its fade starts (an animation's delay would set alpha 0 at once, which takes it out of
+    /// VoiceOver and the UI tests straight away: Nov 23, PR #55). The label's tag counts toasts, so an older one's fade skips a newer.
+    func toast(_ message: String, hold: Double = 1.4) {
         toastLabel.text = "  " + message + "  "
+        toastLabel.accessibilityIdentifier = "board-toast"
+        toastLabel.accessibilityLabel = message
         if toastLabel.superview == nil {
             toastLabel.font = .preferredFont(forTextStyle: .subheadline)
             toastLabel.textColor = .white
@@ -165,8 +169,13 @@ extension BoardController {
         view.bringSubviewToFront(toastLabel)
         toastLabel.layer.removeAllAnimations()
         toastLabel.alpha = 1
-        UIView.animate(withDuration: 0.3, delay: 1.4, options: [.beginFromCurrentState, .allowUserInteraction]) { [weak self] in
-            self?.toastLabel.alpha = 0
+        toastLabel.tag += 1
+        let n = toastLabel.tag
+        DispatchQueue.main.asyncAfter(deadline: .now() + hold) { [weak self] in
+            guard let self, self.toastLabel.tag == n else { return }
+            UIView.animate(withDuration: 0.3, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction]) {
+                self.toastLabel.alpha = 0
+            }
         }
     }
 }

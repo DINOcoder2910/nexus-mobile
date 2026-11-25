@@ -39,7 +39,19 @@ extension BoardBar {
         let more = menuButton("ellipsis.circle", "More", UIMenu(children: [
             UIDeferredMenuElement.uncached { [weak b] done in done(b?.compactMenu() ?? []) },
         ]))
+        more.accessibilityIdentifier = "board-more"
         topRow.addArrangedSubview(more)
+
+        // an upright iPhone: the tools float at the foot of the board (PhoneToolPill.swift), the bar is the top row only
+        phonePill.syncShown()
+        if pill {
+            clear(middleRow)
+            clear(toolRow)
+            middleRow.isHidden = true
+            toolRow.isHidden = true
+            if !readOnly { phonePill.refresh(b) }
+            return
+        }
 
         // middle row: the tools and +
         clear(middleRow)

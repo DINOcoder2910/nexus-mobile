@@ -45,9 +45,13 @@ final class ApplicationsPadTests: XCTestCase {
         let check = app.buttons["Check the school's site"].firstMatch
         XCTAssertTrue(check.waitForExistence(timeout: 5), "the menu has no site check")
         check.tap()
-        sleep(2)
+        // a tap on the menu's first row can land while the menu is still settling and do nothing (Nov 23): tap again
+        let cancel = app.buttons["Cancel"].firstMatch
+        if !cancel.waitForExistence(timeout: 5), check.exists { check.tap() }
+        XCTAssertTrue(cancel.waitForExistence(timeout: 10), "the site check didn't open")
+        sleep(1)
         shot("pad-apps-sitecheck")
-        app.buttons["Cancel"].firstMatch.tap()
+        cancel.tap()
         sleep(1)
 
         let back = app.buttons["Applications"].firstMatch

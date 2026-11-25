@@ -1,7 +1,7 @@
 import XCTest
 
 /// The sidebar with a folder the size of the OneNote import (Nov 16 2026: 1,440 boards in 12 notebooks of 10 sections,
-/// `-NexusTestManyNotebooks`, Sources/Common/TestHooks.swift). The tree reads only the notebooks it shows and counts the boards
+/// `-NexusTestManyNotebooks`, Sources/Common/TestHooks.swift). The sidebar reads only the notebooks it shows and counts the boards
 /// away from the main thread (NotebookTreeModel), so the sidebar comes up, opens a notebook and switches boards at once. The times
 /// are printed (UISTEP) beside SidebarTreeTests' same measure on a small tree (a tap and a look cost seconds in the CI simulator,
 /// so the limits here catch a freeze, and the comparison shows a slowdown); the screenshots ("sidebar-many-…") are printed in the
@@ -40,7 +40,7 @@ final class SidebarSpeedTests: XCTestCase {
         app.launchArguments = ["-NexusTestManyNotebooks"]
         app.launch()
         XCTAssertTrue(app.staticTexts["Today"].firstMatch.waitForExistence(timeout: 60), "the sidebar isn't up")
-        let first = app.buttons["Expand G12 Notebook 01"].firstMatch
+        let first = app.staticTexts["G12 Notebook 01"].firstMatch
         // the notebooks come after the sidebar's own rows (Today … Ideas, Claude), which can put them below the fold, where the
         // list makes no row until it scrolls: scroll to the first one rather than expect it on screen
         if !first.waitForExistence(timeout: 10) { reach(first, "G12 Notebook 01") }
@@ -48,12 +48,12 @@ final class SidebarSpeedTests: XCTestCase {
         reach(first, "G12 Notebook 01")
         // the counts arrive from the walk away from the main thread (10 sections x 12 boards)
         XCTAssertTrue(app.staticTexts["120"].firstMatch.waitForExistence(timeout: 20), "the board counts never showed")
-        // timed on the row's own arrow turning (always on screen); what opens under it may be below the fold
-        time("open a notebook", app.buttons["Collapse G12 Notebook 01"].firstMatch, limit: 8) { first.tap() }
-        let section = app.buttons["Expand Section 01"].firstMatch
+        // stepping inside a notebook (Nov 25 2026: no tree of arrows), timed on its sections' rows showing
+        let section = app.collectionViews.firstMatch.staticTexts["Section 01"].firstMatch
+        time("open a notebook", section, limit: 8) { first.tap() }
         reach(section, "Section 01")
-        time("open a section", app.buttons["Collapse Section 01"].firstMatch, limit: 8) { section.tap() }
-        reach(app.staticTexts["Page 01"].firstMatch, "Page 01")
+        time("open a section", app.collectionViews.firstMatch.staticTexts["Page 01"].firstMatch, limit: 8) { section.tap() }
+        reach(app.collectionViews.firstMatch.staticTexts["Page 01"].firstMatch, "Page 01")
         sleep(1)
         let a = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         a.name = "sidebar-many-light"
@@ -61,7 +61,7 @@ final class SidebarSpeedTests: XCTestCase {
         add(a)
 
         // open a board from its row, then the next one
-        let page = app.staticTexts["Page 03"].firstMatch
+        let page = app.collectionViews.firstMatch.staticTexts["Page 03"].firstMatch
         reach(page, "Page 03")
         time("open a board", app.buttons["Insert"].firstMatch, limit: 10) { page.tap() }
         sleep(1)
@@ -71,7 +71,7 @@ final class SidebarSpeedTests: XCTestCase {
             side.tap()
             sleep(1)
         }
-        let next = app.staticTexts["Page 04"].firstMatch
+        let next = app.collectionViews.firstMatch.staticTexts["Page 04"].firstMatch
         reach(next, "Page 04")
         let t0 = Date()
         next.tap()

@@ -46,6 +46,8 @@ final class NexusStore {
         var focus: CGRect?
         /// A link's end on the board to show first (its box is known once the board is read).
         var focusEnd: JSONValue? = nil
+        /// Solve full screen from a question: `focus` across the width, the status bar hidden, Esc back (BoardController.solving).
+        var solve = false
     }
 
     struct Toast: Identifiable, Equatable {

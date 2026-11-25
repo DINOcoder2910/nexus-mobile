@@ -135,7 +135,7 @@ class ChecklistLookTests: XCTestCase {
         menu(2, "Delete")
         XCTAssertEqual(all("check-line").count, 2, "Delete didn't take the subtask out")
 
-        // Write on it: the sheet's board beside the PDF
+        // Write on it: the sheet's board (in a subject, its notebook › Papers, as the laptop makes it; else beside the PDF)
         let write = el("panel-write-on")
         tries = 0
         while !(write.exists && write.isHittable) && tries < 8 { app.swipeDown(velocity: .slow); tries += 1 }

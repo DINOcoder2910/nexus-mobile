@@ -14,6 +14,10 @@ final class NotebookTreeModel {
     /// Goes up when what the rows show changed (a level read again, new counts): the tree draws again.
     private(set) var version = 0
     private(set) var counts: [String: Int] = [:]
+    /// Every notebook and board by name, from the same walk (the sidebar's find field: NexusCore NotebookFind).
+    private(set) var findEntries: [NotebookFind.Entry] = []
+    /// The walk has run once for this folder (until then the find field says it is reading).
+    private(set) var scanned = false
 
     @ObservationIgnored private var root: URL?
     @ObservationIgnored private var top: [String]?
@@ -57,6 +61,25 @@ final class NotebookTreeModel {
         return l
     }
 
+    /// One notebook's level for a view that shows it (drawn again when a level is read again).
+    func shown(_ root: URL, _ path: String) -> NotebookLevel {
+        _ = version
+        use(root)
+        return level(path)
+    }
+
+    /// The notebook the sidebar shows when stepping into `path` (through notebooks that only hold one notebook).
+    func stepping(into path: String, _ root: URL) -> String {
+        use(root)
+        return NotebookTree.stepping(into: path) { level($0) }
+    }
+
+    /// Where the sidebar's Back goes from inside `path`: nil for the full list.
+    func back(from path: String, _ root: URL) -> String? {
+        use(root)
+        return NotebookTree.steppingBack(from: path) { level($0) }
+    }
+
     /// The notebook for a row's menu: its own level (Delete reads the rest when asked).
     func notebook(_ path: String) -> Notebook { level(path).shallow }
 
@@ -76,17 +99,20 @@ final class NotebookTreeModel {
         checking = Task.detached(priority: .utility) { [weak self] in
             // the stamps first (a stat per notebook): nothing more when nothing changed
             if let old, old.changed(root).isEmpty {
-                await self?.done(root, nil)
+                await self?.done(root, nil, [])
                 return
             }
             let now = NotebookScan.read(root)
-            await self?.done(root, now)
+            let entries = now.findEntries
+            await self?.done(root, now, entries)
         }
     }
 
-    private func done(_ root: URL, _ now: NotebookScan?) {
+    private func done(_ root: URL, _ now: NotebookScan?, _ entries: [NotebookFind.Entry]) {
         checking = nil
         if let now, root == self.root {
+            if entries != findEntries { findEntries = entries }
+            if !scanned { scanned = true }
             var redraw = false
             if let old = scan {
                 for p in now.changed(from: old) {
@@ -108,6 +134,8 @@ final class NotebookTreeModel {
         top = nil
         scan = nil
         if !counts.isEmpty { counts = [:] }
+        if !findEntries.isEmpty { findEntries = [] }
+        if scanned { scanned = false }
         checking?.cancel()
         checking = nil
         // counted after this draw

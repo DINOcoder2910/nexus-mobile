@@ -9,12 +9,15 @@ enum TestHooks {
     static func run(_ store: NexusStore) {
         nestedNotebooks(store)
         manyNotebooks(store)
+        if extras || extrasTask { runExtras(store); return }
         if ProcessInfo.processInfo.arguments.contains("-NexusTestPerson") { person(store) }
         if ProcessInfo.processInfo.arguments.contains("-NexusTestBigBoard") { bigBoard(store); return }
         if ProcessInfo.processInfo.arguments.contains("-NexusTestLinksBoard") { linksBoard(store); return }
         if ProcessInfo.processInfo.arguments.contains("-NexusTestTime") { timeSessions(store); return }
         if ProcessInfo.processInfo.arguments.contains("-NexusTestDayOrder") { dayOrder(store); return }
         if ProcessInfo.processInfo.arguments.contains("-NexusTestDayEdges") { dayEdges(store); return }
+        if ProcessInfo.processInfo.arguments.contains("-NexusTestBank") { questionBank(store); return }
+        if ProcessInfo.processInfo.arguments.contains("-NexusTestDrop") { dropFiles(store); return }
         guard ProcessInfo.processInfo.arguments.contains("-NexusTestPdfBoard") else { return }
         if !store.snapshot.isDataFolder { store.makeSample() }
         sharedPens(store)
@@ -60,8 +63,10 @@ enum TestHooks {
     }
 
     /// `-NexusTestNestedNotebooks`: sample data, then notebooks nested three deep with boards at each level and notebook.json
-    /// orders that are not by name, as the laptop's OneNote import writes them, every notebook closed in the sidebar and no Recent
-    /// boards (UITests/SidebarTreeTests). `-NexusTestDark` puts the window in dark mode.
+    /// orders that are not by name, as the laptop's OneNote import writes them, and a Tutor notebook whose first two levels each
+    /// hold one notebook only; every notebook closed in the sidebar, no Recent
+    /// boards, nothing pinned and no recent Move to places (UITests/SidebarTreeTests, NotebookFindTests). `-NexusTestDark` puts the
+    /// window in dark mode.
     static func nestedNotebooks(_ store: NexusStore) {
         let args = ProcessInfo.processInfo.arguments
         if args.contains("-NexusTestDark") {
@@ -81,8 +86,12 @@ enum TestHooks {
         UserDefaults.standard.removeObject(forKey: "openNotebooks")
         UserDefaults.standard.removeObject(forKey: "openSubjects") // every subject closed too (NewLookTests opens one)
         UserDefaults.standard.removeObject(forKey: RecentBoards.key)
+        UserDefaults.standard.removeObject(forKey: NotebookPins.key)
+        UserDefaults.standard.removeObject(forKey: MovePlaces.key)
+        UserDefaults.standard.removeObject(forKey: "closedGroups") // the Notebooks section unfolded too
         let root = store.folder
-        guard !FileManager.default.fileExists(atPath: root.appendingPathComponent("notebooks/School").path) else { return }
+        // made again at every launch: NotebookFindTests moves boards between them
+        for nb in ["notebooks/School", "notebooks/Spanish", "notebooks/Tutor"] { try? FileManager.default.removeItem(at: root.appendingPathComponent(nb)) }
         let boards = [
             "notebooks/School/Chemistry/R3 Energetics/Week 2/Lattice enthalpy.board",
             "notebooks/School/Chemistry/R3 Energetics/Week 2/Born-Haber cycles.board",
@@ -95,6 +104,11 @@ enum TestHooks {
             "notebooks/School/Biology/Cells.board",
             "notebooks/Spanish/Verbs.board",
             "notebooks/Spanish/Vocab.board",
+            // a OneNote import's lone section groups: Tutor holds only Mechanics, Mechanics only Textbook (stepping inside goes
+            // straight through to Textbook)
+            "notebooks/Tutor/Mechanics/Textbook/A Kinematics/Velocity.board",
+            "notebooks/Tutor/Mechanics/Textbook/A Kinematics/Projectiles.board",
+            "notebooks/Tutor/Mechanics/Textbook/B Forces/Newton's laws.board",
         ]
         let metas = [
             "notebooks/School": ##"{"format": "nexus-notebook/1", "color": "#007F43", "order": ["Chemistry", "Biology"]}"##,
@@ -120,6 +134,7 @@ enum TestHooks {
         if !store.snapshot.isDataFolder { store.makeSample() }
         UserDefaults.standard.removeObject(forKey: "openNotebooks")
         UserDefaults.standard.removeObject(forKey: RecentBoards.key)
+        UserDefaults.standard.removeObject(forKey: NotebookPins.key)
         let root = store.folder
         guard !FileManager.default.fileExists(atPath: root.appendingPathComponent("notebooks/G12 Notebook 01").path) else { return }
         let board = Data(BoardFormat.boardJSON().utf8), fm = FileManager.default
@@ -213,6 +228,57 @@ enum TestHooks {
 
     /// `-NexusTestTime`: sample data with time tracked this week on this device and on the laptop, and a timer running on
     /// "Redox worksheet" (UITests/TimeTrackingTests: the running timer, the Time screen, the task panel's Time section).
+    /// `-NexusTestDrop` (UITests/DropTests): sample data, then Drop/ as a sync would leave it: a photo and a PDF from the laptop,
+    /// notes from the iPhone (or the iPad on an iPhone), a sheet put in the G14's Drop by hand, and a photo sent from here, with
+    /// this device's record of who sent what; Drop never looked at, so the sidebar counts the arrivals. Made again at every launch.
+    static func dropFiles(_ store: NexusStore) {
+        if !store.snapshot.isDataFolder { store.makeSample() }
+        let fm = FileManager.default
+        let dir = store.folder.appendingPathComponent(DropFolder.folder, isDirectory: true)
+        try? fm.removeItem(at: dir)
+        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        let other = Device.isPhone ? "iPad" : "iPhone"
+        func picture(_ top: UIColor, _ bottom: UIColor) -> Data {
+            UIGraphicsImageRenderer(size: CGSize(width: 640, height: 480)).jpegData(withCompressionQuality: 0.85) { c in
+                let colors = [top.cgColor, bottom.cgColor] as CFArray
+                if let g = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 1]) {
+                    c.cgContext.drawLinearGradient(g, start: .zero, end: CGPoint(x: 0, y: 480), options: [])
+                }
+                UIColor.white.withAlphaComponent(0.85).setFill()
+                UIBezierPath(ovalIn: CGRect(x: 420, y: 70, width: 120, height: 120)).fill()
+                UIColor.black.withAlphaComponent(0.35).setFill()
+                UIBezierPath(rect: CGRect(x: 0, y: 360, width: 640, height: 120)).fill()
+            }
+        }
+        let pdf = UIGraphicsPDFRenderer(bounds: CGRect(x: 0, y: 0, width: 595, height: 842)).pdfData { c in
+            c.beginPage()
+            ("Redox: half-equations" as NSString).draw(at: CGPoint(x: 60, y: 70), withAttributes: [.font: UIFont.boldSystemFont(ofSize: 24)])
+            ("Atoms, then O with water, then H with H+, then the charge with electrons." as NSString)
+                .draw(in: CGRect(x: 60, y: 120, width: 475, height: 200), withAttributes: [.font: UIFont.systemFont(ofSize: 15)])
+        }
+        let files: [(String, Data, String, Double, Bool)] = [
+            ("IMG_0042.jpg", picture(.systemTeal, .systemIndigo), "Duo", 2, false),
+            ("Redox notes.pdf", pdf, "Duo", 50, false),
+            ("Essay outline.txt", Data("Intro\nThree points\nConclusion\n".utf8), other, 190, false),
+            ("Physics data.csv", Data("t,x\n0,0\n1,4.9\n2,19.6\n".utf8), "G14", 26 * 60, false),
+            ("Whiteboard.jpg", picture(.systemOrange, .systemPink), "", 30 * 60, true),
+        ]
+        let now = Date()
+        var items: [DropItem] = []
+        for (name, data, from, minutesAgo, here) in files {
+            let at = now.addingTimeInterval(-minutesAgo * 60)
+            let url = dir.appendingPathComponent(name)
+            try? data.write(to: url)
+            try? fm.setAttributes([.modificationDate: at], ofItemAtPath: url.path)
+            items.append(DropItem(path: DropFolder.folder + "/" + name, from: from, at: DropFolder.stamp(at), here: here))
+        }
+        // the record as the sync client leaves it (oldest given first, so the newest ends on top)
+        try? fm.removeItem(at: store.folder.appendingPathComponent(DropFolder.logPath))
+        try? DropLog.note(items.reversed(), in: store.folder)
+        UserDefaults.standard.removeObject(forKey: "dropSeen")
+        store.reload()
+    }
+
     static func timeSessions(_ store: NexusStore) {
         if !store.snapshot.isDataFolder { store.makeSample() }
         guard TimeTracker.shared.entries.isEmpty else {
@@ -269,6 +335,94 @@ enum TestHooks {
         for (title, day, time, est) in adds where !store.snapshot.tasks.values.contains(where: { $0.text == title }) {
             _ = store.add(title: title, workstream: "physics-hl", plan: [PlanEntry(day: day, time: time)], est: est)
         }
+    }
+
+    /// `-NexusTestBank`: sample data, then Chemistry HL's question bank as the laptop leaves it (UITests/BankTests, BankPhoneTests): three
+    /// sample papers sorted (`study/questions.yaml`, written fresh at each launch), a mark, Review later, a pin and a bookmark
+    /// (`study/question-marks.yaml`), and the Acids paper's board in a notebook filed under the subject (notebook.json), with
+    /// writing under question 2. The notebook is "Bank check", never a "Chemistry" one (SidebarTreeTests expects none at the top).
+    static func questionBank(_ store: NexusStore) {
+        if !store.snapshot.isDataFolder { store.makeSample() }
+        let chem = "classes/chemistry-hl", sheets = chem + "/files/Sheets"
+        let acids = sheets + "/08 Reactivity 3 — Acids and bases/Acids — Paper 2 structured, 40 mk [2025]/Acids paper 2.pdf"
+        let atomic = sheets + "/01 Structure 1 — Models of matter/Mole & Atomic Structure — HL test, 40 mk, 60 min [pre-2025]/Atomic structure test.pdf"
+        let energetics = sheets + "/05 Reactivity 1 — Energetics/Energetics — HL test, 30 mk, no MS [2025]/Energetics test.pdf"
+        func j(_ s: String) -> String { JSONValue.string(s).text }
+        // where the sample PDFs' lines are (SampleFolder.pdf: 18 pt title at 770, then a line every 26 pt on a 842 pt page)
+        let one = #"{"page":0,"y":0.1057}"#, two = #"{"page":0,"y":0.1366}"#, end = #"{"page":0,"y":1.0}"#
+        let questions = """
+        # Written by Nexus (Study › Question bank): each question of your papers, sorted once per paper.
+        # facts = the paper's year, session, paper and level; questions = the sort (by the decision model or Claude, with how sure);
+        # mine = what you changed by hand, which a new sort never overwrites.
+        papers:
+          \(j(acids)):
+            facts: {"year":2025,"session":"May","paper":"2","level":"HL","sorted":"2026-11-22","by":"decider+claude"}
+            questions:
+              "1": {"topics":["R3.1"],"type":"short","difficulty":3.0,"marks":1,"command":"calculate","sure":0.93,"by":"decider","from":\(one),"to":\(two)}
+              "2": {"topics":["R3.1"],"type":"structured","difficulty":5.5,"marks":2,"command":"explain","by":"claude","model":{"topics":["R3.2"],"sure":0.41},"from":\(two),"to":\(end)}
+          \(j(atomic)):
+            facts: {"year":2023,"session":"November","paper":"2","level":"HL","sorted":"2026-11-21","by":"decider"}
+            questions:
+              "1": {"topics":["S1.4"],"type":"short","difficulty":2.0,"marks":2,"command":"calculate","sure":0.97,"by":"decider","from":\(one),"to":\(two)}
+              "2": {"topics":["S1.3"],"type":"short","difficulty":4.0,"marks":1,"command":"state","sure":0.88,"by":"decider","from":\(two),"to":\(end)}
+          \(j(energetics)):
+            facts: {"level":"HL","sorted":"2026-11-22","by":"decider"}
+            questions:
+              "1": {"topics":["R1.1"],"type":"short","difficulty":3.5,"marks":2,"command":"define","sure":0.9,"by":"decider","from":\(one),"to":\(two)}
+              "2": {"topics":["R1.2"],"type":"data","difficulty":7.0,"marks":4,"command":"draw","sure":0.86,"by":"decider","from":\(two),"to":\(end)}
+            mine:
+              "2": {"type":"structured"}
+
+        """
+        let marks = """
+        # Written by Nexus (Study › Question bank): your marks on questions ("<paper>#<question>": done, hard or review),
+        # the sheets you pinned as Working on, and where you stopped on each (bookmarks). One line each.
+        marks:
+          \(j(atomic + "#1")): {"mark":"done","at":"\(Days.add(Days.today(), -1))"}
+          \(j(energetics + "#2")): {"mark":"review","at":"\(Days.today())"}
+        pins:
+          \(j(acids)): "\(Days.today())"
+        bookmarks:
+          \(j(acids)): "2"
+
+        """
+        // the subjects' data booklets (the question page's and the board's Data booklet): chemistry's, physics' and maths' formula
+        // booklet (a maths subject as his, named as his is)
+        try? FolderAccess.write(store.folder.appendingPathComponent("classes/math-aa-hl/workstream.yaml"), "id: math-aa-hl\nname: Math AA HL\ncolor: violet\nstatus: active\n")
+        try? FolderAccess.writeData(store.folder.appendingPathComponent("classes/math-aa-hl/files/ib-math-aa-formula-booklet-v1.3.pdf"), SampleFolder.pdf([
+            "Mathematics: analysis and approaches formula booklet", "SL 1.2 Arithmetic sequences: u_n = u_1 + (n - 1)d", "SL 2.6 Quadratic formula: x = (-b +- sqrt(b^2 - 4ac)) / 2a",
+        ]))
+        store.reload()
+        try? FolderAccess.writeData(store.folder.appendingPathComponent(chem + "/files/IB chemistry data booklet.pdf"), SampleFolder.pdf([
+            "Chemistry data booklet", "1. Equations: PV = nRT", "2. Physical constants: R = 8.31 J K-1 mol-1", "9. Periodic table: H 1.01, Fe 55.85, Mn 54.94",
+        ]))
+        try? FolderAccess.writeData(store.folder.appendingPathComponent("classes/physics-hl/files/IB physics data booklet.pdf"), SampleFolder.pdf([
+            "Physics data booklet", "Fundamental constants: g = 9.81 m s-2, c = 3.00 x 10^8 m s-1", "A.1 Kinematics: s = ut + at^2 / 2, v^2 = u^2 + 2as",
+        ]))
+        try? FolderAccess.write(store.folder.appendingPathComponent(chem + "/study/questions.yaml"), questions)
+        try? FolderAccess.write(store.folder.appendingPathComponent(chem + "/study/question-marks.yaml"), marks)
+        // the Acids paper's board, as the laptop's Write on it makes it, with an answer written under question 2
+        let nb = "notebooks/Bank check"
+        let rel = nb + "/Papers/08 Reactivity 3 — Acids and bases/Acids paper 2.board"
+        let board = store.folder.appendingPathComponent(rel, isDirectory: true)
+        try? FolderAccess.write(store.folder.appendingPathComponent(nb + "/notebook.json"), #"{"format":"nexus-notebook/1","subject":"chemistry-hl"}"# + "\n")
+        guard !FileManager.default.fileExists(atPath: board.appendingPathComponent("board.json").path) else { store.didWrite(listChanged: true); return }
+        try? FolderAccess.write(board.appendingPathComponent("board.json"), BoardFormat.boardJSON())
+        var c = BoardContent()
+        c.items = [BoardItem(id: "pdf1", type: "pdf", x: 0, y: 0, fields: [
+            ("src", .string(QuestionBank.relTo(board: rel, acids))), ("w", .number(BoardFormat.pdfWidth)), ("gap", .number(BoardFormat.pdfGap)),
+        ])]
+        // three lines of handwriting under question 2 (page y 0.15 to 0.25 of an 820-wide page)
+        for (k, y) in [205.0, 245.0, 285.0].enumerated() {
+            var pts: [[Double]] = []
+            for i in 0..<60 {
+                let x = 90 + Double(i) * 7
+                pts.append([x, y + sin(Double(i) * 0.9) * 9, 1, 0, Double.pi / 2, Double(i) * 0.01, 2.2, 2.2, 1])
+            }
+            c.strokes.append(BoardStroke(id: "bank\(k)", ink: "com.apple.ink.pen", color: "#1F3A93FF", points: pts))
+        }
+        _ = try? BoardFiles.save(c, to: board, write: { u, t in try FolderAccess.write(u, t) })
+        store.boardsChanged(listChanged: true)
     }
 
     /// `-NexusTestPerson`: sample data, then a People group (kind person) with Ms Lee, a counsellor: one session note and a decision

@@ -100,7 +100,18 @@ class PlannerLookTests: XCTestCase {
         XCTAssertTrue(noDate.isSelected, "No date didn't turn on")
         // the sample's personal statement has a deadline; Columbia's short answers have none
         XCTAssertFalse(el("bank").staticTexts["Finalise the personal statement"].exists, "No date kept a task with a deadline")
-        XCTAssertTrue(el("bank").staticTexts["Columbia short answers"].waitForExistence(timeout: 5), "No date lost a task without one")
+        // the iPhone's bank list starts at the screen's foot and makes only the rows near it (Nov 24: six No date tasks put
+        // Columbia below the fold): scroll it in, then back so the filters are on screen again
+        let columbia = el("bank").staticTexts["Columbia short answers"]
+        var ups = 0
+        while !columbia.waitForExistence(timeout: ups == 0 ? 5 : 2) && ups < 4 { app.scrollViews.firstMatch.swipeUp(velocity: .slow); ups += 1 }
+        XCTAssertTrue(columbia.exists, "No date lost a task without one")
+        for _ in 0..<ups { app.scrollViews.firstMatch.swipeDown(velocity: .slow) }
+        if ups > 0 {
+            tries = 0
+            while !(all.exists && all.isHittable) && tries < 6 { app.scrollViews.firstMatch.swipeUp(velocity: .slow); tries += 1 }
+            sleep(2)
+        }
         if phone { slideFilters(by: 250) }
         all.tap()
         sleep(1)

@@ -335,6 +335,7 @@ final class FormatBar: UIInputView {
                 b?.setBlockField(id, "push", push ? nil : .bool(true))
             },
         ]))
+        out.append(b.googleMenu(id)) // the block's Google Doc (BoardController+GoogleDocs.swift)
         let chem = it.json["chem"]?.bool ?? true
         out.append(UIMenu(title: "Options", image: UIImage(systemName: "gearshape"), children: [
             UIAction(title: "Cover with revision tape", subtitle: "A strip on each line; tap one to peek", image: UIImage(systemName: "rectangle.dashed")) { [weak b] _ in

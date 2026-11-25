@@ -27,6 +27,9 @@ struct BoardPanes: View {
         .id(main.id)
         .ignoresSafeArea()
         .toolbar(.hidden, for: .navigationBar)
+        // solving a question: the whole screen is the board (no status bar, the home bar fades)
+        .statusBarHidden(main.solve)
+        .persistentSystemOverlays(main.solve ? .hidden : .automatic)
     }
 }
 

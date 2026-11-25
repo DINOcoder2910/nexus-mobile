@@ -14,6 +14,9 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     let root: URL
     let path: String
     var focus: CGRect?
+    /// Solve full screen from a question (BankQuestionView): `focus` is the question, shown across the screen's width at the top
+    /// with room under it to write; Esc goes back to the question (BoardShortcuts).
+    var solving = false
     var onClose: (() -> Void)?
     /// After a save: the board's path (sync and the handwriting index pick it up).
     var onSaved: ((String) -> Void)?
@@ -186,6 +189,12 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
         NotificationCenter.default.addObserver(self, selector: #selector(saveNowSelector), name: UIApplication.willResignActiveNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(otherPaneSaved(_:)), name: BoardController.savedNote, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(mathDrawn), name: BlockStyler.mathReady, object: nil)
+        if TestHooks.extras {
+            NotificationCenter.default.addObserver(forName: TestHooks.openGooglePanel, object: nil, queue: .main) { [weak self] n in
+                guard let id = n.object as? String else { return }
+                MainActor.assumeIsolated { self?.openGooglePanel(id) }
+            }
+        }
         poll = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.checkOutside() }
         setUpLive()
     }
@@ -298,7 +307,15 @@ final class BoardController: UIViewController, PKCanvasViewDelegate, UIGestureRe
     /// Where to look first: the place asked for, the first PDF page, or the top left of what is there.
     func showStart() {
         let W = view.bounds.width, top = topInset, H = view.bounds.height - top
-        if let f = focus {
+        if solving, let f = focus {
+            // as the laptop's BoardFull: the question across the width (40 pt either side, 8 on a phone), its top just under the bar
+            let side: CGFloat = W < BoardBar.compactWidth ? 8 : 40
+            let z = min(2, max(0.25, (W - 2 * side) / max(f.width, 1)))
+            canvas.zoomScale = z
+            updateContentSize()
+            scroll(toBoard: CGPoint(x: f.minX - side / z, y: f.minY - (24 + top) / z))
+            toast("Esc or ‹ goes back to the question · what you write stays on the board", hold: 3)
+        } else if let f = focus {
             let z = min(2, max(0.5, min(W / max(f.width + 200, 1), H / max(f.height + 200, 1))))
             canvas.zoomScale = z
             updateContentSize()
