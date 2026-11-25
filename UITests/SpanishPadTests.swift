@@ -204,8 +204,13 @@ final class SpanishPadTests: XCTestCase {
     /// Set up Spanish study from a workstream's … menu.
     func testSetUpFromAWorkstream() {
         openSpanish()
+        // the sidebar's find field and Drop row put Classes at its foot (main, Nov 25): scroll the sidebar to the row, and lift it clear
+        // of the footer icons (NewLookTests' reach)
         let phys = app.staticTexts["Physics HL"].firstMatch
-        XCTAssertTrue(phys.waitForExistence(timeout: 5))
+        var tries = 0
+        while !(phys.exists && phys.isHittable) && tries < 10 { app.collectionViews.firstMatch.swipeUp(velocity: .slow); tries += 1 }
+        if phys.exists && phys.frame.maxY > app.windows.firstMatch.frame.maxY - 140 { app.collectionViews.firstMatch.swipeUp(velocity: .slow) }
+        XCTAssertTrue(phys.waitForExistence(timeout: 5) && phys.isHittable, "can't reach Physics HL in the sidebar")
         phys.tap()
         let more = app.navigationBars.buttons["More"].firstMatch
         XCTAssertTrue(more.waitForExistence(timeout: 5), "no … menu on the workstream")
