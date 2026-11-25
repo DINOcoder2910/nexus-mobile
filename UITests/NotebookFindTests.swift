@@ -1,7 +1,7 @@
 import XCTest
 
 /// Getting around a big notebooks folder quickly (Nov 24 2026: the sidebar and Move to… were too long to scroll): the sidebar's
-/// "Find a notebook or board" field at the top, one branch of the tree open at a time, Pin to the top, and Move to… with its search,
+/// "Find a notebook or board" field at the top, a notebook's row stepping inside it, Pin to the top, and Move to… with its search,
 /// its Recent places and its tree opened where the board is. On the nested notebooks of `-NexusTestNestedNotebooks` (made again at
 /// each launch, Sources/Common/TestHooks.swift). The screenshots ("sidebar-…") are printed in the ui-check log.
 final class NotebookFindTests: XCTestCase {
@@ -100,36 +100,23 @@ final class NotebookFindTests: XCTestCase {
         XCTAssertTrue(app.buttons["Insert"].firstMatch.waitForExistence(timeout: 20), "Calorimetry didn't open from the find field")
         showSidebar()
 
-        // 2. Clearing the field brings the sidebar back, the board's notebooks open; opening another notebook closes them
+        // 2. Clearing the field brings the sidebar back; a notebook's row steps inside it (Nov 25 2026: no tree of arrows)
         let clear = app.buttons["notebook-find-clear"].firstMatch
         XCTAssertTrue(clear.waitForExistence(timeout: 5), "no Clear in the find field")
         clear.tap()
         XCTAssertTrue(app.staticTexts["Planner"].firstMatch.waitForExistence(timeout: 10), "the places didn't come back")
-        // the board opened from the find field: its notebooks are open in the tree
-        reach(app.buttons["Collapse School"].firstMatch, "School, open for the board")
-        let spanish = app.buttons["Expand Spanish"].firstMatch
-        reach(spanish, "the Spanish notebook's arrow")
+        let spanish = sidebar.staticTexts["Spanish"].firstMatch
+        reach(spanish, "the Spanish notebook")
         spanish.tap()
-        XCTAssertTrue(app.buttons["Collapse Spanish"].firstMatch.waitForExistence(timeout: 40), "Spanish didn't open")
-        let schoolClosed = app.buttons["Expand School"].firstMatch
-        if !schoolClosed.waitForExistence(timeout: 20) { reachUp(schoolClosed) }
-        XCTAssertTrue(schoolClosed.exists, "School stayed open beside Spanish: one branch should be open at a time")
-        XCTAssertFalse(app.staticTexts["Enthalpy of combustion"].exists, "School's boards still show")
+        let back = app.buttons["notebook-back"].firstMatch
+        let inside = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == 'Spanish'"), object: back)
+        XCTAssertEqual(XCTWaiter().wait(for: [inside], timeout: 40), .completed, "didn't step inside Spanish")
+        XCTAssertFalse(sidebar.staticTexts["School"].exists, "the other notebooks still show inside Spanish")
         sleep(1)
-        shot("sidebar-one-branch-\(mode)")
+        shot("sidebar-step-in-\(mode)")
 
-        // 3. Pin a board: it shows in Pinned, with where it sits
-        let verbs = app.staticTexts["Verbs"].firstMatch
-        reach(verbs, "Verbs")
-        hold(verbs, "Pin to the top")
-        let pinned = entry("Verbs")
-        if !pinned.waitForExistence(timeout: 5) { reachUp(pinned) }
-        XCTAssertTrue(pinned.waitForExistence(timeout: 5), "Verbs isn't in Pinned")
-        sleep(1)
-        shot("sidebar-pinned-\(mode)")
-
-        // 4. Move to…: where it is now, the tree opened there, the search
-        let vocab = app.staticTexts["Vocab"].firstMatch
+        // 3. Move to…: where it is now, the tree opened there, the search
+        let vocab = sidebar.staticTexts["Vocab"].firstMatch
         reach(vocab, "Vocab")
         hold(vocab, "Move to…")
         let now = app.staticTexts["move-now-in"].firstMatch
@@ -156,13 +143,26 @@ final class NotebookFindTests: XCTestCase {
         week2.tap()
         let closed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: now)
         XCTAssertEqual(XCTWaiter().wait(for: [closed], timeout: 15), .completed, "Move to… didn't close after the move")
-        let moved = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.staticTexts["Vocab"].firstMatch)
+        let moved = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: sidebar.staticTexts["Vocab"].firstMatch)
         XCTAssertEqual(XCTWaiter().wait(for: [moved], timeout: 20), .completed, "Vocab is still in Spanish")
 
-        // 5. The next Move to… offers Week 2 in Recent
-        let verbsRow = app.staticTexts["Verbs"].firstMatch
-        reach(verbsRow, "Verbs again")
-        hold(verbsRow, "Move to…")
+        // 4. Pin a board: back in the full list it shows in Pinned, with where it sits
+        let verbs = sidebar.staticTexts["Verbs"].firstMatch
+        reach(verbs, "Verbs")
+        hold(verbs, "Pin to the top")
+        reach(back, "Back")
+        back.tap()
+        XCTAssertTrue(app.staticTexts["Planner"].firstMatch.waitForExistence(timeout: 20), "Back didn't return to the full list")
+        let pinned = entry("Verbs")
+        if !pinned.waitForExistence(timeout: 5) { reachUp(pinned) }
+        XCTAssertTrue(pinned.waitForExistence(timeout: 5), "Verbs isn't in Pinned")
+        XCTAssertTrue(pinned.label.contains("Spanish"), "the pinned board doesn't say where it is: " + pinned.label)
+        sleep(1)
+        shot("sidebar-pinned-\(mode)")
+
+        // 5. The next Move to… (from the pinned row) offers Week 2 in Recent
+        reach(pinned, "the pinned Verbs")
+        hold(pinned, "Move to…")
         XCTAssertTrue(app.staticTexts["move-now-in"].firstMatch.waitForExistence(timeout: 10), "Move to… didn't open again")
         XCTAssertTrue(app.buttons["move-place-Week 2"].firstMatch.waitForExistence(timeout: 5), "Week 2 isn't in Move to…'s Recent")
         sleep(1)

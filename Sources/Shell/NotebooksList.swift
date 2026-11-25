@@ -5,33 +5,25 @@ import UniformTypeIdentifiers
 import NexusCore
 
 /// The sidebar's notebooks, as the laptop's (nexus docs/data-format.md "The board redesign's additions", Notebooks): every plain folder
-/// under `notebooks/` is a notebook, to any depth; a `<name>.board` folder in one is a board. The sidebar shows them as a tree
-/// (NexusCore NotebookTree): each notebook with an arrow to open it, and inside it its notebooks, then its boards, in the notebook
-/// page's order (notebook.json `order`, OneNote's, then by name). Tapping a notebook opens its page (NotebookPage); tapping a board
-/// opens the board, and the open board's row is the one selected. Press and hold a notebook for Pin, Rename, Move, Colour, New
+/// under `notebooks/` is a notebook, to any depth; a `<name>.board` folder in one is a board. The full sidebar lists only the top
+/// notebooks; tapping one **steps inside** it (Nov 25 2026: a tree of arrows went too many levels deep for a OneNote import): the
+/// sidebar shows just that notebook, its notebooks then its boards, one level at a time, with Back (Sidebar.notebookSections). On
+/// the iPhone a notebook's row pushes its page, which does the same. Press and hold a notebook for Pin, Rename, Move, Colour, New
 /// notebook inside, Delete, a board for Open in a new window, Pin, Rename, Move, Delete; drop a board on a notebook to move it there.
-/// Opening a notebook closes the ones beside it (NotebookTree.opening), so one branch is open at a time.
 struct NotebooksList: View {
     @Environment(NexusStore.self) private var store
     @Bindable var actions: NotebookActions
     /// The iPhone's list (rows push onto the stack; a board opens over everything) rather than the iPad's selectable sidebar.
     var pushes = false
-    /// The open notebooks' paths ("a|b"), remembered.
-    @AppStorage("openNotebooks") private var openList = ""
 
     /// What the tree has read of the folder (lazily: only the levels that show; counts away from the main thread).
     let tree: NotebookTreeModel
 
     var body: some View {
-        ForEach(tree.rows(store.folder, open: NotebookTree.parse(openList))) { r in
-            NotebookTreeLine(row: r, nb: r.kind == .notebook ? tree.notebook(r.path) : nil, pushes: pushes, actions: actions) {
-                // opening one closes the notebooks beside it (one branch open at a time), so the tree stays short
-                withAnimation(.snappy(duration: 0.25)) {
-                    openList = r.isOpen ? NotebookTree.setting(r.path, open: false, in: openList) : NotebookTree.opening(r.path, in: openList)
-                }
-            }
-            // the iPad's selection: a notebook's page, or the board (selected while it is open)
-            .tag(r.kind == .board ? SidebarItem.board(r.path) : SidebarItem.screen(.notebook(r.path)))
+        ForEach(tree.rows(store.folder, open: [])) { r in
+            NotebookTreeLine(row: r, nb: tree.notebook(r.path), pushes: pushes, actions: actions)
+                // the iPad's selection: the notebook's page (the sidebar steps inside it)
+                .tag(SidebarItem.screen(.notebook(r.path)))
         }
         Button { actions.ask(.notebook, in: BoardFormat.notebooks) } label: {
             Label("New notebook…", systemImage: "plus").foregroundStyle(.secondary)
@@ -39,43 +31,22 @@ struct NotebooksList: View {
     }
 }
 
-/// One row of the notebook tree: indented by its depth, an arrow when it has anything inside, then the notebook or the board.
+/// One row of a notebook list (the top notebooks, a notebook's notebooks or boards when the sidebar is inside it): no arrows and no
+/// indent; a notebook ends with a chevron (it steps inside), a board opens.
 struct NotebookTreeLine: View {
     let row: NotebookTreeRow
     /// The notebook itself (for its menu); nil for a board.
     let nb: Notebook?
     let pushes: Bool
     @Bindable var actions: NotebookActions
-    let toggle: () -> Void
     @Environment(NexusStore.self) private var store
 
-    /// Each level's step in, and the arrow's width (kept empty where there is no arrow, so the names line up).
+    /// Move to…'s tree: each level's step in, and the arrow's width (kept empty where there is no arrow, so the names line up).
     static let step: CGFloat = 14
     static let arrowWidth: CGFloat = 22
 
     var body: some View {
         if row.kind == .board { board } else { notebook }
-    }
-
-    private var lead: some View {
-        HStack(spacing: 2) {
-            if row.depth > 0 { Color.clear.frame(width: CGFloat(row.depth) * Self.step, height: 1) }
-            if row.hasChildren {
-                Button(action: toggle) {
-                    // Color's grey, not .secondary: in a button that is the tint's (green) secondary
-                    Image(systemName: "chevron.right")
-                        .font(.nx(.caption, .semibold))
-                        .foregroundStyle(Color.secondary)
-                        .rotationEffect(.degrees(row.isOpen ? 90 : 0))
-                        .frame(width: Self.arrowWidth, height: 30)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel((row.isOpen ? "Collapse " : "Expand ") + row.name)
-            } else {
-                Color.clear.frame(width: Self.arrowWidth, height: 1)
-            }
-        }
     }
 
     // MARK: a notebook
@@ -90,20 +61,23 @@ struct NotebookTreeLine: View {
             Text(row.name).lineLimit(1)
             Spacer(minLength: 4)
             if let n = row.boardCount, n > 0 { Text("\(n)").font(.nx(.caption)).foregroundStyle(.secondary).monospacedDigit() }
+            // the iPad's row steps inside (the iPhone's NavigationLink draws its own)
+            if !pushes {
+                Image(systemName: "chevron.right").font(.nx(.caption2, .semibold)).foregroundStyle(Color.secondary.opacity(0.7))
+            }
         }
         .contentShape(Rectangle())
     }
 
+    @ViewBuilder
     private var notebook: some View {
-        HStack(spacing: 0) {
-            lead
-            if pushes {
-                NavigationLink(value: Screen.notebook(row.path)) { notebookLabel }
-            } else {
-                notebookLabel
-            }
+        if pushes {
+            NavigationLink(value: Screen.notebook(row.path)) { notebookLabel }
+                .notebookRowExtras(nb, actions: actions, store: store)
+        } else {
+            notebookLabel
+                .notebookRowExtras(nb, actions: actions, store: store)
         }
-        .notebookRowExtras(nb, actions: actions, store: store)
     }
 
     // MARK: a board
@@ -122,11 +96,11 @@ struct NotebookTreeLine: View {
         let ref = Notebook.BoardRef(name: row.name, path: row.path)
         if pushes {
             Button { store.openBoard = .init(path: row.path, focus: nil) } label: {
-                HStack(spacing: 0) { lead; boardLabel }.foregroundStyle(Color.primary)
+                boardLabel.foregroundStyle(Color.primary)
             }
             .boardRowExtras(ref, actions: actions)
         } else {
-            HStack(spacing: 0) { lead; boardLabel }
+            boardLabel
                 .boardRowExtras(ref, actions: actions)
         }
     }

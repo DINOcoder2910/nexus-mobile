@@ -61,6 +61,25 @@ final class NotebookTreeModel {
         return l
     }
 
+    /// One notebook's level for a view that shows it (drawn again when a level is read again).
+    func shown(_ root: URL, _ path: String) -> NotebookLevel {
+        _ = version
+        use(root)
+        return level(path)
+    }
+
+    /// The notebook the sidebar shows when stepping into `path` (through notebooks that only hold one notebook).
+    func stepping(into path: String, _ root: URL) -> String {
+        use(root)
+        return NotebookTree.stepping(into: path) { level($0) }
+    }
+
+    /// Where the sidebar's Back goes from inside `path`: nil for the full list.
+    func back(from path: String, _ root: URL) -> String? {
+        use(root)
+        return NotebookTree.steppingBack(from: path) { level($0) }
+    }
+
     /// The notebook for a row's menu: its own level (Delete reads the rest when asked).
     func notebook(_ path: String) -> Notebook { level(path).shallow }
 
