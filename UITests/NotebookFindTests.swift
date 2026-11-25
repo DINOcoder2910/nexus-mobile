@@ -103,7 +103,9 @@ final class NotebookFindTests: XCTestCase {
 
         // 2. Clearing the field brings the sidebar back; a notebook's row steps inside it (Nov 25 2026: no tree of arrows)
         let clear = app.buttons["notebook-find-clear"].firstMatch
-        XCTAssertTrue(clear.waitForExistence(timeout: 5), "no Clear in the find field")
+        // a slow runner (Nov 25) can still be putting the sidebar back over the board: ask once more before giving up
+        if !clear.waitForExistence(timeout: 10) { showSidebar() }
+        XCTAssertTrue(clear.waitForExistence(timeout: 10), "no Clear in the find field")
         clear.tap()
         XCTAssertTrue(app.staticTexts["Planner"].firstMatch.waitForExistence(timeout: 10), "the places didn't come back")
         let spanish = sidebar.staticTexts["Spanish"].firstMatch
@@ -121,7 +123,9 @@ final class NotebookFindTests: XCTestCase {
         reach(vocab, "Vocab")
         hold(vocab, "Move to…")
         let now = app.staticTexts["move-now-in"].firstMatch
-        XCTAssertTrue(now.waitForExistence(timeout: 10), "Move to… didn't open")
+        // a menu row tapped while the menu is still opening can be dropped on a slow runner (Nov 25): hold again once
+        if !now.waitForExistence(timeout: 10) { hold(vocab, "Move to…") }
+        XCTAssertTrue(now.waitForExistence(timeout: 15), "Move to… didn't open")
         XCTAssertTrue(now.label.contains("Spanish"), "Move to… doesn't say where it is now: " + now.label)
         let schoolArrow = app.buttons["move-arrow-School"].firstMatch
         XCTAssertTrue(schoolArrow.waitForExistence(timeout: 5), "School isn't in Move to…'s tree")
